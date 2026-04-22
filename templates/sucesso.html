@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✦ Barbearia no ar!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0c0c0c;--surface:#161616;--border:#2a2a2a;--gold:#c9a96e;--text:#f0ece4;--muted:#888;--success:#4caf82;--radius:6px}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.box{animation:fadeUp 0.4s ease both}
+h1,h2{font-family:'Playfair Display',serif}
+.sucesso-box{text-align:center;padding:clamp(40px,8vw,70px) clamp(20px,6vw,56px);max-width:520px;width:100%}
+.sucesso-icon{font-size:3rem;margin-bottom:1.4rem}
+.sucesso-title{font-size:clamp(1.8rem,4vw,2.3rem);color:var(--gold);margin-bottom:0.5rem}
+.sucesso-sub{font-size:0.9rem;color:var(--muted);line-height:1.65;margin-bottom:1.8rem}
+.link-row{display:flex;align-items:center;gap:0.6rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:0.7rem 1rem;margin-bottom:0.6rem;text-align:left}
+.link-row-label{font-size:0.7rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;flex-shrink:0;min-width:52px}
+.link-row-url{flex:1;font-size:0.8rem;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none}
+.link-row-url:hover{text-decoration:underline}
+.btn-copy{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.72rem;cursor:pointer;flex-shrink:0;transition:border-color 0.2s,color 0.2s;font-family:'Inter',sans-serif}
+.btn-copy:hover{border-color:var(--gold);color:var(--gold)}
+.btn-copy.copiado{border-color:var(--success);color:var(--success)}
+.btn-painel{display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;background:var(--gold);color:#000;padding:0.9rem 2.4rem;border-radius:var(--radius);font-weight:600;text-decoration:none;margin-top:1.6rem;font-size:0.95rem;transition:opacity 0.2s,transform 0.2s}
+.btn-painel:hover{opacity:0.88;transform:translateY(-1px)}
+.sucesso-dica{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin-top:1.4rem;font-size:0.84rem;color:var(--muted);line-height:1.65;text-align:left}
+.sucesso-dica strong{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="sucesso-box">
+    <div class="sucesso-icon">🎉</div>
+    <h1 class="sucesso-title">✦ Sua barbearia está no ar!</h1>
+    <p class="sucesso-sub">Parabéns! Seu site foi criado com sucesso. Compartilhe os links abaixo com seus clientes.</p>
+
+    <div class="link-row">
+      <span class="link-row-label">Site</span>
+      <a class="link-row-url" id="link-site" href="#" target="_blank"></a>
+      <button class="btn-copy" onclick="copiar('link-site', this)">Copiar</button>
+    </div>
+    <div class="link-row">
+      <span class="link-row-label">Painel</span>
+      <a class="link-row-url" id="link-admin" href="#" target="_blank"></a>
+      <button class="btn-copy" onclick="copiar('link-admin', this)">Copiar</button>
+    </div>
+
+    <a class="btn-painel" id="btn-painel" href="#">Acessar meu painel →</a>
+
+    <div class="sucesso-dica">
+      📱 <strong>Baixe o app admin</strong> e faça login com seu e-mail para gerenciar agendamentos, funcionários e preços pelo celular.
+    </div>
+  </div>
+</div>
+<script>
+const slug = window.location.pathname.split('/').pop();
+const siteUrl   = `${location.origin}/${slug}`;
+const painelUrl = `${location.origin}/gestao/login`;
+document.getElementById('link-site').href        = siteUrl;
+document.getElementById('link-site').textContent  = siteUrl;
+document.getElementById('link-admin').href        = painelUrl;
+document.getElementById('link-admin').textContent = painelUrl;
+document.getElementById('btn-painel').href        = painelUrl;
+
+// Clear onboarding state
+['onb_tema','onb_plano','onb_tenant_id','onb_slug'].forEach(k => localStorage.removeItem(k));
+
+function copiar(id, btn) {
+  const url = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = '✓ Copiado';
+    btn.classList.add('copiado');
+    setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copiado'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

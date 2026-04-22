@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Configurações — Barbearia{% endblock %}
+{% block content %}
+<section class="auth-section">
+  <div class="auth-card">
+    <div class="auth-header">
+      <span class="logo-mark">✦</span>
+      <h2 class="auth-title">Configurações</h2>
+      <p class="auth-sub">Seus dados cadastrais</p>
+    </div>
+
+    {% if session.get('is_guest') %}
+      {# ── Visitante: só nome, contato, observação e criar conta ── #}
+      <div class="field">
+        <label class="field-label">Nome</label>
+        <p class="field-value">{{ user.name }}</p>
+      </div>
+      {% if user.contact %}
+      <div class="field">
+        <label class="field-label">Contato</label>
+        <p class="field-value">{{ user.contact }}</p>
+      </div>
+      {% endif %}
+      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:0.5rem;">
+        <div class="field">
+          <label class="field-label">Observação</label>
+          <textarea class="field-input" name="observation" rows="3"
+                    placeholder="Adicione uma observação..."
+                    style="resize:vertical;">{{ user.observation or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-outline btn-full" style="margin-top:0.5rem;">Salvar observação</button>
+      </form>
+      <div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--border);">
+        <p class="auth-sub" style="margin-bottom:0.8rem;">Cadastre-se para salvar seu histórico e receber lembretes.</p>
+        <a href="{{ url_for('register') }}" class="btn btn-gold btn-full">Criar conta</a>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1.2rem;">
+        <a href="{{ url_for('logout') }}" class="link-danger">Sair</a>
+      </div>
+
+    {% else %}
+      {# ── Usuário cadastrado: exibição completa ── #}
+      <div class="field">
+        <label class="field-label">Nome</label>
+        <p class="field-value">{{ user.name }}</p>
+      </div>
+      <div class="field">
+        <label class="field-label">E-mail</label>
+        <p class="field-value">{{ user.email }}</p>
+      </div>
+      {% if user.contact %}
+      <div class="field">
+        <label class="field-label">Contato</label>
+        <p class="field-value">{{ user.contact }}</p>
+      </div>
+      {% endif %}
+      <a href="{{ url_for('esqueci_senha') }}" class="btn btn-outline btn-full">Alterar senha</a>
+      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:1rem;">
+        <div class="field">
+          <label class="field-label">Observação</label>
+          <textarea class="field-input" name="observation" rows="3"
+                    placeholder="Adicione uma observação..."
+                    style="resize:vertical;">{{ user.observation or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-gold btn-full" style="margin-top:0.5rem;">Salvar observação</button>
+      </form>
+      <form method="POST" action="{{ url_for('salvar_lembretes') }}" style="margin-top:1rem;">
+        <div class="toggle-row">
+          <span style="font-size:.85rem;color:var(--text-muted);">Receber lembretes de agendamento por e-mail</span>
+          <label class="toggle-switch">
+            <input type="checkbox" name="receber_lembretes" value="1"
+                   {% if user.receber_lembretes %}checked{% endif %}
+                   onchange="this.form.submit()" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </form>
+      <div class="perfil-links">
+        <a href="{{ url_for('esqueci_senha') }}" class="link-muted">Esqueceu a senha?</a>
+        <a href="{{ url_for('logout') }}" class="link-danger">Sair da conta</a>
+      </div>
+    {% endif %}
+
+    <a href="{{ url_for('servicos') }}" class="btn btn-outline btn-full" style="margin-top:1.4rem;">
+      Voltar
+    </a>
+  </div>
+</section>
+{% endblock %}

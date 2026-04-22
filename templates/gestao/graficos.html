@@ -1,0 +1,333 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Gráficos{% endblock %}
+
+{% block head %}
+<style>
+.tab-bar {
+  display: flex; gap: 0; margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  padding: .55rem 1.1rem; font-size: .85rem; font-weight: 500;
+  font-family: var(--font-sans); background: none; border: none;
+  border-bottom: 2px solid transparent; color: var(--text-muted);
+  cursor: pointer; transition: .15s; margin-bottom: -1px;
+}
+.tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.chart-title { font-size: .8rem; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: .07em; margin-bottom: .2rem; }
+.chart-sub   { font-size: .72rem; color: var(--text-muted); margin-bottom: 1rem; }
+.chart-area  { position: relative; width: 100%; display: flex; justify-content: center; }
+canvas.gr    { display: block; }
+
+.legend { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; }
+.legend-row { display: flex; align-items: center; gap: .55rem; font-size: .78rem; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-name { flex: 1; color: var(--text-muted); }
+.legend-val  { color: var(--text); font-weight: 500; }
+
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .9rem 1rem; }
+.kpi-label { font-size: .7rem; color: var(--text-muted); margin-bottom: .2rem; }
+.kpi-val { font-size: 1.45rem; font-weight: 700; color: var(--text); }
+.kpi-sub  { font-size: .72rem; color: var(--gold); margin-top: .1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="g-page-title">Gráficos</h1>
+
+<!-- Tabs -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="mudarTab('agendamentos',this)">Agendamentos</button>
+  <button class="tab-btn" onclick="mudarTab('financeiro',this)">Financeiro</button>
+  <button class="tab-btn" onclick="mudarTab('servicos',this)">Serviços</button>
+</div>
+
+<!-- ── ABA 1: Agendamentos ─────────────────────────────────────── -->
+<div class="tab-pane active" id="tab-agendamentos">
+  <div id="kpi-ags" class="kpi-row"></div>
+  <div class="chart-card">
+    <div class="chart-title">Agendamentos por mês</div>
+    <div class="chart-sub">Total de agendamentos não cancelados</div>
+    <div class="chart-area"><canvas class="gr" id="c-ags-mes"></canvas></div>
+    <div class="legend" id="leg-ags-mes"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Agendamentos por dia da semana</div>
+    <div class="chart-sub">Distribuição ao longo da semana</div>
+    <div class="chart-area"><canvas class="gr" id="c-ags-dia"></canvas></div>
+    <div class="legend" id="leg-ags-dia"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Barbeiros com mais cortes</div>
+    <div class="chart-sub">Agendamentos ativos por barbeiro</div>
+    <div class="chart-area"><canvas class="gr" id="c-barbeiros"></canvas></div>
+    <div class="legend" id="leg-barbeiros"></div>
+  </div>
+</div>
+
+<!-- ── ABA 2: Financeiro ──────────────────────────────────────── -->
+<div class="tab-pane" id="tab-financeiro">
+  <div id="kpi-fin" class="kpi-row"></div>
+  <div class="chart-card">
+    <div class="chart-title">Receita por mês</div>
+    <div class="chart-sub">Soma das entradas monetárias registradas</div>
+    <div class="chart-area"><canvas class="gr" id="c-receita-mes"></canvas></div>
+    <div class="legend" id="leg-receita-mes"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Receita por forma de pagamento</div>
+    <div class="chart-sub">Entradas monetárias agrupadas por forma</div>
+    <div class="chart-area"><canvas class="gr" id="c-receita-forma"></canvas></div>
+    <div class="legend" id="leg-receita-forma"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Formas de pagamento nos agendamentos</div>
+    <div class="chart-sub">Preferência de pagamento dos clientes</div>
+    <div class="chart-area"><canvas class="gr" id="c-formas-pag"></canvas></div>
+    <div class="legend" id="leg-formas-pag"></div>
+  </div>
+</div>
+
+<!-- ── ABA 3: Serviços ────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-servicos">
+  <div id="kpi-serv" class="kpi-row"></div>
+  <div class="chart-card">
+    <div class="chart-title">Serviços mais pedidos</div>
+    <div class="chart-sub">Pedidos não cancelados por serviço</div>
+    <div class="chart-area"><canvas class="gr" id="c-servicos"></canvas></div>
+    <div class="legend" id="leg-servicos"></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Status dos pedidos</div>
+    <div class="chart-sub">Distribuição atual por status</div>
+    <div class="chart-area"><canvas class="gr" id="c-status"></canvas></div>
+    <div class="legend" id="leg-status"></div>
+  </div>
+</div>
+
+<script>
+const TOKEN = "{{ token }}";
+const GOLD = '#C8C8C8';
+
+function _rr(ctx, x, y, w, h, r) {
+  if (w < 2*r) r = w/2;
+  if (h < 2*r) r = h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────
+function mudarTab(id, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + id).classList.add('active');
+}
+
+// ── Utilitários ───────────────────────────────────────────────────
+function fmtR(v) { return 'R$ ' + parseFloat(v||0).toFixed(2).replace('.',','); }
+function fmtMes(m) {
+  const [y, mo] = m.split('-');
+  const ns = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return (ns[parseInt(mo)]||mo) + '/' + y.slice(2);
+}
+
+// Paleta de cores para pizza
+const PIE_PALETTE = [
+  '#C9A96E','#6C9BCF','#4CAF82','#E07B7B','#B088D0',
+  '#F0C040','#60C8C8','#E08840','#90B870','#C870B0'
+];
+function barColor(i, total) { return PIE_PALETTE[i % PIE_PALETTE.length]; }
+
+const STATUS_COLORS = {
+  pago:            '#4CAF82',
+  pendente:        '#f0c040',
+  cancelado:       '#e05555',
+  nao_compareceu:  '#FFA500',
+};
+const STATUS_LABELS = {
+  pago:           'Realizado',
+  pendente:       'Pendente',
+  cancelado:      'Cancelado',
+  nao_compareceu: 'Não compareceu',
+};
+
+// ── Gráfico de pizza (donut) ─────────────────────────────────────
+function drawHBar(canvasId, legendId, dados, labelFn, valFn, fmtFn, colorFn) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const n     = dados.length;
+  const total = dados.reduce((s, _, i) => s + valFn(i), 0);
+  if (!n || total === 0) {
+    canvas.style.display = 'none';
+    if (legendId) document.getElementById(legendId).innerHTML =
+      '<span style="color:var(--text-muted);font-size:.8rem;">Sem dados</span>';
+    return;
+  }
+  canvas.style.display = 'block';
+  const size = Math.min(canvas.parentElement.clientWidth || 280, 260);
+  canvas.width  = size;
+  canvas.height = size;
+  canvas.style.height = size + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  const cx = size / 2, cy = size / 2;
+  const R  = size * 0.43, ir = size * 0.24;
+
+  let start = -Math.PI / 2;
+  dados.forEach((_, i) => {
+    const slice = (valFn(i) / total) * 2 * Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, start, start + slice);
+    ctx.closePath();
+    ctx.fillStyle = colorFn(i, n);
+    ctx.fill();
+    // separador
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0d0d0d';
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    start += slice;
+  });
+
+  // buraco central
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0d0d0d';
+  ctx.beginPath();
+  ctx.arc(cx, cy, ir, 0, 2 * Math.PI);
+  ctx.fillStyle = bg;
+  ctx.fill();
+
+  // legenda
+  if (legendId) {
+    document.getElementById(legendId).innerHTML = dados.map((_, i) => {
+      const pct = ((valFn(i) / total) * 100).toFixed(1);
+      return `<div class="legend-row">
+        <div class="legend-dot" style="background:${colorFn(i,n)}"></div>
+        <span class="legend-name">${labelFn(i)}</span>
+        <span class="legend-val">${fmtFn(i)}&nbsp;<span style="color:var(--text-muted);font-size:.7rem;">${pct}%</span></span>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── KPI card ──────────────────────────────────────────────────────
+function kpiHTML(label, val, sub) {
+  return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-val">${val}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;
+}
+
+// ── Carregar todos os dados ───────────────────────────────────────
+async function carregar() {
+  const h = {'Authorization': 'Bearer ' + TOKEN};
+  const [
+    rAgsMes, rAgsDia, rBarb, rServicos,
+    rFormasPag, rReceitaMes, rReceitaForma, rStatus
+  ] = await Promise.all([
+    fetch('/api/stats/agendamentos_por_mes', {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/agendamentos_por_dia', {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/barbeiros',            {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/servicos',             {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/formas_pagamento',     {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/receita_por_mes',      {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/receita_por_forma',    {headers:h}).then(r=>r.json()),
+    fetch('/api/stats/pedidos_por_status',   {headers:h}).then(r=>r.json()),
+  ]);
+
+  // ── KPIs Agendamentos ──
+  const totalAgs  = rAgsMes.reduce((s,x)=>s+x.total,0);
+  const mesAtual  = new Date().toISOString().slice(0,7);
+  const agsHoje   = (rAgsMes.find(x=>x.mes===mesAtual)||{}).total || 0;
+  const topBarb   = rBarb[0]?.nome || '—';
+  const topBarbN  = rBarb[0]?.total || 0;
+  document.getElementById('kpi-ags').innerHTML =
+    kpiHTML('Total agendamentos', totalAgs, 'histórico') +
+    kpiHTML('Este mês', agsHoje, 'agendamentos') +
+    kpiHTML('Top barbeiro', topBarb.split(' ')[0], topBarbN + ' cortes');
+
+  // ── KPIs Financeiro ──
+  const receitaTotal = rReceitaMes.reduce((s,x)=>s+x.total,0);
+  const recMesAtual  = (rReceitaMes.find(x=>x.mes===mesAtual)||{}).total || 0;
+  const topForma     = rReceitaForma[0]?.forma || '—';
+  document.getElementById('kpi-fin').innerHTML =
+    kpiHTML('Receita total', fmtR(receitaTotal), 'todas as entradas') +
+    kpiHTML('Receita este mês', fmtR(recMesAtual), '') +
+    kpiHTML('Principal forma', topForma, fmtR(rReceitaForma[0]?.total||0));
+
+  // ── KPIs Serviços ──
+  const totalPedidos = rStatus.reduce((s,x)=>s+x.total,0);
+  const topServ      = rServicos[0]?.nome || '—';
+  const topServN     = rServicos[0]?.total || 0;
+  document.getElementById('kpi-serv').innerHTML =
+    kpiHTML('Total pedidos', totalPedidos, 'histórico') +
+    kpiHTML('Serviço top', topServ, topServN + ' pedidos') +
+    kpiHTML('Serviços únicos', rServicos.length, 'cadastrados');
+
+  // ── Gráficos Agendamentos ──
+  drawHBar('c-ags-mes',   'leg-ags-mes',
+    rAgsMes, i => fmtMes(rAgsMes[i].mes), i => rAgsMes[i].total,
+    i => rAgsMes[i].total, barColor);
+
+  drawHBar('c-ags-dia', 'leg-ags-dia',
+    rAgsDia, i => rAgsDia[i].dia, i => rAgsDia[i].total,
+    i => rAgsDia[i].total, barColor);
+
+  drawHBar('c-barbeiros', 'leg-barbeiros',
+    rBarb.slice(0,10), i => rBarb[i].nome.split(' ')[0], i => rBarb[i].total,
+    i => rBarb[i].total + ' corte' + (rBarb[i].total!==1?'s':''), barColor);
+
+  // ── Gráficos Financeiro ──
+  drawHBar('c-receita-mes', 'leg-receita-mes',
+    rReceitaMes, i => fmtMes(rReceitaMes[i].mes), i => rReceitaMes[i].total,
+    i => fmtR(rReceitaMes[i].total), barColor);
+
+  drawHBar('c-receita-forma', 'leg-receita-forma',
+    rReceitaForma, i => _fmtForma(rReceitaForma[i].forma), i => rReceitaForma[i].total,
+    i => fmtR(rReceitaForma[i].total), barColor);
+
+  drawHBar('c-formas-pag', 'leg-formas-pag',
+    rFormasPag, i => _fmtForma(rFormasPag[i].forma), i => rFormasPag[i].total,
+    i => rFormasPag[i].total, barColor);
+
+  // ── Gráficos Serviços ──
+  drawHBar('c-servicos', 'leg-servicos',
+    rServicos.slice(0,10),
+    i => rServicos[i].nome, i => rServicos[i].total,
+    i => rServicos[i].total + ' pedido' + (rServicos[i].total!==1?'s':''), barColor);
+
+  // Status com cores fixas
+  drawHBar('c-status', 'leg-status',
+    rStatus,
+    i => STATUS_LABELS[rStatus[i].status] || rStatus[i].status,
+    i => rStatus[i].total,
+    i => rStatus[i].total,
+    (i) => STATUS_COLORS[rStatus[i]?.status] || GOLD);
+}
+
+function _fmtForma(f) {
+  const map = {pix:'PIX', cartao_credito:'Crédito', cartao_debito:'Débito', dinheiro:'Dinheiro', pagar_no_local:'No local'};
+  return map[f] || f;
+}
+
+carregar();
+// Redesenha ao redimensionar (canvas precisa de tamanho explícito)
+window.addEventListener('resize', () => setTimeout(carregar, 100));
+</script>
+{% endblock %}

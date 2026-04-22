@@ -1,0 +1,27 @@
+# Secrets
+.env
+
+# Database
+*.db
+instance/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Uploads gerados em runtime
+static/uploads/
+
+# Logs
+*.log
+flask_out.txt
+
+# Scripts de migração (não necessários em produção)
+migrate_*.py
+migration.py
+clear_db.py
+
+# Pasta admin Flutter (tem seu próprio repo se necessário)
+barbearia_admin/

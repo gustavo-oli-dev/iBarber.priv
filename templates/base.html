@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}{{ tenant.nome if tenant else 'Barbearia' }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=8" />
+  {% if tema_override %}{{ tema_override|safe }}{% endif %}
+  {% if preview_mode %}
+  <style>
+    body{overflow-x:hidden;pointer-events:none}
+    .navbar{position:relative!important}
+    .nav-drawer,.nav-toggle,.drawer-fechar{display:none!important}
+  </style>
+  {% endif %}
+</head>
+<body>
+  <nav class="navbar">
+    <a href="{{ url_for('index') }}" class="nav-logo">
+      {% set _logo = (preview_identity.logoUrl | default('')) or (tema_config.logoUrl | default('')) %}
+      {% set _nome = (preview_identity.nomeDisplay | default('')) or (tema_config.nomeDisplay | default('')) or (tenant.nome | upper if tenant else 'BARBEARIA') %}
+      {% if _logo %}
+        <img src="{{ _logo }}" alt="{{ _nome }}" style="height:28px;max-width:140px;object-fit:contain;display:block;">
+      {% else %}
+        <span class="logo-mark">✦</span> {{ _nome }}
+      {% endif %}
+    </a>
+    <div class="nav-links"></div>
+    {% if session.get('user_id') %}
+      {% if session.get('is_guest') %}
+        <span class="badge-visitante">Visitante</span>
+      {% endif %}
+      <div class="nav-menu-wrap" id="navMenuWrap">
+        <button class="nav-dots" id="navDotsBtn" aria-label="Menu de opções">⋮</button>
+        <div class="nav-dropdown" id="navDropdown">
+          <a href="{{ url_for('perfil') }}" class="btn btn-outline">Perfil</a>
+          <a href="{{ url_for('logout') }}" class="btn btn-outline nav-dropdown-item--danger">Sair da conta</a>
+        </div>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    {% endif %}
+  </nav>
+  {% if session.get('user_id') %}
+  <nav class="nav-drawer" id="navDrawer">
+    <button class="drawer-fechar" id="drawerFechar" aria-label="Fechar menu">×</button>
+    <a href="{{ url_for('perfil') }}" class="btn btn-outline drawer-link">Perfil</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-outline drawer-link" style="color:var(--error);border-color:var(--error);">Sair da conta</a>
+  </nav>
+  {% endif %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash--{{ category }}">
+            {{ message }}
+            <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <p>© 2026 {{ (preview_identity.nomeDisplay | default('')) or (tema_config.nomeDisplay | default('')) or (tenant.nome if tenant else 'Barbearia') }}. Todos os direitos reservados.</p>
+  </footer>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script>
+  // Informa rota atual ao editor pai
+  if (window.parent !== window) {
+    window.parent.postMessage({tipo: 'rota_atual', rota: window.location.pathname}, '*');
+  }
+
+  window.addEventListener('message', function(e) {
+    if (!e.data || !e.data.tipo) return;
+
+    if (e.data.tipo === 'tema') {
+      const t = e.data.tema;
+      const r = document.documentElement.style;
+      if (t.fundo)       r.setProperty('--bg',          t.fundo);
+      if (t.superficie)  r.setProperty('--surface',      t.superficie);
+      if (t.superficie)  r.setProperty('--surface2',     t.superficie);
+      if (t.borda)       r.setProperty('--border',       t.borda);
+      if (t.destaque)    r.setProperty('--gold',         t.destaque);
+      if (t.destaque)    r.setProperty('--gold-dim',     t.destaque + 'cc');
+      if (t.destaque)    r.setProperty('--gold-hover',   t.destaque + 'dd');
+      if (t.texto)       r.setProperty('--text',         t.texto);
+      if (t.texto)       r.setProperty('--text-muted',   t.texto + '88');
+      if (t.texto)       r.setProperty('--placeholder',  t.texto + '55');
+      if (t.fonteTitulo) r.setProperty('--font-serif', "'" + t.fonteTitulo + "', Georgia, serif");
+      if (t.fonteCorpo)  r.setProperty('--font-sans',  "'" + t.fonteCorpo  + "', system-ui, sans-serif");
+      if (t.cardRadius)  r.setProperty('--radius',       t.cardRadius + 'px');
+      if (t.btnEstilo) {
+        const br = t.btnEstilo === 'pilula' ? '999px' : t.btnEstilo === 'angular' ? '0px' : (t.cardRadius || 6) + 'px';
+        document.querySelectorAll('.btn,.btn-gold').forEach(el => el.style.borderRadius = br);
+      }
+      if ('heroUrl' in t) {
+        document.body.style.backgroundImage  = t.heroUrl ? `url('${t.heroUrl}')` : '';
+        document.body.style.backgroundSize   = t.heroUrl ? 'cover' : '';
+        document.body.style.backgroundPosition = t.heroUrl ? 'center' : '';
+        document.body.style.backgroundAttachment = t.heroUrl ? 'fixed' : '';
+        const heroEl = document.querySelector('.hero-central');
+        if (heroEl) heroEl.style.backgroundImage = t.heroUrl ? `url('${t.heroUrl}')` : '';
+      }
+    }
+
+    if (e.data.tipo === 'fabs') {
+      _aplicarFabPreview('wpp',  e.data.wppBtn,
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.563 4.14 1.542 5.878L0 24l6.31-1.519A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.373l-.36-.214-3.727.977.995-3.636-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>');
+      _aplicarFabPreview('maps', e.data.mapsBtn,
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>');
+      return;
+    }
+
+    if (e.data.tipo === 'preview_banner' && !document.getElementById('preview-banner')) {
+      const b = document.createElement('div');
+      b.id = 'preview-banner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--gold,#C9A96E);color:#000;text-align:center;font-size:11px;padding:4px 8px;z-index:9999;font-weight:500;letter-spacing:.02em';
+      b.textContent = '✦ Modo preview — navegue livremente, dados são fictícios';
+      document.body.prepend(b);
+      document.body.style.paddingTop = '26px';
+    }
+  });
+
+  function _aplicarFabPreview(tipo, cfg, svgHtml) {
+    if (!cfg) return;
+    const idEl = 'preview-fab-' + tipo;
+    let el = document.getElementById(idEl);
+    if (!el) {
+      el = document.createElement('a');
+      el.id = idEl;
+      el.style.cssText = 'position:fixed;display:flex;align-items:center;gap:8px;border-radius:50px;padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;z-index:1000;transition:opacity .2s,transform .2s;border:none';
+      el.innerHTML = svgHtml + '<span></span>';
+      document.body.appendChild(el);
+    }
+    el.style.display = cfg.mostrar ? 'flex' : 'none';
+    el.style.background = cfg.cor;
+    el.style.color = cfg.corTexto;
+    el.style.bottom = cfg.bottom + 'px';
+    el.style[cfg.posicaoH === 'right' ? 'right' : 'left'] = '24px';
+    el.style[cfg.posicaoH === 'right' ? 'left' : 'right'] = 'auto';
+    el.querySelector('span').textContent = cfg.texto;
+  }
+  </script>
+
+{% if tenant and not hide_fabs %}
+  {% set wpp = tenant.whatsapp | default('', true) | replace('(','') | replace(')','') | replace(' ','') | replace('-','') %}
+  {% set has_wpp  = wpp | length > 0 %}
+  {% set has_maps = tenant.maps_url | default('', true) | length > 0 %}
+
+  {% if has_wpp %}
+  <a class="fab fab-wpp {% if not has_maps %}fab-wpp-only{% endif %}"
+     href="https://wa.me/55{{ wpp }}" target="_blank" rel="noopener" aria-label="WhatsApp"
+     data-fab-cfg="{{ tenant.fab_wpp or '{}' }}">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.563 4.14 1.542 5.878L0 24l6.31-1.519A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.373l-.36-.214-3.727.977.995-3.636-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+    <span>Fale conosco!</span>
+  </a>
+  {% endif %}
+
+  {% if has_maps %}
+  <a class="fab fab-maps {% if not has_wpp %}fab-wpp-only{% endif %}"
+     href="{{ tenant.maps_url }}" target="_blank" rel="noopener" aria-label="Google Maps"
+     data-fab-cfg="{{ tenant.fab_maps or '{}' }}">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    <span>Estamos aqui!</span>
+  </a>
+  {% endif %}
+  <script>
+  document.querySelectorAll('.fab[data-fab-cfg]').forEach(function(el) {
+    try {
+      var cfg = JSON.parse(el.getAttribute('data-fab-cfg') || '{}');
+      var lado = (cfg.posicaoH === 'right') ? 'right' : 'left';
+      var outro = lado === 'right' ? 'left' : 'right';
+      el.style[lado] = '24px';
+      el.style[outro] = 'auto';
+      if (cfg.cor)      el.style.background = cfg.cor;
+      if (cfg.corTexto) el.style.color = cfg.corTexto;
+      if (cfg.bottom)   el.style.bottom = cfg.bottom + 'px';
+      if (cfg.texto) { var sp = el.querySelector('span'); if(sp) sp.textContent = cfg.texto; }
+      if (cfg.mostrar === false) el.style.display = 'none';
+    } catch(e) {}
+  });
+  </script>
+{% endif %}
+</body>
+</html>

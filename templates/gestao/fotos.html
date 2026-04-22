@@ -1,0 +1,149 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Fotos{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+  <h1 class="g-page-title" style="margin:0">Fotos dos Serviços</h1>
+  <button class="g-btn g-btn-primary" onclick="abrirModal()">+ Enviar foto</button>
+</div>
+
+<!-- Modal upload -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:400px;">
+    <div class="g-section-title" style="margin-bottom:1rem;">Nova Foto</div>
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Imagem</label>
+      <input id="fFoto" class="g-input" type="file" accept="image/*" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Categoria</label>
+      <select id="fCat" class="g-input" onchange="loadServicosPorCat()"></select>
+    </div>
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Serviço (opcional)</label>
+      <select id="fServico" class="g-input">
+        <option value="">— Nenhum —</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="g-btn g-btn-primary" id="btnEnviar" onclick="enviarFoto()">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Filtro por categoria -->
+<div id="filtrosCat" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;"></div>
+
+<!-- Grid de fotos -->
+<div id="gridFotos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;"></div>
+
+<style>
+.g-chip{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);padding:.3rem .85rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s}
+.g-chip:hover{border-color:var(--gold);color:var(--gold)}
+.g-chip-active{background:var(--gold);border-color:var(--gold);color:#000;font-weight:600}
+</style>
+
+<script>
+const TOKEN = "{{ token }}";
+let categorias = [];
+let servicos = [];
+let fotos = [];
+let filtroAtivo = 'todos';
+
+async function carregar() {
+  const [rC, rS, rF] = await Promise.all([
+    fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    fetch('/api/fotos'),
+  ]);
+  categorias = await rC.json();
+  servicos = await rS.json();
+  fotos = await rF.json();
+  renderFiltros();
+  renderFotos();
+}
+
+function renderFiltros() {
+  const box = document.getElementById('filtrosCat');
+  box.innerHTML = `<button class="g-chip g-chip-active" onclick="setFiltro('todos',this)">Todas</button>` +
+    categorias.filter(c=>c.ativo).map(c =>
+      `<button class="g-chip" onclick="setFiltro('${c.nome}',this)">${c.nome}</button>`
+    ).join('');
+}
+function setFiltro(f, el) {
+  filtroAtivo = f;
+  document.querySelectorAll('.g-chip').forEach(c=>c.classList.remove('g-chip-active'));
+  el.classList.add('g-chip-active');
+  renderFotos();
+}
+
+function renderFotos() {
+  const grid = document.getElementById('gridFotos');
+  const lista = filtroAtivo === 'todos' ? fotos : fotos.filter(f=>f.categoria===filtroAtivo);
+  if (!lista.length) {
+    grid.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;grid-column:1/-1;">Nenhuma foto cadastrada.</p>';
+    return;
+  }
+  grid.innerHTML = lista.map(f => `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <img src="${f.url}" alt="${f.servico||''}" style="width:100%;height:150px;object-fit:cover;display:block;" />
+      <div style="padding:.5rem .75rem;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:.8rem;font-weight:500;">${f.servico||'—'}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);">${f.categoria||''}</div>
+        </div>
+        <button class="g-btn g-btn-outline" style="padding:.2rem .5rem;font-size:.7rem;color:var(--error);" onclick="deletarFoto(${f.id},this)">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Modal ──
+function populateCats() {
+  const sel = document.getElementById('fCat');
+  sel.innerHTML = '<option value="outros">Outros</option>' +
+    categorias.filter(c=>c.ativo).map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+}
+function loadServicosPorCat() {
+  const cat = document.getElementById('fCat').value;
+  const lista = servicos.filter(s=>s.ativo && categorias.find(c=>c.nome===cat && c.id===s.categoria_id));
+  const sel = document.getElementById('fServico');
+  sel.innerHTML = '<option value="">— Nenhum —</option>' +
+    lista.map(s=>`<option value="${s.nome}">${s.nome}</option>`).join('');
+}
+function abrirModal() {
+  populateCats();
+  loadServicosPorCat();
+  document.getElementById('fFoto').value = '';
+  document.getElementById('modal').style.display = 'flex';
+}
+function fecharModal() { document.getElementById('modal').style.display = 'none'; }
+
+async function enviarFoto() {
+  const arquivo = document.getElementById('fFoto').files[0];
+  const categoria = document.getElementById('fCat').value;
+  const servico = document.getElementById('fServico').value;
+  if (!arquivo) { alert('Selecione uma imagem'); return; }
+  const btn = document.getElementById('btnEnviar');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const fd = new FormData();
+  fd.append('foto', arquivo);
+  fd.append('categoria', categoria);
+  if (servico) fd.append('servico', servico);
+  const r = await fetch('/api/fotos', {method:'POST', headers:{'Authorization':'Bearer '+TOKEN}, body:fd});
+  btn.disabled = false; btn.textContent = 'Enviar';
+  if (r.ok) { fecharModal(); await carregar(); }
+  else { const d=await r.json(); alert(d.erro||'Erro ao enviar'); }
+}
+
+async function deletarFoto(id, btn) {
+  if (!confirm('Excluir foto?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/api/fotos/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) { fotos = fotos.filter(f=>f.id!==id); renderFotos(); }
+  else { btn.disabled=false; alert('Erro ao excluir'); }
+}
+
+carregar();
+</script>
+{% endblock %}

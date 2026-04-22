@@ -1,0 +1,195 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Serviços{% endblock %}
+{% block content %}
+<div class="g-page-header">
+  <h1 class="g-page-title">Serviços</h1>
+  <div class="g-page-header-actions">
+    <button class="g-btn g-btn-outline" onclick="abrirModalCat()">+ Categoria</button>
+    <button class="g-btn g-btn-primary" onclick="abrirModalServico()">+ Serviço</button>
+  </div>
+</div>
+
+<div id="conteudo"><p style="color:var(--text-muted);">Carregando...</p></div>
+
+<!-- Modal Categoria -->
+<div id="modalCat" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:360px;">
+    <div class="g-section-title" style="margin-bottom:1rem;" id="titCat">Nova Categoria</div>
+    <input type="hidden" id="catId">
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Nome</label>
+      <input id="catNome" class="g-input" placeholder="Ex: Cortes" />
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharModalCat()">Cancelar</button>
+      <button class="g-btn g-btn-primary" onclick="salvarCategoria()">Salvar</button>
+      <button id="btnDelCat" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarCategoria()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Serviço -->
+<div id="modalServico" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:420px;">
+    <div class="g-section-title" style="margin-bottom:1rem;" id="titServico">Novo Serviço</div>
+    <input type="hidden" id="servicoId">
+    <div class="g-form-row">
+      <div class="g-form-group">
+        <label class="g-label">Nome</label>
+        <input id="sNome" class="g-input" placeholder="Ex: Corte degradê" />
+      </div>
+      <div class="g-form-group">
+        <label class="g-label">Categoria</label>
+        <select id="sCat" class="g-input"></select>
+      </div>
+    </div>
+    <div class="g-form-group" style="margin-top:.75rem;">
+      <label class="g-label">Preço (R$)</label>
+      <input id="sPreco" class="g-input" type="number" step="0.01" min="0" placeholder="0.00" />
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharModalServico()">Cancelar</button>
+      <button class="g-btn g-btn-primary" onclick="salvarServico()">Salvar</button>
+      <button id="btnDelServico" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarServico()">Excluir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN = "{{ token }}";
+let categorias = [];
+let servicos = [];
+
+async function carregar() {
+  const [rC, rS] = await Promise.all([
+    fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}}),
+  ]);
+  categorias = await rC.json();
+  servicos = await rS.json();
+  render();
+}
+
+function fmtR(v) { return 'R$ '+parseFloat(v||0).toFixed(2).replace('.',','); }
+
+function render() {
+  const box = document.getElementById('conteudo');
+  if (!categorias.length && !servicos.length) {
+    box.innerHTML = '<p style="color:var(--text-muted);">Nenhum serviço cadastrado. Crie uma categoria primeiro.</p>';
+    return;
+  }
+  const semCat = servicos.filter(s => !s.categoria_id || !categorias.find(c=>c.id===s.categoria_id));
+  let html = '';
+  categorias.filter(c=>c.ativo).forEach(cat => {
+    const lista = servicos.filter(s=>s.categoria_id===cat.id && s.ativo);
+    html += `<div style="margin-bottom:1.25rem;">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;">
+        <div class="g-section-title" style="margin:0">${cat.nome}</div>
+        <button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.75rem;" onclick="editarCategoria(${cat.id})">Editar</button>
+      </div>
+      ${lista.length ? lista.map(s => renderServico(s)).join('') : '<p style="color:var(--text-muted);font-size:.8rem;padding:.5rem 0;">Nenhum serviço nesta categoria.</p>'}
+    </div>`;
+  });
+  if (semCat.length) {
+    html += `<div style="margin-bottom:1.25rem;"><div class="g-section-title" style="margin-bottom:.5rem;">Sem categoria</div>${semCat.map(s=>renderServico(s)).join('')}</div>`;
+  }
+  box.innerHTML = html;
+}
+
+function renderServico(s) {
+  return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem;">
+    <div style="flex:1;">
+      <span style="font-size:.9rem;font-weight:500;">${s.nome}</span>
+    </div>
+    <span style="color:var(--gold);font-size:.9rem;">${fmtR(s.preco)}</span>
+    <button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.75rem;" onclick="editarServico(${s.id})">Editar</button>
+  </div>`;
+}
+
+// ── Categoria ──
+function abrirModalCat() {
+  document.getElementById('catId').value = '';
+  document.getElementById('catNome').value = '';
+  document.getElementById('titCat').textContent = 'Nova Categoria';
+  document.getElementById('btnDelCat').style.display = 'none';
+  document.getElementById('modalCat').style.display = 'flex';
+}
+function fecharModalCat() { document.getElementById('modalCat').style.display = 'none'; }
+function editarCategoria(id) {
+  const c = categorias.find(x=>x.id===id);
+  if (!c) return;
+  document.getElementById('catId').value = id;
+  document.getElementById('catNome').value = c.nome;
+  document.getElementById('titCat').textContent = 'Editar Categoria';
+  document.getElementById('btnDelCat').style.display = '';
+  document.getElementById('modalCat').style.display = 'flex';
+}
+async function salvarCategoria() {
+  const id = document.getElementById('catId').value;
+  const nome = document.getElementById('catNome').value.trim();
+  if (!nome) { alert('Informe o nome'); return; }
+  const url = id ? `/api/categorias/${id}` : '/api/categorias';
+  const method = id ? 'PUT' : 'POST';
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify({nome})});
+  if (r.ok) { fecharModalCat(); await carregar(); }
+  else alert('Erro ao salvar categoria');
+}
+async function deletarCategoria() {
+  const id = document.getElementById('catId').value;
+  if (!id || !confirm('Excluir categoria? Serviços ficarão sem categoria.')) return;
+  const r = await fetch(`/api/categorias/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) { fecharModalCat(); await carregar(); }
+  else alert('Erro ao excluir');
+}
+
+// ── Serviço ──
+function populateCatSelect(selectedId) {
+  const sel = document.getElementById('sCat');
+  sel.innerHTML = '<option value="">— Sem categoria —</option>' +
+    categorias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nome}</option>`).join('');
+}
+function abrirModalServico() {
+  document.getElementById('servicoId').value = '';
+  document.getElementById('sNome').value = '';
+  document.getElementById('sPreco').value = '';
+  document.getElementById('titServico').textContent = 'Novo Serviço';
+  document.getElementById('btnDelServico').style.display = 'none';
+  populateCatSelect(null);
+  document.getElementById('modalServico').style.display = 'flex';
+}
+function fecharModalServico() { document.getElementById('modalServico').style.display = 'none'; }
+function editarServico(id) {
+  const s = servicos.find(x=>x.id===id);
+  if (!s) return;
+  document.getElementById('servicoId').value = id;
+  document.getElementById('sNome').value = s.nome;
+  document.getElementById('sPreco').value = s.preco||0;
+  document.getElementById('titServico').textContent = 'Editar Serviço';
+  document.getElementById('btnDelServico').style.display = '';
+  populateCatSelect(s.categoria_id);
+  document.getElementById('modalServico').style.display = 'flex';
+}
+async function salvarServico() {
+  const id = document.getElementById('servicoId').value;
+  const nome = document.getElementById('sNome').value.trim();
+  const preco = parseFloat(document.getElementById('sPreco').value||0);
+  const catId = document.getElementById('sCat').value;
+  if (!nome) { alert('Informe o nome'); return; }
+  const body = {nome, preco, categoria_id: catId ? parseInt(catId) : null};
+  const url = id ? `/api/servicos/${id}` : '/api/servicos';
+  const method = id ? 'PUT' : 'POST';
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify(body)});
+  if (r.ok) { fecharModalServico(); await carregar(); }
+  else alert('Erro ao salvar serviço');
+}
+async function deletarServico() {
+  const id = document.getElementById('servicoId').value;
+  if (!id || !confirm('Excluir serviço?')) return;
+  const r = await fetch(`/api/servicos/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) { fecharModalServico(); await carregar(); }
+  else alert('Erro ao excluir');
+}
+
+carregar();
+</script>
+{% endblock %}

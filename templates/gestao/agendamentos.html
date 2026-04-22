@@ -1,0 +1,547 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Marcar Horário{% endblock %}
+
+{% block head %}
+<style>
+  .mh-section-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  /* Cliente autocomplete */
+  .cliente-wrap { position: relative; margin-bottom: 1.25rem; }
+  .cliente-lista {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    z-index: 50;
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+  }
+  .cliente-lista.open { display: block; }
+  .cliente-item {
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .cliente-item:last-child { border-bottom: none; }
+  .cliente-item:hover, .cliente-item.focused { background: var(--surface); }
+  .cliente-item-nome { color: var(--text); font-weight: 500; }
+  .cliente-item-sub { color: var(--text-muted); font-size: 0.75rem; }
+  .btn-novo-cliente {
+    font-size: 0.78rem; color: var(--gold);
+    background: none; border: none; cursor: pointer;
+    font-family: var(--font-sans);
+    display: flex; align-items: center; gap: 0.3rem;
+    padding: 0;
+  }
+  .btn-novo-cliente:hover { opacity: 0.8; }
+
+  /* Data strip */
+  .data-strip {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding-bottom: 4px; margin-bottom: 1.25rem;
+    scrollbar-width: none;
+  }
+  .data-strip::-webkit-scrollbar { display: none; }
+  .data-btn {
+    display: flex; flex-direction: column; align-items: center;
+    min-width: 52px; padding: 8px 6px;
+    border-radius: 10px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.03);
+    cursor: pointer; font-family: var(--font-sans);
+    transition: background 0.15s, border-color 0.15s;
+    touch-action: manipulation;
+  }
+  .data-btn:hover { background: rgba(255,255,255,0.06); }
+  .data-btn.sel { background: var(--gold); border-color: var(--gold); }
+  .data-btn-dia { font-size: 8px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.04em; }
+  .data-btn.sel .data-btn-dia { color: rgba(0,0,0,0.5); }
+  .data-btn-num { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1.1; }
+  .data-btn.sel .data-btn-num { color: #000; }
+  .data-btn-mes { font-size: 8px; color: var(--text-muted); }
+  .data-btn.sel .data-btn-mes { color: rgba(0,0,0,0.4); }
+
+  /* Slots */
+  .slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+    margin-bottom: 1.5rem;
+  }
+  .slot-btn {
+    padding: 0.55rem 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    touch-action: manipulation;
+    text-align: center;
+  }
+  .slot-btn:hover { background: rgba(255,255,255,0.07); border-color: var(--gold-dim); }
+  .slot-btn.sel { background: var(--gold); border-color: var(--gold); color: #000; font-weight: 700; }
+  .slots-loading { color: var(--text-muted); font-size: 0.875rem; padding: 0.75rem 0; }
+  .slots-fechado { color: var(--error); font-size: 0.875rem; padding: 0.75rem 0; }
+
+  /* Botão salvar */
+  .btn-salvar {
+    width: 100%; padding: 0.85rem;
+    background: var(--gold); color: #000;
+    border: none; border-radius: var(--radius);
+    font-size: 1rem; font-weight: 700;
+    font-family: var(--font-sans);
+    cursor: pointer; transition: opacity 0.15s;
+    touch-action: manipulation;
+  }
+  .btn-salvar:disabled { opacity: 0.35; cursor: default; }
+  .btn-salvar:not(:disabled):hover { opacity: 0.85; }
+
+  /* Modal novo cliente */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.65); z-index: 400;
+    align-items: flex-end; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  @media (min-width: 480px) { .modal-overlay { align-items: center; } }
+  .modal-box {
+    background: var(--surface);
+    border-radius: 16px 16px 0 0;
+    width: 100%; max-width: 480px;
+    padding: 1.5rem 1.25rem 2rem;
+    border-top: 1px solid var(--border);
+  }
+  @media (min-width: 480px) {
+    .modal-box { border-radius: 16px; border: 1px solid var(--border); }
+  }
+  .modal-titulo { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--border); border-radius: 2px;
+    margin: 0 auto 1rem;
+  }
+  @media (min-width: 480px) { .modal-handle { display: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="g-page-title">Marcar Horário</h1>
+
+<div style="max-width: 520px;">
+
+  <!-- Cliente -->
+  <div class="mh-section-label">
+    <span>Cliente</span>
+    <button class="btn-novo-cliente" onclick="abrirModalNovoCliente()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Novo cliente
+    </button>
+  </div>
+  <div class="cliente-wrap">
+    <input class="g-input" id="clienteBusca" placeholder="Buscar cliente..." autocomplete="off"
+           oninput="filtrarClientes()" onfocus="abrirLista()" />
+    <input type="hidden" id="clienteId" />
+    <div class="cliente-lista" id="clienteLista"></div>
+  </div>
+
+  <!-- Data -->
+  <div class="mh-section-label" style="margin-bottom:0.6rem;">Data</div>
+  <div class="data-strip" id="dataStrip"></div>
+
+  <!-- Serviços (multi-seleção) -->
+  <div class="mh-section-label" style="margin-bottom:0.6rem;">Serviços <span style="font-weight:400;color:var(--text-muted);font-size:.7rem;">(opcional)</span></div>
+  <div style="margin-bottom:1.25rem;">
+    <div id="servicosChips" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;"></div>
+    <div id="totalServicos" style="font-size:.85rem;color:var(--gold);min-height:1.2rem;"></div>
+  </div>
+
+  <!-- Forma pagamento -->
+  <div class="mh-section-label" style="margin-bottom:0.6rem;">Forma de pagamento</div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem;">
+      <input type="radio" name="formaPag" value="pagar_no_local" checked style="accent-color:var(--gold);" /> Pagar no local
+    </label>
+    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem;">
+      <input type="radio" name="formaPag" value="pix" style="accent-color:var(--gold);" /> Pix
+    </label>
+  </div>
+
+  <!-- Slots -->
+  <div class="mh-section-label" style="margin-bottom:0.6rem;">
+    <span>Horário disponível</span>
+  </div>
+  <div id="slotsArea"><div class="slots-loading">Selecione uma data</div></div>
+
+  <!-- Salvar -->
+  <button class="btn-salvar" id="btnSalvar" disabled onclick="salvar()">Confirmar agendamento</button>
+  <div id="msgSalvar" style="margin-top:0.75rem; font-size:0.875rem;"></div>
+</div>
+
+<!-- Modal novo cliente -->
+<div class="modal-overlay" id="modalCliente" onclick="fecharModalSeFora(event)">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo">Novo Cliente</div>
+    <div class="g-form-group" style="margin-bottom:0.85rem;">
+      <label class="g-label">Nome *</label>
+      <input class="g-input" id="novoNome" placeholder="Nome completo" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:0.85rem;">
+      <label class="g-label">Contato *</label>
+      <input class="g-input" id="novoContato" type="tel" placeholder="(00) 00000-0000" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:1.1rem;">
+      <label class="g-label">Observação</label>
+      <input class="g-input" id="novoObs" placeholder="Opcional" />
+    </div>
+    <div style="display:flex; gap:0.75rem;">
+      <button class="g-btn g-btn-outline" style="flex:1;" onclick="fecharModalCliente()">Cancelar</button>
+      <button class="btn-salvar" style="flex:1;" onclick="salvarNovoCliente()">Criar cliente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CLIENTES = {{ clientes_json | safe }};
+const TOKEN    = '{{ token }}';
+const DIAS_PT  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+let clienteSelecionado = null;
+let dataSelecionada    = null;  // 'YYYY-MM-DD'
+let slotSelecionado    = null;
+let clientesFiltrados  = [...CLIENTES];
+let servicosLista      = [];
+
+let servicosSelecionados = []; // [{id, nome, preco}]
+
+async function carregarServicos() {
+  try {
+    const r = await fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}});
+    servicosLista = await r.json();
+    renderServicosChips();
+  } catch(e) {}
+}
+
+function renderServicosChips() {
+  const box = document.getElementById('servicosChips');
+  box.innerHTML = servicosLista.map(s => {
+    const sel = servicosSelecionados.some(x => x.id === s.id);
+    return `<button type="button" onclick="toggleServico(${s.id})"
+      style="padding:.3rem .75rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s;
+             background:${sel?'var(--gold)':'var(--surface)'};
+             border:1px solid ${sel?'var(--gold)':'var(--border)'};
+             color:${sel?'#000':'var(--text-muted)'};">
+      ${s.nome}${s.preco>0?' · R$ '+parseFloat(s.preco).toFixed(2).replace('.',','):''}
+    </button>`;
+  }).join('');
+  const total = servicosSelecionados.reduce((s,x)=>s+x.preco,0);
+  document.getElementById('totalServicos').textContent =
+    servicosSelecionados.length ? `Total: R$ ${total.toFixed(2).replace('.',',')}` : '';
+}
+
+function toggleServico(id) {
+  const idx = servicosSelecionados.findIndex(x=>x.id===id);
+  if (idx >= 0) {
+    servicosSelecionados.splice(idx,1);
+  } else {
+    const sv = servicosLista.find(s=>s.id===id);
+    if (sv) servicosSelecionados.push({id:sv.id, nome:sv.nome, preco:parseFloat(sv.preco||0)});
+  }
+  renderServicosChips();
+}
+
+// ── Cliente ─────────────────────────────────────────
+function filtrarClientes() {
+  const q = document.getElementById('clienteBusca').value.toLowerCase();
+  clientesFiltrados = CLIENTES.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.contact || '').toLowerCase().includes(q) ||
+    (c.email || '').toLowerCase().includes(q)
+  );
+  renderLista();
+  abrirLista();
+  if (!q) { clienteSelecionado = null; document.getElementById('clienteId').value = ''; atualizarBotao(); }
+}
+
+function abrirLista() {
+  const lista = document.getElementById('clienteLista');
+  if (!clientesFiltrados.length) {
+    lista.innerHTML = '<div class="cliente-item" style="color:var(--text-muted)">Nenhum cliente encontrado</div>';
+  }
+  lista.classList.add('open');
+  renderLista();
+}
+
+function renderLista() {
+  const lista = document.getElementById('clienteLista');
+  lista.innerHTML = clientesFiltrados.slice(0, 30).map(c => `
+    <div class="cliente-item" onclick="selecionarCliente(${c.id}, '${c.name.replace(/'/g,"\\'")}')">
+      <div class="cliente-item-nome">${c.name}</div>
+      <div class="cliente-item-sub">${c.contact || c.email || ''}</div>
+    </div>
+  `).join('') || '<div class="cliente-item" style="color:var(--text-muted)">Nenhum cliente encontrado</div>';
+  lista.classList.add('open');
+}
+
+function selecionarCliente(id, nome) {
+  clienteSelecionado = id;
+  document.getElementById('clienteBusca').value = nome;
+  document.getElementById('clienteId').value = id;
+  document.getElementById('clienteLista').classList.remove('open');
+  atualizarBotao();
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.cliente-wrap')) {
+    document.getElementById('clienteLista').classList.remove('open');
+  }
+});
+
+// ── Data strip ──────────────────────────────────────
+function buildDataStrip() {
+  const strip = document.getElementById('dataStrip');
+  const hoje = new Date();
+  const dias = [];
+  let cursor = new Date(hoje);
+  while (dias.length < 30) {
+    if (cursor.getDay() !== 0) { // sem domingo
+      dias.push(new Date(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  strip.innerHTML = dias.map(d => {
+    const iso = toISO(d);
+    const label = d.toDateString() === hoje.toDateString() ? 'Hoje' : DIAS_PT[d.getDay()];
+    return `<button class="data-btn" data-date="${iso}" onclick="selecionarData('${iso}', this)">
+      <span class="data-btn-dia">${label}</span>
+      <span class="data-btn-num">${d.getDate()}</span>
+      <span class="data-btn-mes">${MESES_PT[d.getMonth()]}</span>
+    </button>`;
+  }).join('');
+  // seleciona hoje por padrão
+  const primeiro = strip.querySelector('.data-btn');
+  if (primeiro) primeiro.click();
+}
+
+function toISO(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+function selecionarData(iso, el) {
+  document.querySelectorAll('.data-btn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  dataSelecionada = iso;
+  slotSelecionado = null;
+  atualizarBotao();
+  carregarSlots(iso);
+}
+
+// ── Slots ────────────────────────────────────────────
+async function carregarSlots(data) {
+  const area = document.getElementById('slotsArea');
+  area.innerHTML = '<div class="slots-loading">Carregando horários...</div>';
+  try {
+    const res = await fetch(`/api/horarios-disponiveis?data=${data}`);
+    const body = await res.json();
+    if (body.fechado) {
+      area.innerHTML = '<div class="slots-fechado">Dia fechado — sem atendimento.</div>';
+      return;
+    }
+    const slots = body.disponiveis || [];
+    if (!slots.length) {
+      area.innerHTML = '<div class="slots-fechado">Sem horários disponíveis.</div>';
+      return;
+    }
+    area.innerHTML = `<div class="slots-grid">${slots.map(s =>
+      `<button class="slot-btn" onclick="selecionarSlot('${s}', this)">${s}</button>`
+    ).join('')}</div>`;
+  } catch {
+    area.innerHTML = '<div class="slots-fechado">Erro ao carregar horários.</div>';
+  }
+}
+
+function selecionarSlot(slot, el) {
+  document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+  slotSelecionado = slot;
+  atualizarBotao();
+}
+
+function atualizarBotao() {
+  document.getElementById('btnSalvar').disabled = !(clienteSelecionado && dataSelecionada && slotSelecionado);
+}
+
+// ── Salvar ────────────────────────────────────────────
+async function salvar() {
+  if (!clienteSelecionado || !dataSelecionada || !slotSelecionado) return;
+  const btn = document.getElementById('btnSalvar');
+  const msg = document.getElementById('msgSalvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  msg.textContent = '';
+  try {
+    const formaPag  = document.querySelector('input[name="formaPag"]:checked')?.value || 'pagar_no_local';
+    const payload   = {
+      user_id: clienteSelecionado,
+      data_hora: dataSelecionada + 'T' + slotSelecionado + ':00',
+      forma_pagamento: formaPag,
+    };
+    if (servicosSelecionados.length) payload.servico_ids = servicosSelecionados.map(s=>s.id);
+    const res = await fetch('/api/agendamentos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify(payload)
+    });
+    const body = await res.json();
+    if (body.ok) {
+      msg.style.color = 'var(--success)';
+      msg.textContent = '✓ Horário marcado com sucesso!';
+      // Se pix e tem pedido, abre QR
+      if (formaPag === 'pix' && body.pedido_id) {
+        const cliente = CLIENTES.find(c => c.id === clienteSelecionado);
+        await gerarQrPix(body.pedido_id, body.total, cliente?.email);
+      }
+      // reset
+      clienteSelecionado = null; slotSelecionado = null;
+      document.getElementById('clienteBusca').value = '';
+      document.getElementById('clienteId').value = '';
+      document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('sel'));
+      carregarSlots(dataSelecionada);
+    } else {
+      msg.style.color = 'var(--error)';
+      msg.textContent = body.erro || 'Erro ao marcar horário.';
+    }
+  } catch {
+    msg.style.color = 'var(--error)';
+    msg.textContent = 'Erro de conexão.';
+  }
+  btn.textContent = 'Confirmar agendamento';
+  atualizarBotao();
+}
+
+// ── Novo cliente ──────────────────────────────────────
+function abrirModalNovoCliente() {
+  document.getElementById('modalCliente').classList.add('open');
+  setTimeout(() => document.getElementById('novoNome').focus(), 100);
+}
+function fecharModalCliente() {
+  document.getElementById('modalCliente').classList.remove('open');
+}
+function fecharModalSeFora(e) {
+  if (e.target === document.getElementById('modalCliente')) fecharModalCliente();
+}
+
+async function salvarNovoCliente() {
+  const nome    = document.getElementById('novoNome').value.trim();
+  const contato = document.getElementById('novoContato').value.trim();
+  const obs     = document.getElementById('novoObs').value.trim();
+  if (!nome || !contato) { alert('Nome e contato são obrigatórios.'); return; }
+  const email = 'guest_' + Math.random().toString(36).slice(2,10) + '@gestao.local';
+  const res = await fetch('/api/usuarios', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+    body: JSON.stringify({ name: nome, email, contact: contato, observation: obs })
+  });
+  const body = await res.json();
+  if (body.id || body.ok) {
+    const id = body.id;
+    CLIENTES.unshift({ id, name: nome, contact: contato, email });
+    selecionarCliente(id, nome);
+    fecharModalCliente();
+    document.getElementById('novoNome').value = '';
+    document.getElementById('novoContato').value = '';
+    document.getElementById('novoObs').value = '';
+  } else {
+    alert(body.erro || 'Erro ao criar cliente.');
+  }
+}
+
+carregarServicos();
+buildDataStrip();
+
+// ── QR Code Pix ──────────────────────────────────────
+function fecharQrGestao() {
+  document.getElementById('qrGestaoOverlay').style.display = 'none';
+  document.getElementById('qrGestaoModal').style.display   = 'none';
+}
+
+async function gerarQrPix(pedidoId, total, payerEmail) {
+  document.getElementById('qrGestaoTotal').textContent = 'R$ ' + total.toFixed(2).replace('.',',');
+  document.getElementById('qrGestaoImg').style.display      = 'none';
+  document.getElementById('qrGestaoLoading').style.display  = 'block';
+  document.getElementById('qrGestaoCopia').style.display    = 'none';
+  document.getElementById('qrGestaoStatus').textContent     = 'Gerando QR Code…';
+  document.getElementById('qrGestaoOverlay').style.display  = 'block';
+  document.getElementById('qrGestaoModal').style.display    = 'flex';
+
+  try {
+    const r = await fetch('/api/criar-pagamento', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify({total, metodo:'pix', pedido_id: pedidoId, payer_email: payerEmail || 'cliente@barbearia.com'})
+    });
+    const d = await r.json();
+    if (d.qr_code_base64) {
+      document.getElementById('qrGestaoImg').src = 'data:image/png;base64,' + d.qr_code_base64;
+      document.getElementById('qrGestaoImg').style.display = 'block';
+    }
+    if (d.qr_code) {
+      document.getElementById('qrGestaoCodigo').value = d.qr_code;
+      document.getElementById('qrGestaoCopia').style.display = 'block';
+    }
+    document.getElementById('qrGestaoLoading').style.display = 'none';
+    document.getElementById('qrGestaoStatus').textContent    = 'Aguardando pagamento…';
+  } catch(e) {
+    document.getElementById('qrGestaoLoading').style.display = 'none';
+    document.getElementById('qrGestaoStatus').textContent    = 'Erro ao gerar QR Code.';
+  }
+}
+
+function copiarPixGestao() {
+  const cod = document.getElementById('qrGestaoCodigo').value;
+  navigator.clipboard.writeText(cod).then(() => {
+    const btn = document.getElementById('btnCopiarPixGestao');
+    btn.textContent = 'Copiado!';
+    setTimeout(() => btn.textContent = 'Copiar', 2000);
+  });
+}
+</script>
+
+<!-- Modal QR Pix (gestão) -->
+<div id="qrGestaoOverlay" onclick="fecharQrGestao()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;"></div>
+<div id="qrGestaoModal" style="display:none;position:fixed;inset:0;z-index:301;align-items:center;justify-content:center;padding:1rem;pointer-events:none;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:340px;text-align:center;pointer-events:auto;position:relative;">
+    <button onclick="fecharQrGestao()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;line-height:1;">×</button>
+    <div class="g-section-title" style="margin-bottom:.25rem;">Pague via PIX</div>
+    <div id="qrGestaoTotal" style="color:var(--gold);font-size:1.1rem;font-weight:600;margin-bottom:1rem;">R$ 0,00</div>
+    <div id="qrGestaoLoading" style="padding:2rem 0;color:var(--text-muted);font-size:.875rem;">Gerando QR Code…</div>
+    <img id="qrGestaoImg" src="" alt="QR Code" style="display:none;max-width:220px;width:100%;border-radius:8px;margin:0 auto .75rem;" />
+    <div id="qrGestaoCopia" style="display:none;margin-bottom:.75rem;">
+      <p style="font-size:.75rem;color:var(--text-muted);margin-bottom:.4rem;">Copia e cola:</p>
+      <div style="display:flex;gap:.4rem;align-items:center;">
+        <input id="qrGestaoCodigo" readonly class="g-input" style="font-size:.7rem;flex:1;" />
+        <button id="btnCopiarPixGestao" class="g-btn g-btn-outline" onclick="copiarPixGestao()" style="padding:.4rem .7rem;font-size:.75rem;white-space:nowrap;">Copiar</button>
+      </div>
+    </div>
+    <div id="qrGestaoStatus" style="font-size:.8rem;color:var(--text-muted);"></div>
+  </div>
+</div>
+{% endblock %}

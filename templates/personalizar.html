@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personalizar — BarberOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700&family=Cormorant+Garamond:wght@400;600;700&family=Raleway:wght@400;600;700&family=Bebas+Neue&family=Montserrat:wght@400;600;700&family=DM+Sans:wght@400;500;600&family=Poppins:wght@400;500;600&family=Lato:wght@400;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);
+  --gold:#C9A96E;--gold2:#e0be88;--text:#f5f5f5;--muted:#888;--muted2:#3a3a3a;
+  --panel:300px;--screens:130px;
+}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;display:flex;flex-direction:column}
+
+/* ── TOPBAR ── */
+.topbar{
+  height:54px;flex-shrink:0;
+  display:flex;align-items:center;gap:1.25rem;
+  padding:0 1.25rem 0 1.5rem;
+  background:rgba(0,0,0,0.85);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);z-index:100;
+}
+.topbar-logo{font-size:.88rem;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.topbar-logo span{color:var(--gold)}
+.tb-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.steps{display:flex;align-items:center;gap:0;flex:1;justify-content:center}
+.step-item{
+  display:flex;align-items:center;gap:.45rem;padding:5px 12px;
+  border-radius:50px;font-size:.76rem;font-weight:500;color:var(--muted);
+  cursor:pointer;transition:color .2s;white-space:nowrap;
+}
+.step-item.active{color:var(--gold)}
+.step-num{
+  width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;
+  display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;
+}
+.step-item.done .step-num{background:var(--gold);border-color:var(--gold);color:#000}
+.step-conn{width:28px;height:1px;background:var(--border)}
+.topbar-right{display:flex;align-items:center;gap:.6rem;margin-left:auto}
+.btn-avancar{
+  background:var(--gold);color:#000;padding:7px 18px;border-radius:8px;
+  font-size:.8rem;font-weight:700;border:none;cursor:pointer;
+  transition:background .2s,transform .15s;white-space:nowrap;
+}
+.btn-avancar:hover{background:var(--gold2);transform:scale(1.02)}
+
+/* ── LAYOUT ── */
+.main{display:flex;flex:1;overflow:hidden}
+
+/* ── PANEL (left editor) ── */
+.panel{
+  width:var(--panel);flex-shrink:0;
+  background:rgba(5,5,5,1);
+  border-right:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;
+}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:var(--muted2);border-radius:2px}
+
+/* Edit scope indicator */
+#edit-scope-bar{
+  padding:.55rem 1.25rem;background:rgba(201,169,110,.07);
+  border-bottom:1px solid rgba(201,169,110,.15);font-size:.7rem;
+  color:#C9A96E;font-weight:600;display:none;align-items:center;gap:.4rem;
+}
+
+/* Presets */
+.p-sec{padding:1.1rem 1.25rem}
+.p-sec+.p-sec{border-top:1px solid var(--border)}
+.p-title{font-size:.67rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.9rem}
+.presets{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem}
+.preset{border:1.5px solid var(--border);border-radius:9px;padding:.55rem .4rem;cursor:pointer;transition:border-color .25s,transform .15s;text-align:center}
+.preset:hover{border-color:rgba(255,255,255,0.2);transform:translateY(-1px)}
+.preset.sel{border-color:var(--gold)}
+.preset-sw{height:28px;border-radius:6px;margin-bottom:.35rem;display:flex;align-items:center;justify-content:center;gap:3px}
+.preset-dot{width:7px;height:7px;border-radius:50%}
+.preset-name{font-size:.62rem;color:var(--muted);font-weight:500}
+
+/* Color pickers */
+.color-list{display:flex;flex-direction:column;gap:.55rem}
+.color-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.color-lbl{font-size:.78rem;color:var(--text);flex:1}
+.cp-wrap{width:34px;height:34px;border-radius:8px;border:1.5px solid var(--border);overflow:hidden;cursor:pointer;position:relative;flex-shrink:0;transition:border-color .2s}
+.cp-wrap:hover{border-color:rgba(255,255,255,0.3)}
+.cp-wrap input[type=color]{position:absolute;inset:-4px;width:calc(100%+8px);height:calc(100%+8px);border:none;padding:0;cursor:pointer;opacity:0}
+.cp-preview{position:absolute;inset:0;border-radius:6px;pointer-events:none}
+
+/* Fonts */
+.font-list{display:flex;flex-direction:column;gap:.75rem}
+.font-lbl{font-size:.75rem;color:var(--muted);margin-bottom:.35rem}
+.font-sel{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:.82rem;width:100%;cursor:pointer;outline:none;transition:border-color .2s;font-family:inherit}
+.font-sel:focus{border-color:var(--gold)}
+.font-sel option{background:#111;color:#f5f5f5}
+.font-sample{font-size:.95rem;color:var(--muted);margin-top:.35rem;line-height:1.2}
+.img-upload-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.img-upload-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
+.img-upload-btn{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px dashed var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:.8rem;cursor:pointer;transition:border-color .2s,background .2s;white-space:nowrap}
+.img-upload-btn:hover{border-color:var(--gold);background:rgba(201,169,110,.08)}
+.img-upload-rm{background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;transition:color .2s}
+.img-upload-rm:hover{color:#e55}
+
+/* Geometry */
+.geo-list{display:flex;flex-direction:column;gap:1rem}
+.geo-lbl{font-size:.75rem;color:var(--muted);margin-bottom:.4rem;display:flex;justify-content:space-between}
+.geo-lbl b{color:var(--gold);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
+.btnstyle-row{display:flex;gap:.4rem;margin-top:.1rem}
+.bso{flex:1;padding:7px 4px;border-radius:7px;border:1.5px solid var(--border);font-size:.7rem;font-weight:500;color:var(--muted);cursor:pointer;text-align:center;transition:border-color .2s,color .2s;background:transparent}
+.bso.sel{border-color:var(--gold);color:var(--gold)}
+
+/* ── SCREENS SIDEBAR ── */
+.screens-sidebar{
+  width:var(--screens);flex-shrink:0;
+  background:rgba(8,8,8,1);
+  border-right:1px solid var(--border);
+  overflow-y:auto;overflow-x:hidden;
+  display:flex;flex-direction:column;
+  padding:.6rem 0 1rem;
+}
+.screens-sidebar::-webkit-scrollbar{width:2px}
+.screens-sidebar::-webkit-scrollbar-thumb{background:var(--muted2);border-radius:2px}
+.screens-group-header{
+  font-size:.6rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding:.8rem .85rem .35rem;
+}
+.screens-group-header+.screens-group-header{border-top:1px solid var(--border);margin-top:.3rem}
+.screen-item{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.5rem .85rem;cursor:pointer;
+  font-size:.78rem;font-weight:500;color:var(--muted);
+  border-left:2px solid transparent;
+  transition:color .15s,background .15s,border-color .15s;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.screen-item:hover{color:var(--text);background:rgba(255,255,255,0.03)}
+.screen-item.active{color:var(--gold);border-left-color:var(--gold);background:rgba(201,169,110,.06)}
+
+/* ── CANVAS ── */
+.canvas{
+  flex:1;overflow:hidden;display:flex;flex-direction:column;
+  background:#070707;
+}
+.canvas-ctrl{
+  display:flex;align-items:center;padding:.6rem 1.1rem;
+  border-bottom:1px solid var(--border);gap:.6rem;flex-shrink:0;
+  background:rgba(0,0,0,0.6);backdrop-filter:blur(12px);
+}
+.toggle-group{display:flex;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:3px;gap:2px}
+.tg-btn{padding:5px 13px;border-radius:6px;font-size:.74rem;font-weight:500;color:var(--muted);cursor:pointer;border:none;background:transparent;transition:background .15s,color .15s;white-space:nowrap}
+.tg-btn.active{background:rgba(255,255,255,0.1);color:var(--text)}
+.canvas-url{
+  flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);
+  border-radius:20px;padding:5px 12px;font-size:.71rem;color:var(--muted);
+  font-family:'Inter',sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  display:flex;align-items:center;gap:5px;
+}
+.canvas-url-lock{opacity:.4;font-size:.65rem}
+
+/* Canvas body — dot grid background */
+.canvas-body{
+  flex:1;overflow:auto;
+  display:flex;align-items:center;justify-content:center;
+  padding:2.5rem 2rem;
+  background-image:radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
+  background-size:22px 22px;
+}
+.canvas-body::-webkit-scrollbar{width:4px}
+.canvas-body::-webkit-scrollbar-thumb{background:#222;border-radius:4px}
+
+/* ── Desktop mockup — laptop frame ── */
+@keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+
+.prev-desktop{
+  display:flex;flex-direction:column;align-items:center;
+  filter:drop-shadow(0 32px 64px rgba(0,0,0,0.9));
+  animation:popIn .3s cubic-bezier(.22,1,.36,1) both;
+  width:900px;flex-shrink:0;
+}
+
+/* Laptop lid */
+.laptop-lid{
+  width:100%;
+  background:linear-gradient(180deg,#272727 0%,#1e1e1e 100%);
+  border-radius:14px 14px 0 0;
+  border:none;
+  padding:14px 11px 0;
+  position:relative;
+}
+/* Webcam dot */
+.laptop-lid::before{
+  content:'';position:absolute;top:6px;left:50%;transform:translateX(-50%);
+  width:5px;height:5px;border-radius:50%;
+  background:#111;box-shadow:0 0 0 1px rgba(255,255,255,.12);
+}
+
+/* Browser chrome inside lid */
+.browser-win{
+  background:linear-gradient(180deg,#2c2c2c 0%,#232323 100%);
+  border-radius:8px 8px 0 0;
+  border:none;
+}
+.browser-titlebar{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.42rem .7rem;
+  border-bottom:1px solid rgba(0,0,0,.4);
+}
+.b-dots{display:flex;gap:5px;flex-shrink:0}
+.b-dot{
+  width:10px;height:10px;border-radius:50%;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2);
+}
+.browser-tabs{
+  display:flex;align-items:center;gap:.35rem;flex:1;overflow:hidden;
+}
+.browser-tab{
+  display:flex;align-items:center;gap:.35rem;
+  background:rgba(255,255,255,0.07);border-radius:5px 5px 0 0;
+  padding:.25rem .6rem;font-size:.65rem;color:rgba(255,255,255,.55);
+  white-space:nowrap;overflow:hidden;max-width:160px;
+  border:none;
+}
+.browser-tab-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);flex-shrink:0}
+.browser-tab-title{overflow:hidden;text-overflow:ellipsis}
+
+.browser-body{
+  border:none;
+  overflow:hidden;height:500px;
+  background:#000;
+}
+.browser-body iframe{width:100%;height:100%;border:none;display:block}
+
+/* Laptop base/hinge */
+.laptop-base{
+  width:100%;
+  height:22px;
+  background:linear-gradient(180deg,#232323 0%,#1a1a1a 100%);
+  border-radius:0 0 6px 6px;
+  border:none;
+  border-top:2px solid rgba(0,0,0,.6);
+  display:flex;align-items:center;justify-content:center;
+}
+.laptop-trackpad{
+  width:110px;height:14px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:3px;
+}
+/* Bottom foot */
+.laptop-foot{
+  width:92%;height:6px;
+  background:linear-gradient(180deg,#161616,#101010);
+  border-radius:0 0 8px 8px;
+  border:1px solid rgba(255,255,255,.06);
+  border-top:none;
+  box-shadow:0 6px 20px rgba(0,0,0,.7);
+}
+
+/* ── Phone mockup ── */
+.prev-phone{
+  display:flex;justify-content:center;align-items:flex-start;
+  filter:drop-shadow(0 40px 80px rgba(0,0,0,0.9));
+  animation:popIn .3s cubic-bezier(.22,1,.36,1) both;
+}
+.phone-outer{
+  width:280px;
+  background:linear-gradient(160deg,#2a2a2a 0%,#111 60%,#1a1a1a 100%);
+  border-radius:52px;
+  padding:12px;
+  position:relative;
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,.8),
+    inset 0 1px 0 rgba(255,255,255,.12),
+    inset 0 -1px 0 rgba(0,0,0,.5),
+    0 50px 100px rgba(0,0,0,.95);
+}
+/* Side buttons */
+.phone-outer::before{
+  content:'';position:absolute;
+  left:-3px;top:90px;width:3px;height:36px;
+  background:linear-gradient(180deg,#2a2a2a,#1a1a1a);
+  border-radius:3px 0 0 3px;
+  box-shadow:-1px 0 0 rgba(255,255,255,.06);
+}
+.phone-outer::after{
+  content:'';position:absolute;
+  right:-3px;top:110px;width:3px;height:60px;
+  background:linear-gradient(180deg,#2a2a2a,#1a1a1a);
+  border-radius:0 3px 3px 0;
+  box-shadow:1px 0 0 rgba(255,255,255,.06);
+}
+/* Dynamic island */
+.phone-island{
+  position:absolute;top:20px;left:50%;transform:translateX(-50%);
+  width:100px;height:30px;
+  background:#000;border-radius:20px;z-index:10;
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.07);
+}
+.phone-screen{
+  width:256px;height:518px;
+  border-radius:40px;overflow:hidden;
+  position:relative;background:#000;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
+}
+.phone-inner{width:375px;transform-origin:top left;transform:scale(0.6827)}
+/* Home bar */
+.phone-home{
+  position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  width:100px;height:4px;background:rgba(255,255,255,.25);
+  border-radius:4px;z-index:10;
+}
+.phone-status{
+  position:absolute;top:0;left:0;right:0;height:48px;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:14px 24px 0;
+  font-size:.6rem;color:rgba(255,255,255,.7);font-weight:600;
+  z-index:5;pointer-events:none;
+  font-family:'Inter',sans-serif;letter-spacing:.02em;
+}
+
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <a href="/landing" class="topbar-logo" style="text-decoration:none"><span>✦</span> BarberOS</a>
+  <div class="tb-sep"></div>
+  <div class="steps">
+    <div class="step-item active"><div class="step-num">1</div> Estilo</div>
+    <div class="step-conn"></div>
+    <div class="step-item"><div class="step-num">2</div> Plano</div>
+    <div class="step-conn"></div>
+    <div class="step-item"><div class="step-num">3</div> Cadastro</div>
+    <div class="step-conn"></div>
+    <div class="step-item"><div class="step-num">4</div> Pagamento</div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn-avancar" onclick="irParaPlanos()">Próximo →</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- ── LEFT PANEL (editor) ── -->
+  <aside class="panel">
+
+    <div id="edit-scope-bar">
+      <span>✏️</span> <span id="edit-scope-label">Editando: Site de Agendamento</span>
+    </div>
+
+    <!-- Presets -->
+    <div class="p-sec">
+      <div class="p-title">Temas Prontos</div>
+      <div class="presets">
+        <div class="preset sel" onclick="aplicarPreset('classico')" id="pr-classico">
+          <div class="preset-sw" style="background:#111"><div class="preset-dot" style="background:#C9A96E"></div><div class="preset-dot" style="background:#1a1a1a"></div></div>
+          <div class="preset-name">Clássico</div>
+        </div>
+        <div class="preset" onclick="aplicarPreset('moderno')" id="pr-moderno">
+          <div class="preset-sw" style="background:#0a0a14"><div class="preset-dot" style="background:#6C63FF"></div><div class="preset-dot" style="background:#12122a"></div></div>
+          <div class="preset-name">Moderno</div>
+        </div>
+        <div class="preset" onclick="aplicarPreset('bege')" id="pr-bege">
+          <div class="preset-sw" style="background:#f0ebe1"><div class="preset-dot" style="background:#8B5E3C"></div><div class="preset-dot" style="background:#fff"></div></div>
+          <div class="preset-name">Bege</div>
+        </div>
+        <div class="preset" onclick="aplicarPreset('carbono')" id="pr-carbono">
+          <div class="preset-sw" style="background:#080808"><div class="preset-dot" style="background:#e0e0e0"></div><div class="preset-dot" style="background:#1c1c1c"></div></div>
+          <div class="preset-name">Carbono</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cores -->
+    <div class="p-sec">
+      <div class="p-title">Cores</div>
+      <div class="color-list">
+        <div class="color-row">
+          <span class="color-lbl">Fundo</span>
+          <div class="cp-wrap"><div class="cp-preview" id="cpp-fundo"></div><input type="color" id="cp-fundo" value="#0c0c0c" oninput="onColor('fundo',this.value)"></div>
+        </div>
+        <div class="color-row">
+          <span class="color-lbl">Superfície</span>
+          <div class="cp-wrap"><div class="cp-preview" id="cpp-surf"></div><input type="color" id="cp-surf" value="#161616" oninput="onColor('superficie',this.value)"></div>
+        </div>
+        <div class="color-row">
+          <span class="color-lbl">Destaque</span>
+          <div class="cp-wrap"><div class="cp-preview" id="cpp-dest"></div><input type="color" id="cp-dest" value="#C9A96E" oninput="onColor('destaque',this.value)"></div>
+        </div>
+        <div class="color-row">
+          <span class="color-lbl">Texto</span>
+          <div class="cp-wrap"><div class="cp-preview" id="cpp-texto"></div><input type="color" id="cp-texto" value="#F0ECE4" oninput="onColor('texto',this.value)"></div>
+        </div>
+        <div class="color-row">
+          <span class="color-lbl">Borda</span>
+          <div class="cp-wrap"><div class="cp-preview" id="cpp-borda"></div><input type="color" id="cp-borda" value="#252525" oninput="onColor('borda',this.value)"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tipografia -->
+    <div class="p-sec">
+      <div class="p-title">Tipografia</div>
+      <div class="font-list">
+        <div>
+          <div class="font-lbl">Títulos</div>
+          <select class="font-sel" id="sel-titulo" onchange="onFont('titulo',this.value)">
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="Cormorant Garamond">Cormorant Garamond</option>
+            <option value="Raleway">Raleway</option>
+            <option value="Bebas Neue">Bebas Neue</option>
+            <option value="Montserrat">Montserrat</option>
+          </select>
+          <div class="font-sample" id="smp-titulo" style="font-family:'Playfair Display',serif">Abc — Sua Barbearia</div>
+        </div>
+        <div>
+          <div class="font-lbl">Corpo</div>
+          <select class="font-sel" id="sel-corpo" onchange="onFont('corpo',this.value)">
+            <option value="Inter">Inter</option>
+            <option value="DM Sans">DM Sans</option>
+            <option value="Poppins">Poppins</option>
+            <option value="Lato">Lato</option>
+            <option value="Source Sans 3">Source Sans 3</option>
+          </select>
+          <div class="font-sample" id="smp-corpo" style="font-family:'Inter',sans-serif">Agende seu horário</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Identidade -->
+    <div class="p-sec">
+      <div class="p-title">Identidade</div>
+      <div class="font-list">
+        <div>
+          <div class="font-lbl">Nome exibido</div>
+          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João" oninput="onIdentidade('nomeDisplay',this.value)" />
+        </div>
+        <div>
+          <div class="font-lbl">Slogan</div>
+          <input class="font-sel" id="id-tagline" placeholder="Ex: Bem-vindo" oninput="onIdentidade('tagline',this.value)" />
+        </div>
+        <div>
+          <div class="font-lbl">Botão principal</div>
+          <input class="font-sel" id="id-cta" placeholder="Ex: Agende agora" oninput="onIdentidade('ctaTexto',this.value)" />
+        </div>
+        <div>
+          <div class="font-lbl">Logo</div>
+          <div class="img-upload-wrap" id="wrap-logo">
+            <img class="img-upload-thumb" id="thumb-logo" src="" alt="" style="display:none" />
+            <label class="img-upload-btn" for="file-logo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="lbl-logo">Escolher imagem</span>
+            </label>
+            <input type="file" id="file-logo" accept="image/*" style="display:none" onchange="uploadImagem('logo',this)" />
+            <button class="img-upload-rm" id="rm-logo" style="display:none" onclick="removerImagem('logo')" title="Remover">×</button>
+          </div>
+        </div>
+        <div>
+          <div class="font-lbl">Foto de capa</div>
+          <div class="img-upload-wrap" id="wrap-hero">
+            <img class="img-upload-thumb" id="thumb-hero" src="" alt="" style="display:none" />
+            <label class="img-upload-btn" for="file-hero">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="lbl-hero">Escolher imagem</span>
+            </label>
+            <input type="file" id="file-hero" accept="image/*" style="display:none" onchange="uploadImagem('hero',this)" />
+            <button class="img-upload-rm" id="rm-hero" style="display:none" onclick="removerImagem('hero')" title="Remover">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Geometria -->
+    <div class="p-sec">
+      <div class="p-title">Geometria</div>
+      <div class="geo-list">
+        <div>
+          <div class="geo-lbl">Raio dos cards <b id="radius-val">8px</b></div>
+          <input type="range" min="0" max="24" value="8" id="sl-radius" oninput="onRadius(this.value)">
+        </div>
+        <div>
+          <div class="geo-lbl" style="margin-bottom:.5rem">Estilo do botão</div>
+          <div class="btnstyle-row">
+            <button class="bso sel" id="bs-arredondado" onclick="onBtnStyle('arredondado')">Suave</button>
+            <button class="bso" id="bs-pilula" onclick="onBtnStyle('pilula')">Pílula</button>
+            <button class="bso" id="bs-angular" onclick="onBtnStyle('angular')">Angular</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── SCREENS SIDEBAR ── -->
+  <aside class="screens-sidebar" id="screens-sidebar">
+    <div id="screens-list"></div>
+  </aside>
+
+  <!-- ── CANVAS ── -->
+  <div class="canvas">
+    <div class="canvas-ctrl">
+      <div class="toggle-group">
+        <button class="tg-btn active" id="site-ag" onclick="setSite('ag')">Agendamento</button>
+        <button class="tg-btn" id="site-gt" onclick="setSite('gt')">Gestão</button>
+      </div>
+      <div class="toggle-group">
+        <button class="tg-btn active" id="mode-global" onclick="setEditMode('global')" title="Editar ambos os sites">🌐 Global</button>
+        <button class="tg-btn" id="mode-single" onclick="setEditMode('single')" title="Editar apenas o site visível">✏️ Tela atual</button>
+      </div>
+      <div class="toggle-group">
+        <button class="tg-btn active" id="view-desk" onclick="setView('desk')">🖥</button>
+        <button class="tg-btn" id="view-mob" onclick="setView('mob')">📱</button>
+      </div>
+    </div>
+
+    <div class="canvas-body">
+
+      <!-- DESKTOP VIEW -->
+      <div id="prev-desktop" class="prev-desktop">
+        <div class="laptop-lid">
+          <div class="browser-win">
+            <div class="browser-titlebar">
+              <div class="b-dots">
+                <div class="b-dot" style="background:#ff5f57"></div>
+                <div class="b-dot" style="background:#febc2e"></div>
+                <div class="b-dot" style="background:#28c840"></div>
+              </div>
+              <div class="browser-tabs">
+                <div class="browser-tab">
+                  <div class="browser-tab-dot"></div>
+                  <span class="browser-tab-title" id="tab-title">Barbearia</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="browser-body" style="position:relative">
+            <iframe id="iframe-ag-desk" src="" onload="onFrameLoad(this)" title="Agendamento" style="width:100%;height:100%;border:none;display:block"></iframe>
+            <iframe id="iframe-gt-desk" src="" onload="onFrameLoad(this)" title="Gestão" style="width:100%;height:100%;border:none;display:none"></iframe>
+            <div style="position:absolute;inset:0;z-index:10;cursor:default" onwheel="fwdScroll(event,'iframe-ag-desk','iframe-gt-desk')"></div>
+          </div>
+        </div>
+        <div class="laptop-base"><div class="laptop-trackpad"></div></div>
+        <div class="laptop-foot"></div>
+      </div>
+
+      <!-- PHONE VIEW -->
+      <div id="prev-phone" class="prev-phone" style="display:none">
+        <div class="phone-outer">
+          <div class="phone-island"></div>
+          <div class="phone-screen">
+            <div class="phone-status">
+              <span>9:41</span>
+              <span style="display:flex;gap:3px;align-items:center;font-size:.55rem">▋▋▋ ≋ 🔋</span>
+            </div>
+            <div class="phone-inner" style="position:relative">
+              <iframe id="iframe-ag-mob" src="" onload="onFrameLoad(this)" title="Agendamento Mobile" style="width:375px;height:760px;border:none;display:block"></iframe>
+              <iframe id="iframe-gt-mob" src="" onload="onFrameLoad(this)" title="Gestão Mobile" style="width:375px;height:760px;border:none;display:none"></iframe>
+              <div style="position:absolute;inset:0;z-index:10;cursor:default" onwheel="fwdScroll(event,'iframe-ag-mob','iframe-gt-mob')"></div>
+            </div>
+            <div class="phone-home"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /canvas-body -->
+  </div><!-- /canvas -->
+
+</div><!-- /main -->
+
+<script>
+const DEFAULT = {
+  fundo:'#0c0c0c',superficie:'#161616',borda:'#252525',destaque:'#C9A96E',texto:'#F0ECE4',
+  cardRadius:8,btnEstilo:'arredondado',fonteTitulo:'Playfair Display',fonteCorpo:'Inter',
+  nomeDisplay:'',logoUrl:'',tagline:'',ctaTexto:'',heroUrl:''
+};
+
+const PRESETS = {
+  classico:{fundo:'#0c0c0c',superficie:'#161616',borda:'#252525',destaque:'#C9A96E',texto:'#F0ECE4',cardRadius:8,btnEstilo:'arredondado',fonteTitulo:'Playfair Display',fonteCorpo:'Inter'},
+  moderno:{fundo:'#0a0a16',superficie:'#10102c',borda:'#1e1e3a',destaque:'#6C63FF',texto:'#e8e8ff',cardRadius:12,btnEstilo:'arredondado',fonteTitulo:'Raleway',fonteCorpo:'Poppins'},
+  bege:{fundo:'#f0ebe1',superficie:'#ffffff',borda:'#e0d9cc',destaque:'#8B5E3C',texto:'#1a1a1a',cardRadius:6,btnEstilo:'angular',fonteTitulo:'Cormorant Garamond',fonteCorpo:'Lato'},
+  carbono:{fundo:'#080808',superficie:'#141414',borda:'#1e1e1e',destaque:'#d0d0d0',texto:'#ebebeb',cardRadius:4,btnEstilo:'angular',fonteTitulo:'Bebas Neue',fonteCorpo:'Source Sans 3'}
+};
+
+const AG_SCREENS = [
+  {id:'inicio',       label:'Início (Login)',    urlFn: ()=> '/preview/ag/inicio?' + _agParams(T.ag)},
+  {id:'sem-cadastro', label:'Sem Cadastro',      urlFn: ()=> '/preview/ag/sem-cadastro?' + _agParams(T.ag)},
+  {id:'logado',       label:'Serviços / Carrinho', urlFn: ()=> '/preview/ag/servicos?' + _agParams(T.ag)},
+  {id:'register',     label:'Cadastro',          urlFn: ()=> '/preview/ag/register?' + _agParams(T.ag)},
+  {id:'perfil',       label:'Perfil',            urlFn: ()=> '/preview/ag/perfil?' + _agParams(T.ag)},
+  {id:'esqueci',      label:'Esqueci Senha',     urlFn: ()=> '/preview/ag/esqueci?' + _agParams(T.ag)},
+];
+const GT_SCREENS = [
+  {id:'dashboard',    label:'Dashboard',     urlFn: ()=> buildGtUrl('dashboard')},
+  {id:'agendamentos', label:'Agenda',        urlFn: ()=> buildGtUrl('agendamentos')},
+  {id:'pedidos',      label:'Pedidos',       urlFn: ()=> buildGtUrl('pedidos')},
+  {id:'clientes',     label:'Clientes',      urlFn: ()=> buildGtUrl('clientes')},
+  {id:'financeiro',   label:'Financeiro',    urlFn: ()=> buildGtUrl('financeiro')},
+  {id:'funcionarios', label:'Funcionários',  urlFn: ()=> buildGtUrl('funcionarios')},
+  {id:'servicos',     label:'Serviços',      urlFn: ()=> buildGtUrl('servicos')},
+  {id:'precos',       label:'Preços',        urlFn: ()=> buildGtUrl('precos')},
+  {id:'fotos',        label:'Fotos',         urlFn: ()=> buildGtUrl('fotos')},
+  {id:'graficos',     label:'Gráficos',      urlFn: ()=> buildGtUrl('graficos')},
+  {id:'horarios',     label:'Horários',      urlFn: ()=> buildGtUrl('horarios')},
+  {id:'contato',      label:'Contato',       urlFn: ()=> buildGtUrl('contato')},
+  {id:'credenciais',  label:'Credenciais',   urlFn: ()=> buildGtUrl('credenciais')},
+];
+
+const T = {
+  ag: {...DEFAULT},
+  gt: {...DEFAULT}
+};
+
+let siteMode  = 'ag';
+let viewMode  = 'desk';
+let editMode  = 'global';
+let agScreen  = 'logado';
+let gtScreen  = 'dashboard';
+
+function cur() { return T[siteMode]; }
+
+// ── URL builders ──────────────────────────────────────────────────────────────
+function _agParams(t) {
+  const p = {
+    p:'1', fundo:t.fundo, superficie:t.superficie, destaque:t.destaque,
+    texto:t.texto, borda:t.borda, fonteTitulo:t.fonteTitulo,
+    fonteCorpo:t.fonteCorpo, cardRadius:t.cardRadius, btnEstilo:t.btnEstilo
+  };
+  if (t.nomeDisplay) p.nomeDisplay = t.nomeDisplay;
+  if (t.logoUrl)     p.logoUrl     = t.logoUrl;
+  if (t.tagline)     p.tagline     = t.tagline;
+  if (t.ctaTexto)    p.ctaTexto    = t.ctaTexto;
+  if (t.heroUrl)     p.heroUrl     = t.heroUrl;
+  return new URLSearchParams(p).toString();
+}
+
+function buildAgServicosUrl() {
+  return '/preview/ag/servicos?' + _agParams(T.ag);
+}
+
+function buildAgRegisterUrl() {
+  return '/preview/ag/register?' + _agParams(T.ag);
+}
+
+function buildGtUrl(screen) {
+  const t = T.gt;
+  return '/preview/gt/' + screen + '?' + new URLSearchParams({
+    fundo:t.fundo, superficie:t.superficie, borda:t.borda,
+    destaque:t.destaque, texto:t.texto,
+    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo
+  }).toString();
+}
+
+// ── PostMessage helpers ───────────────────────────────────────────────────────
+function fwdScroll(e, idAg, idGt) {
+  e.preventDefault();
+  const agEl = document.getElementById(idAg);
+  const gtEl = document.getElementById(idGt);
+  const active = (agEl && agEl.style.display !== 'none') ? agEl : gtEl;
+  try { if (active && active.contentWindow) active.contentWindow.scrollBy(0, e.deltaY); } catch(_) {}
+}
+
+function postTo(id, tema) {
+  const f = document.getElementById(id);
+  if(f && f.contentWindow) try { f.contentWindow.postMessage({tipo:'tema', tema}, '*'); } catch(e) {}
+}
+
+function postTheme() {
+  if(editMode === 'global') {
+    postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag);
+    postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt);
+  } else {
+    if(siteMode === 'ag') { postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag); }
+    else                  { postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt); }
+  }
+  postThemeToThumbs();
+}
+
+function onFrameLoad(iframe) {
+  const isGt = iframe.id.includes('gt');
+  try { iframe.contentWindow.postMessage({tipo:'tema', tema: isGt ? T.gt : T.ag}, '*'); } catch(e) {}
+}
+
+// ── Set iframe src for current screen ────────────────────────────────────────
+function reloadAgIframes() {
+  const screens = AG_SCREENS;
+  const s = screens.find(x => x.id === agScreen) || screens[0];
+  const url = s.urlFn();
+  document.getElementById('iframe-ag-desk').src = url;
+  document.getElementById('iframe-ag-mob').src  = url;
+  updateUrlBar();
+}
+
+function reloadGtIframes() {
+  const screens = GT_SCREENS;
+  const s = screens.find(x => x.id === gtScreen) || screens[0];
+  const url = s.urlFn();
+  document.getElementById('iframe-gt-desk').src = url;
+  document.getElementById('iframe-gt-mob').src  = url;
+  updateUrlBar();
+}
+
+// ── Screens sidebar — mostra TODAS as telas de ambos os sites ────────────────
+function renderScreensSidebar() {
+  const list = document.getElementById('screens-list');
+  list.innerHTML = '';
+
+  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
+  const label   = siteMode === 'ag' ? 'Agendamento' : 'Gestão';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'screens-group-header';
+  hdr.textContent = label;
+  list.appendChild(hdr);
+
+  screens.forEach(s => {
+    const curScreen = siteMode === 'ag' ? agScreen : gtScreen;
+    const div = document.createElement('div');
+    div.id = 'scr-' + siteMode + '-' + s.id;
+    div.className = 'screen-item' + (s.id === curScreen ? ' active' : '');
+    div.textContent = s.label;
+    div.onclick = () => setScreen(siteMode, s.id);
+    list.appendChild(div);
+  });
+}
+
+function postThemeToThumbs() {}
+function reloadAgThumbs() {}
+
+// Clicar na tela: só muda o preview, não mexe no editor
+function setScreen(site, screenId) {
+  if(siteMode !== site) {
+    siteMode = site;
+    _updateSiteToggle();
+    showHideIframes();
+    if(editMode === 'single') { syncPickers(); updateScopeLabel(); }
+  }
+  if(site === 'ag') { agScreen = screenId; reloadAgIframes(); }
+  else              { gtScreen = screenId; reloadGtIframes(); }
+  renderScreensSidebar();
+}
+
+// Sincroniza sidebar quando o iframe navega internamente
+function syncSidebarFromRoute(rota) {
+  // Agendamento
+  if(rota === '/')                                                          { agScreen = 'inicio'; }
+  else if(rota === '/preview/ag/sem-cadastro')                             { agScreen = 'sem-cadastro'; }
+  else if(rota === '/register'  || rota === '/preview/ag/register')        { agScreen = 'register'; }
+  else if(rota === '/servicos'  || rota === '/preview/ag/servicos')        { agScreen = 'logado'; }
+  else if(rota === '/perfil'    || rota === '/preview/ag/perfil')          { agScreen = 'perfil'; }
+  else if(rota === '/esqueci-senha' || rota === '/preview/ag/esqueci')     { agScreen = 'esqueci'; }
+  // Gestão — preview routes
+  else if(rota.startsWith('/preview/gt/')) {
+    const sc = rota.replace('/preview/gt/','').split('?')[0];
+    if(GT_SCREENS.find(s=>s.id===sc)) { gtScreen = sc; if(siteMode!=='gt'){ siteMode='gt'; _updateSiteToggle(); showHideIframes(); } }
+  }
+  // Gestão — site real
+  else if(rota.startsWith('/gestao')) {
+    const sc = rota.split('/')[2] || 'dashboard';
+    const mapped = {agendamentos:'agendamentos',pedidos:'pedidos',clientes:'clientes',
+      entradas:'financeiro',funcionarios:'funcionarios',servicos:'servicos',
+      precos:'precos',fotos:'fotos',graficos:'graficos',horarios:'horarios',
+      contato:'contato',credenciais:'credenciais'}[sc] || 'dashboard';
+    gtScreen = mapped;
+    if(siteMode!=='gt'){ siteMode='gt'; _updateSiteToggle(); showHideIframes(); }
+  }
+  renderScreensSidebar();
+}
+
+// Escutar navegações dentro do iframe
+window.addEventListener('message', function(e) {
+  if(e.data && e.data.tipo === 'rota_atual') syncSidebarFromRoute(e.data.rota);
+});
+
+function _updateSiteToggle() {
+  document.getElementById('site-ag').classList.toggle('active', siteMode==='ag');
+  document.getElementById('site-gt').classList.toggle('active', siteMode==='gt');
+  updateUrlBar();
+}
+
+// ── Sync pickers ──────────────────────────────────────────────────────────────
+function syncPickers() {
+  const t = cur();
+  document.getElementById('cpp-fundo').style.background = t.fundo;
+  document.getElementById('cpp-surf').style.background  = t.superficie;
+  document.getElementById('cpp-dest').style.background  = t.destaque;
+  document.getElementById('cpp-texto').style.background = t.texto;
+  document.getElementById('cpp-borda').style.background = t.borda;
+  document.getElementById('cp-fundo').value  = t.fundo;
+  document.getElementById('cp-surf').value   = t.superficie;
+  document.getElementById('cp-dest').value   = t.destaque;
+  document.getElementById('cp-texto').value  = t.texto;
+  document.getElementById('cp-borda').value  = t.borda;
+  document.getElementById('sl-radius').value = t.cardRadius;
+  document.getElementById('radius-val').textContent = t.cardRadius+'px';
+  document.getElementById('sel-titulo').value = t.fonteTitulo;
+  document.getElementById('sel-corpo').value  = t.fonteCorpo;
+  document.getElementById('smp-titulo').style.fontFamily = `'${t.fonteTitulo}',serif`;
+  document.getElementById('smp-corpo').style.fontFamily  = `'${t.fonteCorpo}',sans-serif`;
+  ['arredondado','pilula','angular'].forEach(s =>
+    document.getElementById('bs-'+s).classList.toggle('sel', s===t.btnEstilo));
+  document.getElementById('id-nome').value    = t.nomeDisplay || '';
+  document.getElementById('id-tagline').value = t.tagline     || '';
+  document.getElementById('id-cta').value     = t.ctaTexto    || '';
+  ['logo','hero'].forEach(tipo => {
+    const key   = tipo === 'logo' ? 'logoUrl' : 'heroUrl';
+    const url   = t[key] || '';
+    const thumb = document.getElementById('thumb-' + tipo);
+    const rm    = document.getElementById('rm-'    + tipo);
+    const lbl   = document.getElementById('lbl-'   + tipo);
+    if (url) {
+      thumb.src = url; thumb.style.display = 'block';
+      rm.style.display = 'inline'; lbl.textContent = 'Trocar';
+    } else {
+      thumb.style.display = 'none'; rm.style.display = 'none';
+      lbl.textContent = 'Escolher imagem';
+    }
+  });
+}
+
+// ── Upload de imagem (logo / hero) ─────────────────────────────────────────────
+async function uploadImagem(tipo, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const lbl  = document.getElementById('lbl-' + tipo);
+  const thumb = document.getElementById('thumb-' + tipo);
+  const rm   = document.getElementById('rm-' + tipo);
+  lbl.textContent = 'Enviando…';
+  const fd = new FormData();
+  fd.append('imagem', file);
+  try {
+    const res = await fetch('/api/personalizar/upload', {method:'POST', body:fd});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.erro || 'erro');
+    thumb.src = data.url;
+    thumb.style.display = 'block';
+    rm.style.display = 'inline';
+    lbl.textContent = 'Trocar';
+    onIdentidade(tipo === 'logo' ? 'logoUrl' : 'heroUrl', data.url);
+  } catch(e) {
+    lbl.textContent = 'Erro — tente de novo';
+    setTimeout(() => lbl.textContent = 'Escolher imagem', 2500);
+  }
+  input.value = '';
+}
+function removerImagem(tipo) {
+  const key = tipo === 'logo' ? 'logoUrl' : 'heroUrl';
+  document.getElementById('thumb-' + tipo).style.display = 'none';
+  document.getElementById('rm-'    + tipo).style.display = 'none';
+  document.getElementById('lbl-'   + tipo).textContent   = 'Escolher imagem';
+  onIdentidade(key, '');
+}
+
+// ── Identidade ────────────────────────────────────────────────────────────────
+let _idTimer = null;
+function onIdentidade(key, val) {
+  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
+  else { cur()[key] = val; }
+  clearTimeout(_idTimer);
+  _idTimer = setTimeout(() => {
+    if(editMode === 'global' || siteMode === 'ag') reloadAgIframes();
+    if(editMode === 'global' || siteMode === 'gt') reloadGtIframes();
+  }, 600);
+}
+
+// ── Color/font/geometry handlers ──────────────────────────────────────────────
+function onColor(key, val) {
+  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
+  else { cur()[key] = val; }
+  const m = {fundo:'fundo',superficie:'surf',destaque:'dest',texto:'texto',borda:'borda'};
+  document.getElementById('cpp-'+m[key]).style.background = val;
+  postTheme();
+}
+
+function onRadius(val) {
+  if(editMode === 'global') { T.ag.cardRadius = +val; T.gt.cardRadius = +val; }
+  else { cur().cardRadius = +val; }
+  document.getElementById('radius-val').textContent = val+'px';
+  postTheme();
+}
+
+function onBtnStyle(s) {
+  if(editMode === 'global') { T.ag.btnEstilo = s; T.gt.btnEstilo = s; }
+  else { cur().btnEstilo = s; }
+  ['arredondado','pilula','angular'].forEach(x =>
+    document.getElementById('bs-'+x).classList.toggle('sel', x===s));
+  postTheme();
+}
+
+function onFont(tipo, val) {
+  const key = tipo==='titulo' ? 'fonteTitulo' : 'fonteCorpo';
+  const smpId = tipo==='titulo' ? 'smp-titulo' : 'smp-corpo';
+  const stack = tipo==='titulo' ? 'serif' : 'sans-serif';
+  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
+  else { cur()[key] = val; }
+  document.getElementById(smpId).style.fontFamily = `'${val}',${stack}`;
+  postTheme();
+}
+
+// ── Preset ────────────────────────────────────────────────────────────────────
+function aplicarPreset(nome) {
+  if(editMode === 'global') { Object.assign(T.ag, PRESETS[nome]); Object.assign(T.gt, PRESETS[nome]); }
+  else { Object.assign(cur(), PRESETS[nome]); }
+  document.querySelectorAll('.preset').forEach(el => el.classList.remove('sel'));
+  document.getElementById('pr-'+nome).classList.add('sel');
+  syncPickers();
+  // Reload iframes with new URL params
+  if(editMode === 'global' || siteMode === 'ag') { reloadAgIframes(); reloadAgThumbs(); }
+  if(editMode === 'global' || siteMode === 'gt') reloadGtIframes();
+}
+
+// ── Edit mode ─────────────────────────────────────────────────────────────────
+function setEditMode(mode) {
+  editMode = mode;
+  document.getElementById('mode-global').classList.toggle('active', mode==='global');
+  document.getElementById('mode-single').classList.toggle('active', mode==='single');
+  const bar = document.getElementById('edit-scope-bar');
+  if(mode === 'single') {
+    bar.style.display = 'flex';
+    updateScopeLabel();
+  } else {
+    bar.style.display = 'none';
+  }
+  syncPickers();
+}
+
+function updateScopeLabel() {
+  const label = siteMode === 'ag' ? 'Site de Agendamento' : 'Site de Gestão';
+  document.getElementById('edit-scope-label').textContent = 'Editando: ' + label;
+}
+
+// ── Site / View toggles ───────────────────────────────────────────────────────
+function setSite(mode) {
+  siteMode = mode;
+  _updateSiteToggle();
+  if(editMode === 'single') { syncPickers(); updateScopeLabel(); }
+  showHideIframes();
+  renderScreensSidebar(); // re-renders with only the new site's screens
+}
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('view-desk').classList.toggle('active', mode==='desk');
+  document.getElementById('view-mob').classList.toggle('active', mode==='mob');
+  document.getElementById('prev-desktop').style.display = mode==='desk' ? 'block' : 'none';
+  document.getElementById('prev-phone').style.display   = mode==='mob'  ? 'flex'  : 'none';
+  renderScreensSidebar();
+}
+
+function showHideIframes() {
+  document.getElementById('iframe-ag-desk').style.display = siteMode==='ag' ? 'block' : 'none';
+  document.getElementById('iframe-gt-desk').style.display = siteMode==='gt' ? 'block' : 'none';
+  document.getElementById('iframe-ag-mob').style.display  = siteMode==='ag' ? 'block' : 'none';
+  document.getElementById('iframe-gt-mob').style.display  = siteMode==='gt' ? 'block' : 'none';
+}
+
+function updateUrlBar() {
+  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
+  const curId   = siteMode === 'ag' ? agScreen   : gtScreen;
+  const s       = screens.find(x => x.id === curId) || screens[0];
+  const agUrlMap = {inicio:'', 'sem-cadastro':'#sem-cadastro', logado:'servicos', register:'register', perfil:'perfil', esqueci:'esqueci-senha'};
+  const url     = siteMode === 'ag'
+    ? 'localhost:5000/' + (agUrlMap[curId] ?? curId)
+    : 'localhost:5000/gestao/' + curId;
+}
+
+// ── Navigate to next step ─────────────────────────────────────────────────────
+function irParaPlanos() {
+  localStorage.setItem('onb_tema', JSON.stringify({ag: T.ag, gt: T.gt}));
+  window.location.href = '/planos';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+syncPickers();
+showHideIframes();
+reloadAgIframes();
+reloadGtIframes();
+renderScreensSidebar();
+</script>
+</body>
+</html>

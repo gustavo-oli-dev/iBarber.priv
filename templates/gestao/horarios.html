@@ -1,0 +1,369 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Horários{% endblock %}
+{% block content %}
+<h1 class="g-page-title">Horários e Dias</h1>
+
+<!-- Tabs -->
+<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem;">
+  <button class="g-tab g-tab-active" onclick="setTab('horarios',this)">Horários</button>
+  <button class="g-tab" onclick="setTab('fechados',this)">Dias Fechados</button>
+  <button class="g-tab" onclick="setTab('especiais',this)">Horários Especiais</button>
+</div>
+
+<!-- Tab 1: Horários de funcionamento -->
+<div id="tab-horarios">
+  <form method="POST" action="{{ url_for('gestao_horarios') }}">
+    <div class="g-section-title" style="margin-bottom:.75rem;">Horário por dia da semana</div>
+    <div style="display:grid;gap:.6rem;max-width:540px;margin-bottom:1.5rem;">
+      {% set dias = [('seg','Segunda'),('ter','Terça'),('qua','Quarta'),('qui','Quinta'),('sex','Sexta'),('sab','Sábado'),('dom','Domingo')] %}
+      {% for key, label in dias %}
+      {% set cfg = config_dias.get(key, {}) %}
+      {% set aberto_default = key not in ('dom',) %}
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.65rem 1rem;">
+        <label class="toggle-switch" style="min-width:130px;flex-shrink:0;">
+          <input type="checkbox" name="aberto_{{ key }}" value="1"
+                 {% if cfg.get('aberto', aberto_default) %}checked{% endif %}
+                 onchange="toggleHorario('{{ key }}',this.checked)" />
+          <span class="toggle-track"></span>
+          <span style="font-size:.875rem;color:var(--text);">{{ label }}</span>
+        </label>
+        <div id="hr_{{ key }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;{% if not cfg.get('aberto', aberto_default) %}opacity:.35;pointer-events:none;{% endif %}">
+          <input class="g-input" type="time" name="abertura_{{ key }}" value="{{ cfg.get('abertura','08:00') }}" style="width:110px;" />
+          <span style="color:var(--text-muted);font-size:.8rem;">às</span>
+          <input class="g-input" type="time" name="fechamento_{{ key }}" value="{{ cfg.get('fechamento','18:00') }}" style="width:110px;" />
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="g-section-title" style="margin-bottom:.75rem;">Configurações gerais</div>
+    <div class="g-form-row" style="max-width:420px;margin-bottom:1.5rem;">
+      <div class="g-form-group">
+        <label class="g-label">Duração do slot (min)</label>
+        <select class="g-input" name="slot_minutos">
+          {% for v in [15,20,30,40,45,60] %}
+          <option value="{{ v }}" {% if config_geral.get('slot_minutos',40)|int == v %}selected{% endif %}>{{ v }} min</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="g-form-group">
+        <label class="g-label">Dias de antecedência</label>
+        <input class="g-input" type="number" name="dias_agenda" min="1" max="90" value="{{ config_geral.get('dias_agenda',20) }}" />
+      </div>
+    </div>
+    <button class="g-btn g-btn-primary" type="submit">Salvar horários</button>
+  </form>
+</div>
+
+<!-- Tab 2: Dias fechados -->
+<div id="tab-fechados" style="display:none;">
+  <div class="g-section-title" style="margin-bottom:.75rem;">Dias Fechados</div>
+  <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem;">Selecione datas em que a barbearia não funcionará.</p>
+
+  <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;">
+    <div>
+      <input id="novoFechado" class="g-input" type="date" style="max-width:200px;" oninput="atualizarLabelData('novoFechado','labelFechado')" />
+      <div id="labelFechado" style="font-size:.78rem;color:var(--gold);margin-top:.25rem;min-height:1rem;"></div>
+    </div>
+    <button class="g-btn g-btn-primary" onclick="addFechado()">Adicionar</button>
+  </div>
+
+  <div id="listaFechados" style="display:flex;flex-wrap:wrap;gap:.5rem;"></div>
+</div>
+
+<!-- Modal: conflito de agendamentos -->
+<div id="modalConflito" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:440px;">
+    <div class="g-section-title" style="margin-bottom:.35rem;">⚠️ Agendamentos no período removido</div>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem;">Os agendamentos abaixo ficam fora do novo horário especial. O que deseja fazer?</p>
+    <div id="listaConflitos" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:180px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.35rem;"></div>
+    <div style="display:flex;gap:.75rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharModalConflito()">Cancelar</button>
+      <button class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarEspecial('manter')">Manter e resolver depois</button>
+      <button class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarEspecial('cancelar')">Cancelar agendamentos</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tab 3: Horários especiais -->
+<div id="tab-especiais" style="display:none;">
+  <div class="g-section-title" style="margin-bottom:.75rem;">Horários Especiais</div>
+  <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem;">Defina horários diferentes para datas específicas.</p>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;max-width:480px;margin-bottom:1.25rem;">
+
+    <!-- Mini calendário -->
+    <label class="g-label" style="margin-bottom:.6rem;display:block;">Data</label>
+    <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.75rem;">
+      <!-- cabeçalho mês -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .75rem;background:var(--surface2);">
+        <button type="button" onclick="calNav(-1)" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0 .35rem;line-height:1;">‹</button>
+        <span id="calMesLabel" style="font-size:.85rem;font-weight:600;color:var(--text);"></span>
+        <button type="button" onclick="calNav(+1)" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0 .35rem;line-height:1;">›</button>
+      </div>
+      <!-- dias da semana -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;padding:.35rem .5rem 0;">
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Dom</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Seg</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Ter</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Qua</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Qui</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Sex</span>
+        <span style="font-size:.65rem;color:var(--text-muted);padding:.2rem 0;">Sáb</span>
+      </div>
+      <!-- células dos dias -->
+      <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:.35rem .5rem .5rem;"></div>
+    </div>
+    <div id="labelEspecial" style="font-size:.8rem;color:var(--gold);margin-bottom:.75rem;min-height:1.1rem;"></div>
+    <input type="hidden" id="eData" value="" />
+
+    <div class="g-form-row" style="margin-bottom:.5rem;">
+      <div class="g-form-group">
+        <label class="g-label">Abertura</label>
+        <input id="eAbertura" class="g-input" type="time" value="08:00" />
+      </div>
+      <div class="g-form-group">
+        <label class="g-label">Fechamento</label>
+        <input id="eFechamento" class="g-input" type="time" value="18:00" />
+      </div>
+    </div>
+    <button class="g-btn g-btn-primary" style="width:100%;margin-top:.25rem;" onclick="addEspecial()">Adicionar horário especial</button>
+  </div>
+
+  <div class="g-table-wrap desktop-only">
+    <table class="g-table">
+      <thead><tr><th>Data</th><th>Abertura</th><th>Fechamento</th><th></th></tr></thead>
+      <tbody id="tbodyEspeciais"></tbody>
+    </table>
+  </div>
+  <div class="mobile-only" id="mobileEspeciais"></div>
+</div>
+
+<style>
+.g-tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-muted);padding:.6rem 1.1rem;font-size:.875rem;cursor:pointer;transition:.15s;}
+.g-tab:hover{color:var(--text-primary);}
+.g-tab-active{color:var(--gold);border-bottom-color:var(--gold);font-weight:600;}
+.desktop-only{display:block}.mobile-only{display:none}
+@media(max-width:640px){.desktop-only{display:none}.mobile-only{display:block}}
+.esp-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.8rem 1rem;margin-bottom:.6rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem;}
+.esp-card-info{flex:1;min-width:0;}
+.esp-card-date{font-weight:600;font-size:.9rem;}
+.esp-card-hrs{font-size:.8rem;color:var(--text-muted);margin-top:.15rem;}
+</style>
+
+<script>
+const TOKEN = "{{ token }}";
+let diasFechados = {{ dias_fechados|tojson }};
+let especiais = {{ especiais_json|safe }};
+
+function setTab(id, el) {
+  ['horarios','fechados','especiais'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===id ? '' : 'none';
+  });
+  document.querySelectorAll('.g-tab').forEach(b=>b.classList.remove('g-tab-active'));
+  el.classList.add('g-tab-active');
+}
+
+function toggleHorario(key, checked) {
+  const el = document.getElementById('hr_'+key);
+  el.style.opacity = checked ? '1' : '.35';
+  el.style.pointerEvents = checked ? '' : 'none';
+}
+
+// ── Fechados ──
+function renderFechados() {
+  const box = document.getElementById('listaFechados');
+  if (!diasFechados.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;">Nenhum dia fechado.</p>'; return; }
+  box.innerHTML = diasFechados.map(d => {
+    const fmt = new Date(d+'T12:00:00').toLocaleDateString('pt-BR');
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.35rem .75rem;display:flex;align-items:center;gap:.5rem;font-size:.875rem;">
+      ${fmt}
+      <button style="background:none;border:none;color:var(--error);cursor:pointer;font-size:1rem;padding:0 .2rem;" onclick="removeFechado('${d}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function addFechado() {
+  const d = document.getElementById('novoFechado').value;
+  if (!d) return;
+  if (diasFechados.includes(d)) { alert('Data já adicionada'); return; }
+  const r = await fetch('/api/dias-fechados', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({data:d})
+  });
+  if (r.ok) { diasFechados.push(d); diasFechados.sort(); renderFechados(); document.getElementById('novoFechado').value=''; }
+  else alert('Erro ao adicionar');
+}
+
+async function removeFechado(d) {
+  const r = await fetch('/api/dias-fechados', {
+    method:'DELETE', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({data:d})
+  });
+  if (r.ok) { diasFechados = diasFechados.filter(x=>x!==d); renderFechados(); }
+  else alert('Erro ao remover');
+}
+
+// ── Especiais ──
+function renderEspeciais() {
+  const tbody = document.getElementById('tbodyEspeciais');
+  const mbox  = document.getElementById('mobileEspeciais');
+  if (!especiais.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;">Nenhum horário especial.</td></tr>';
+    mbox.innerHTML  = '<p style="color:var(--text-muted);font-size:.875rem;">Nenhum horário especial.</p>';
+    return;
+  }
+  tbody.innerHTML = especiais.map(e => {
+    const fmt = new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR');
+    return `<tr>
+      <td>${fmt}</td>
+      <td>${e.abertura}</td>
+      <td>${e.fechamento}</td>
+      <td><button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.75rem;color:var(--error);" onclick="removeEspecial(${e.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+  mbox.innerHTML = especiais.map(e => {
+    const fmt = new Date(e.data+'T12:00:00').toLocaleDateString('pt-BR');
+    return `<div class="esp-card">
+      <div class="esp-card-info">
+        <div class="esp-card-date">${fmt}</div>
+        <div class="esp-card-hrs">${e.abertura} às ${e.fechamento}</div>
+      </div>
+      <button class="g-btn g-btn-outline" style="padding:.25rem .55rem;font-size:.75rem;color:var(--error);min-height:36px;flex-shrink:0;" onclick="removeEspecial(${e.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// Guarda params do horário especial pendente (usado pelo modal de conflito)
+let _pendente = null;
+
+async function addEspecial() {
+  const data      = document.getElementById('eData').value;
+  const abertura  = document.getElementById('eAbertura').value;
+  const fechamento= document.getElementById('eFechamento').value;
+  if (!data || !abertura || !fechamento) { alert('Preencha todos os campos'); return; }
+  await _salvarEspecial(data, abertura, fechamento, '');
+}
+
+async function _salvarEspecial(data, abertura, fechamento, acao) {
+  const r = await fetch('/api/horarios-especiais', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({data, abertura, fechamento, acao})
+  });
+  if (r.ok) {
+    const d = await r.json();
+    especiais = especiais.filter(e => e.data !== data);
+    especiais.push({id: d.id || Date.now(), data, abertura, fechamento});
+    especiais.sort((a,b) => a.data.localeCompare(b.data));
+    renderEspeciais();
+    renderCal();
+    fecharModalConflito();
+  } else if (r.status === 409) {
+    const body = await r.json().catch(() => ({}));
+    _pendente = {data, abertura, fechamento};
+    abrirModalConflito(body.conflitos || []);
+  } else {
+    const err = await r.json().catch(() => ({}));
+    alert(err.erro || 'Erro ao adicionar');
+  }
+}
+
+function abrirModalConflito(conflitos) {
+  const lista = document.getElementById('listaConflitos');
+  lista.innerHTML = conflitos.map(c =>
+    `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
+       <span style="color:var(--text);">${c.usuario}</span>
+       <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
+     </div>`
+  ).join('');
+  document.getElementById('modalConflito').style.display = 'flex';
+}
+
+function fecharModalConflito() {
+  document.getElementById('modalConflito').style.display = 'none';
+  _pendente = null;
+}
+
+async function confirmarEspecial(acao) {
+  if (!_pendente) return;
+  await _salvarEspecial(_pendente.data, _pendente.abertura, _pendente.fechamento, acao);
+}
+
+async function removeEspecial(id) {
+  if (!confirm('Remover horário especial?')) return;
+  const r = await fetch(`/api/horarios-especiais/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) { especiais = especiais.filter(e=>e.id!==id); renderEspeciais(); renderCal(); }
+  else alert('Erro ao remover');
+}
+
+function atualizarLabelData(inputId, labelId) {
+  const val = document.getElementById(inputId).value;
+  const lbl = document.getElementById(labelId);
+  if (!val) { lbl.textContent = ''; return; }
+  lbl.textContent = new Date(val+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+}
+
+// ── Mini calendário horários especiais ──────────────────────────
+const MESES_CAL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+let _calMes = new Date().getMonth();
+let _calAno = new Date().getFullYear();
+let _calSel = null; // 'YYYY-MM-DD'
+
+function calNav(delta) {
+  _calMes += delta;
+  if (_calMes < 0)  { _calMes = 11; _calAno--; }
+  if (_calMes > 11) { _calMes = 0;  _calAno++; }
+  renderCal();
+}
+
+function renderCal() {
+  document.getElementById('calMesLabel').textContent = MESES_CAL[_calMes] + ' ' + _calAno;
+  const grid   = document.getElementById('calGrid');
+  const hoje   = new Date().toISOString().slice(0,10);
+  const primeiro = new Date(_calAno, _calMes, 1).getDay(); // 0=Dom
+  const ultimo   = new Date(_calAno, _calMes+1, 0).getDate();
+  const jaExistem = new Set(especiais.map(e => e.data));
+
+  let cells = '';
+  for (let i = 0; i < primeiro; i++) {
+    cells += '<div></div>';
+  }
+  for (let d = 1; d <= ultimo; d++) {
+    const iso = `${_calAno}-${String(_calMes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const passado  = iso < hoje;
+    const selecionado = iso === _calSel;
+    const temEspecial = jaExistem.has(iso);
+    let bg = 'transparent', color = 'var(--text-muted)', border = '1px solid transparent', cursor = 'pointer', fontWeight = '400';
+    if (passado)     { color = '#333'; cursor = 'default'; }
+    if (temEspecial) { border = '1px solid var(--gold)'; color = 'var(--gold)'; }
+    if (selecionado) { bg = 'var(--gold)'; color = '#000'; fontWeight = '700'; border = '1px solid var(--gold)'; }
+    cells += `<div onclick="${passado?'':'calSel(\''+iso+'\')'}"
+      style="text-align:center;padding:.3rem .1rem;border-radius:6px;cursor:${cursor};
+             background:${bg};color:${color};border:${border};font-weight:${fontWeight};
+             font-size:.8rem;transition:.12s;">${d}</div>`;
+  }
+  grid.innerHTML = cells;
+}
+
+function calSel(iso) {
+  _calSel = iso;
+  document.getElementById('eData').value = iso;
+  document.getElementById('labelEspecial').textContent =
+    new Date(iso+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+  renderCal();
+}
+
+(function initDatas() {
+  const hoje = new Date().toISOString().slice(0,10);
+  const fechadoEl = document.getElementById('novoFechado');
+  if (fechadoEl) { fechadoEl.min = hoje; fechadoEl.value = hoje; }
+  atualizarLabelData('novoFechado','labelFechado');
+  // seleciona hoje no calendário
+  calSel(hoje);
+  renderCal();
+})();
+
+renderFechados();
+renderEspeciais();
+</script>
+{% endblock %}

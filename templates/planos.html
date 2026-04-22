@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Escolha seu Plano — BarberOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);
+  --gold:#C9A96E;--gold2:#e0be88;--text:#f5f5f5;--muted:#888;--muted2:#3a3a3a;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif}
+body{display:flex;flex-direction:column}
+
+/* TOPBAR */
+.topbar{
+  height:54px;flex-shrink:0;
+  display:flex;align-items:center;gap:1.25rem;
+  padding:0 1.25rem 0 1.5rem;
+  background:rgba(0,0,0,0.9);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+}
+.topbar-logo{font-size:.88rem;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text)}
+.topbar-logo span{color:var(--gold)}
+.tb-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.steps{display:flex;align-items:center;gap:0;flex:1;justify-content:center}
+.step-item{display:flex;align-items:center;gap:.45rem;padding:5px 12px;border-radius:50px;font-size:.76rem;font-weight:500;color:var(--muted);white-space:nowrap}
+.step-item.done{color:var(--muted)}
+.step-item.active{color:var(--gold)}
+.step-num{width:20px;height:20px;border-radius:50%;border:1.5px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0}
+.step-item.done .step-num{background:var(--gold);border-color:var(--gold);color:#000}
+.step-conn{width:28px;height:1px;background:var(--border)}
+.topbar-right{display:flex;align-items:center;gap:.6rem;margin-left:auto}
+.btn-back{background:transparent;color:var(--muted);border:1px solid var(--border);padding:7px 16px;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;transition:background .2s,color .2s}
+.btn-back:hover{background:var(--surface);color:var(--text)}
+
+/* PAGE */
+.page{flex:1;display:flex;flex-direction:column;align-items:center;padding:3rem 1.5rem 4rem}
+.page-hd{text-align:center;margin-bottom:3rem}
+.page-hd h1{font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;line-height:1.15;margin-bottom:.75rem}
+.page-hd h1 span{color:var(--gold)}
+.page-hd p{color:var(--muted);font-size:1rem;max-width:480px;margin:0 auto}
+
+/* PLANO CARDS */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;width:100%;max-width:920px}
+@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.cards{grid-template-columns:1fr}}
+.card{
+  border:1.5px solid var(--border);border-radius:16px;padding:1.75rem 1.5rem;
+  cursor:pointer;transition:border-color .25s,transform .2s,background .2s;
+  background:var(--surface);position:relative;
+}
+.card:hover{border-color:rgba(201,169,110,.4);transform:translateY(-2px)}
+.card.sel{border-color:var(--gold);background:rgba(201,169,110,.06)}
+.card.popular{border-color:rgba(201,169,110,.5)}
+.badge{
+  position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+  background:var(--gold);color:#000;font-size:.65rem;font-weight:800;
+  padding:3px 12px;border-radius:50px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;
+}
+.card-name{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem}
+.card-price{margin-bottom:.35rem}
+.price-val{font-size:2rem;font-weight:800;line-height:1;color:var(--text)}
+.price-per{font-size:.8rem;color:var(--muted);margin-left:2px}
+.price-total{font-size:.78rem;color:var(--muted);margin-bottom:1.25rem}
+.price-total b{color:var(--gold)}
+.card-feats{list-style:none;display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.5rem}
+.card-feats li{font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
+.card-feats li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0}
+.card-eco{font-size:.72rem;font-weight:600;color:var(--gold);background:rgba(201,169,110,.12);border-radius:6px;padding:4px 8px;display:inline-block}
+
+/* CTA */
+.cta-wrap{margin-top:2.5rem;width:100%;max-width:920px;display:flex;justify-content:flex-end}
+.btn-continuar{
+  background:var(--gold);color:#000;padding:13px 32px;border-radius:10px;
+  font-size:.95rem;font-weight:800;border:none;cursor:pointer;
+  transition:background .2s,transform .15s;letter-spacing:.02em;
+}
+.btn-continuar:hover{background:var(--gold2);transform:translateY(-1px)}
+.btn-continuar:disabled{opacity:.4;cursor:default;transform:none}
+
+/* GLOW */
+.glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.08) 0%,transparent 70%);pointer-events:none;z-index:0}
+</style>
+</head>
+<body>
+
+<div class="glow"></div>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <a href="/landing" class="topbar-logo"><span>✦</span> BarberOS</a>
+  <div class="tb-sep"></div>
+  <div class="steps">
+    <div class="step-item done"><div class="step-num">1</div> Estilo</div>
+    <div class="step-conn"></div>
+    <div class="step-item active"><div class="step-num">2</div> Plano</div>
+    <div class="step-conn"></div>
+    <div class="step-item"><div class="step-num">3</div> Cadastro</div>
+    <div class="step-conn"></div>
+    <div class="step-item"><div class="step-num">4</div> Pagamento</div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn-back" onclick="history.back()">← Voltar</button>
+  </div>
+</header>
+
+<!-- PAGE -->
+<main class="page">
+  <div class="page-hd">
+    <h1>Escolha seu <span>plano</span></h1>
+    <p>Sem contratos. Cancele quando quiser. Acesso completo em todos os planos.</p>
+  </div>
+
+  <div class="cards">
+
+    <!-- MENSAL -->
+    <div class="card" id="card-mensal" onclick="selPlano('mensal')">
+      <div class="card-name">Mensal</div>
+      <div class="card-price">
+        <span class="price-val">R$49</span><span class="price-per">/mês</span>
+      </div>
+      <div class="price-total">Total: <b>R$49</b></div>
+      <ul class="card-feats">
+        <li>Site de agendamento</li>
+        <li>App de gestão</li>
+        <li>Domínio incluído</li>
+        <li>Suporte por e-mail</li>
+      </ul>
+    </div>
+
+    <!-- TRIMESTRAL -->
+    <div class="card" id="card-trimestral" onclick="selPlano('trimestral')">
+      <div class="card-name">Trimestral</div>
+      <div class="card-price">
+        <span class="price-val">R$44</span><span class="price-per">/mês</span>
+      </div>
+      <div class="price-total">Total: <b>R$132</b> em 3x</div>
+      <ul class="card-feats">
+        <li>Site de agendamento</li>
+        <li>App de gestão</li>
+        <li>Domínio incluído</li>
+        <li>Suporte por e-mail</li>
+      </ul>
+      <span class="card-eco">Economize 10%</span>
+    </div>
+
+    <!-- SEMESTRAL -->
+    <div class="card popular" id="card-semestral" onclick="selPlano('semestral')">
+      <div class="badge">Mais popular</div>
+      <div class="card-name">Semestral</div>
+      <div class="card-price">
+        <span class="price-val">R$39</span><span class="price-per">/mês</span>
+      </div>
+      <div class="price-total">Total: <b>R$234</b> em 6x</div>
+      <ul class="card-feats">
+        <li>Site de agendamento</li>
+        <li>App de gestão</li>
+        <li>Domínio incluído</li>
+        <li>Suporte prioritário</li>
+      </ul>
+      <span class="card-eco">Economize 20%</span>
+    </div>
+
+    <!-- ANUAL -->
+    <div class="card" id="card-anual" onclick="selPlano('anual')">
+      <div class="card-name">Anual</div>
+      <div class="card-price">
+        <span class="price-val">R$34</span><span class="price-per">/mês</span>
+      </div>
+      <div class="price-total">Total: <b>R$408</b> em 12x</div>
+      <ul class="card-feats">
+        <li>Site de agendamento</li>
+        <li>App de gestão</li>
+        <li>Domínio incluído</li>
+        <li>Suporte prioritário</li>
+      </ul>
+      <span class="card-eco">Economize 31%</span>
+    </div>
+
+  </div>
+
+  <div class="cta-wrap">
+    <button class="btn-continuar" id="btn-continuar" onclick="continuar()" disabled>Continuar →</button>
+  </div>
+</main>
+
+<script>
+let planoSel = null;
+
+// Restore from localStorage if returning
+const savedPlano = localStorage.getItem('onb_plano');
+if(savedPlano) selPlano(savedPlano);
+
+function selPlano(p) {
+  planoSel = p;
+  ['mensal','trimestral','semestral','anual'].forEach(x => {
+    document.getElementById('card-'+x).classList.toggle('sel', x===p);
+  });
+  document.getElementById('btn-continuar').disabled = false;
+}
+
+function continuar() {
+  if(!planoSel) return;
+  localStorage.setItem('onb_plano', planoSel);
+  window.location.href = '/cadastro';
+}
+</script>
+</body>
+</html>

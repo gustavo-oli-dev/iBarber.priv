@@ -1,0 +1,105 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Perfil do Cliente{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+  <a href="/gestao/clientes" class="g-btn g-btn-outline" style="padding:.3rem .75rem;font-size:.85rem;">← Voltar</a>
+  <h1 class="g-page-title" style="margin:0" id="nomeCliente">Carregando...</h1>
+</div>
+
+<div id="perfilBox" style="display:none;">
+  <!-- Cards info -->
+  <div class="g-grid" style="margin-bottom:1.5rem;">
+    <div class="g-card">
+      <div class="g-card-label">E-mail</div>
+      <div id="infoEmail" style="font-size:.9rem;color:var(--text-primary);margin-top:.25rem;"></div>
+    </div>
+    <div class="g-card">
+      <div class="g-card-label">Telefone</div>
+      <div id="infoFone" style="font-size:.9rem;color:var(--text-primary);margin-top:.25rem;display:flex;align-items:center;gap:.5rem;"></div>
+    </div>
+    <div class="g-card">
+      <div class="g-card-label">Membro desde</div>
+      <div id="infoDesde" style="font-size:.9rem;color:var(--text-primary);margin-top:.25rem;"></div>
+    </div>
+    <div class="g-card">
+      <div class="g-card-label">Total de pedidos</div>
+      <div id="infoTotal" style="font-size:1.5rem;font-weight:700;color:var(--gold);margin-top:.25rem;"></div>
+    </div>
+  </div>
+
+  <!-- Observação -->
+  <div id="obsBox" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
+    <div class="g-section-title" style="margin-bottom:.5rem;">Observação</div>
+    <div id="obsTexto" style="font-size:.875rem;color:var(--text-muted);"></div>
+  </div>
+
+  <!-- Histórico de pedidos -->
+  <div class="g-section-title" style="margin-bottom:.75rem;">Histórico de Pedidos</div>
+  <div class="g-table-wrap">
+    <table class="g-table">
+      <thead>
+        <tr><th>#</th><th>Serviços</th><th>Total</th><th>Status</th><th>Data</th></tr>
+      </thead>
+      <tbody id="tbodyPedidos"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="errBox" style="display:none;color:var(--error);text-align:center;padding:2rem;">Cliente não encontrado.</div>
+
+<script>
+const TOKEN = "{{ token }}";
+const UID = {{ uid }};
+
+function fmtData(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtR(v) { return 'R$ ' + parseFloat(v||0).toFixed(2).replace('.',','); }
+function badgeStatus(s) {
+  if (s==='pago') return '<span class="g-badge g-badge-ok">Realizado</span>';
+  if (s==='cancelado') return '<span class="g-badge g-badge-err">Cancelado</span>';
+  return '<span class="g-badge g-badge-warn">Pendente</span>';
+}
+
+async function carregar() {
+  const r = await fetch(`/api/usuarios/${UID}`, {headers:{'Authorization':'Bearer '+TOKEN}});
+  if (!r.ok) { document.getElementById('errBox').style.display=''; document.getElementById('nomeCliente').textContent='Erro'; return; }
+  const u = await r.json();
+  document.getElementById('nomeCliente').textContent = u.name || u.nome || '—';
+  document.getElementById('infoEmail').textContent = u.email || '—';
+  const fone = (u.contact||'').replace(/\D/g,'');
+  const foneEl = document.getElementById('infoFone');
+  if (fone) {
+    foneEl.innerHTML = `${u.contact} <a href="https://wa.me/55${fone}" target="_blank" style="color:#25d366;text-decoration:none;font-size:.75rem;border:1px solid #25d366;border-radius:999px;padding:.1rem .5rem;">WhatsApp</a>`;
+  } else {
+    foneEl.textContent = u.contact || '—';
+  }
+  document.getElementById('infoDesde').textContent = u.criado_em ? new Date(u.criado_em).toLocaleDateString('pt-BR') : '—';
+  const pedidos = u.pedidos || [];
+  document.getElementById('infoTotal').textContent = pedidos.length;
+  if (u.observation) {
+    document.getElementById('obsBox').style.display = '';
+    document.getElementById('obsTexto').textContent = u.observation;
+  }
+  const tbody = document.getElementById('tbodyPedidos');
+  if (!pedidos.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">Nenhum pedido.</td></tr>';
+  } else {
+    tbody.innerHTML = pedidos.map(p => {
+      const servicos = (p.itens||[]).map(i=>i.nome).join(', ') || '—';
+      return `<tr>
+        <td style="color:var(--text-muted)">#${p.id}</td>
+        <td style="font-size:.85rem;">${servicos}</td>
+        <td style="color:var(--gold)">${fmtR(p.total)}</td>
+        <td>${badgeStatus(p.status)}</td>
+        <td style="color:var(--text-muted);white-space:nowrap;">${fmtData(p.criado_em)}</td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('perfilBox').style.display = '';
+}
+
+carregar();
+</script>
+{% endblock %}

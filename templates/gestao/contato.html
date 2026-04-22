@@ -1,0 +1,25 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Contato{% endblock %}
+{% block content %}
+<h1 class="g-page-title">Contato</h1>
+
+<form method="POST" action="{{ url_for('gestao_contato') }}" style="max-width:520px;">
+  <div class="g-section">
+    <div class="g-section-title">Informações de contato</div>
+    <div class="g-form-group" style="margin-bottom:1rem;">
+      <label class="g-label">WhatsApp</label>
+      <input class="g-input" name="whatsapp" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.whatsapp or '' }}" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:1rem;">
+      <label class="g-label">Link do Google Maps</label>
+      <input class="g-input" name="maps_url" type="url" placeholder="https://maps.google.com/..." value="{{ tenant.maps_url or '' }}" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:1rem;">
+      <label class="g-label">Telefone / Contato exibido no site</label>
+      <input class="g-input" name="contato" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.contato or '' }}" />
+    </div>
+  </div>
+
+  <button class="g-btn g-btn-primary" type="submit">Salvar</button>
+</form>
+{% endblock %}

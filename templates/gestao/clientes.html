@@ -1,0 +1,122 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+  <h1 class="g-page-title" style="margin:0">Clientes</h1>
+  <span id="totalClientes" style="color:var(--text-muted);font-size:.85rem;"></span>
+</div>
+
+<input id="busca" class="g-input" style="margin-bottom:1rem;max-width:340px;" placeholder="Buscar por nome, e-mail ou telefone..." oninput="renderClientes()">
+
+<!-- Desktop: tabela -->
+<div class="g-table-wrap desktop-only">
+  <table class="g-table">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>E-mail</th>
+        <th>Telefone</th>
+        <th>Desde</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- Mobile: cards -->
+<div id="cardsClientes" class="mobile-only"></div>
+
+<style>
+.desktop-only { display: block; }
+.mobile-only  { display: none; }
+@media (max-width: 640px) {
+  .desktop-only { display: none; }
+  .mobile-only  { display: block; }
+}
+.cliente-card {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .85rem 1rem;
+  margin-bottom: .55rem;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+.cliente-card:active { opacity: .75; }
+.cliente-card-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(200,200,200,.1);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; font-weight: 700; color: var(--gold);
+  flex-shrink: 0;
+}
+.cliente-card-info { flex: 1; min-width: 0; }
+.cliente-card-nome { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cliente-card-sub { font-size: .75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+
+<script>
+const CLIENTES = {{ clientes_json|safe }};
+
+function fmtData(iso) {
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
+
+function renderClientes() {
+  const q = document.getElementById('busca').value.toLowerCase();
+  const filtered = CLIENTES.filter(c => {
+    if (!q) return true;
+    return (c.name+' '+c.email+' '+(c.contact||'')).toLowerCase().includes(q);
+  });
+  document.getElementById('totalClientes').textContent = filtered.length + ' cliente(s)';
+
+  // Desktop
+  const tbody = document.getElementById('tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">Nenhum cliente encontrado.</td></tr>';
+    document.getElementById('cardsClientes').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem;">Nenhum cliente encontrado.</p>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(c => {
+    const fone = (c.contact||'').replace(/\D/g,'');
+    const waBtn = fone
+      ? `<a href="https://wa.me/55${fone}" target="_blank" class="g-btn g-btn-outline" style="padding:.25rem .65rem;font-size:.75rem;color:#25d366;border-color:#25d366;text-decoration:none;" onclick="event.stopPropagation()">WhatsApp</a>`
+      : '';
+    return `<tr style="cursor:pointer;" onclick="location.href='/gestao/clientes/${c.id}'">
+      <td style="font-weight:500;">${c.name}</td>
+      <td style="color:var(--text-muted)">${c.email}</td>
+      <td>${c.contact||'—'}</td>
+      <td style="color:var(--text-muted)">${fmtData(c.criado_em)}</td>
+      <td>${waBtn}</td>
+    </tr>`;
+  }).join('');
+
+  // Mobile cards
+  document.getElementById('cardsClientes').innerHTML = filtered.map(c => {
+    const fone = (c.contact||'').replace(/\D/g,'');
+    const letra = c.name.charAt(0).toUpperCase();
+    const sub = [c.contact, fmtData(c.criado_em)].filter(Boolean).join(' · ');
+    const waHtml = fone
+      ? `<a href="https://wa.me/55${fone}" target="_blank" onclick="event.stopPropagation()"
+           style="background:#1a2b1a;border:1px solid rgba(37,211,102,.4);color:#25d366;border-radius:6px;padding:3px 9px;font-size:.75rem;text-decoration:none;white-space:nowrap;flex-shrink:0;">WPP</a>`
+      : '';
+    return `<a class="cliente-card" href="/gestao/clientes/${c.id}">
+      <div class="cliente-card-avatar">${letra}</div>
+      <div class="cliente-card-info">
+        <div class="cliente-card-nome">${c.name}</div>
+        <div class="cliente-card-sub">${sub}</div>
+      </div>
+      ${waHtml}
+    </a>`;
+  }).join('');
+}
+
+renderClientes();
+</script>
+{% endblock %}

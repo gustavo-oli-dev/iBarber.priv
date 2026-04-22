@@ -1,0 +1,263 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Entrada Monetária{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem;">
+  <h1 class="g-page-title" style="margin:0">Entrada Monetária</h1>
+  <button class="g-btn g-btn-primary" onclick="abrirForm()">+ Registrar</button>
+</div>
+
+<!-- Modal nova entrada -->
+<div id="modalEntrada" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:420px;">
+    <div class="g-section-title" style="margin-bottom:1rem;">Nova Entrada</div>
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Descrição</label>
+      <input id="fDesc" class="g-input" placeholder="Ex: Corte + barba" />
+    </div>
+    <div class="g-form-row">
+      <div class="g-form-group">
+        <label class="g-label">Valor (R$)</label>
+        <input id="fValor" class="g-input" type="number" step="0.01" min="0" placeholder="0.00" />
+      </div>
+      <div class="g-form-group">
+        <label class="g-label">Forma</label>
+        <select id="fForma" class="g-input">
+          <option value="dinheiro">Dinheiro</option>
+          <option value="pix">Pix</option>
+          <option value="cartao_credito">Cartão de crédito</option>
+          <option value="cartao_debito">Cartão de débito</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharForm()">Cancelar</button>
+      <button class="g-btn g-btn-primary" onclick="salvarEntrada()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Filtro de período -->
+<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+  <button class="g-chip g-chip-active" onclick="setPeriodo('dia',this)">Hoje</button>
+  <button class="g-chip" onclick="setPeriodo('semana',this)">Semana</button>
+  <button class="g-chip" onclick="setPeriodo('mes',this)">Mês</button>
+  <button class="g-chip" onclick="setPeriodo('ano',this)">Ano</button>
+</div>
+
+<!-- Cards resumo -->
+<div class="g-grid" style="margin-bottom:1.5rem;">
+  <div class="g-card">
+    <div class="g-card-label" id="labelTotal">Total hoje</div>
+    <div class="g-card-value" id="valorTotal">R$ 0,00</div>
+  </div>
+  <div class="g-card">
+    <div class="g-card-label">Nº de entradas</div>
+    <div class="g-card-value" id="qtdEntradas">0</div>
+  </div>
+</div>
+
+<!-- Gráfico de barras SVG -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
+  <div class="g-section-title" style="margin-bottom:.75rem;" id="tituloGrafico">Entradas por hora</div>
+  <div id="graficoBox" style="overflow-x:auto;"></div>
+</div>
+
+<!-- Tabela (desktop) -->
+<div class="g-table-wrap desktop-only">
+  <table class="g-table">
+    <thead><tr><th>Data</th><th>Descrição</th><th>Forma</th><th>Valor</th><th></th></tr></thead>
+    <tbody id="tbodyEntradas"></tbody>
+  </table>
+</div>
+
+<!-- Cards (mobile) -->
+<div class="mobile-only" id="mobileEntradas"></div>
+
+<style>
+.g-chip{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);padding:.3rem .85rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s}
+.g-chip:hover{border-color:var(--gold);color:var(--gold)}
+.g-chip-active{background:var(--gold);border-color:var(--gold);color:#000;font-weight:600}
+.desktop-only{display:block}
+.mobile-only{display:none}
+@media(max-width:640px){
+  .desktop-only{display:none}
+  .mobile-only{display:block}
+}
+.entrada-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:.65rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem;}
+.entrada-card-info{flex:1;min-width:0;}
+.entrada-card-desc{font-weight:500;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.entrada-card-meta{font-size:.75rem;color:var(--text-muted);margin-top:.2rem;}
+.entrada-card-val{font-size:1.05rem;font-weight:600;color:var(--gold);white-space:nowrap;}
+</style>
+
+<script>
+const TOKEN = "{{ token }}";
+let ENTRADAS = {{ entradas_json|safe }};
+let periodo = 'dia';
+
+function abrirForm() {
+  const m = document.getElementById('modalEntrada');
+  m.style.display = 'flex';
+}
+function fecharForm() {
+  document.getElementById('modalEntrada').style.display = 'none';
+  document.getElementById('fDesc').value = '';
+  document.getElementById('fValor').value = '';
+}
+
+async function salvarEntrada() {
+  const desc = document.getElementById('fDesc').value.trim();
+  const valor = parseFloat(document.getElementById('fValor').value||0);
+  const forma = document.getElementById('fForma').value;
+  if (!desc || valor <= 0) { alert('Preencha descrição e valor'); return; }
+  const r = await fetch('/api/entradas', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({descricao:desc, valor, forma})
+  });
+  if (r.ok) {
+    const d = await r.json();
+    const now = new Date().toISOString();
+    ENTRADAS.unshift({id:d.id, descricao:desc, valor, forma, criado_em:now});
+    fecharForm();
+    renderAll();
+  } else { alert('Erro ao salvar'); }
+}
+
+async function deletarEntrada(id, btn) {
+  if (!confirm('Remover entrada?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/api/entradas/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) {
+    ENTRADAS = ENTRADAS.filter(e => e.id !== id);
+    renderAll();
+  } else { btn.disabled = false; alert('Erro ao remover'); }
+}
+
+function setPeriodo(p, el) {
+  periodo = p;
+  document.querySelectorAll('.g-chip').forEach(c => c.classList.remove('g-chip-active'));
+  el.classList.add('g-chip-active');
+  renderAll();
+}
+
+function filtrarPorPeriodo() {
+  const agora = new Date();
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  return ENTRADAS.filter(e => {
+    const d = new Date(e.criado_em);
+    if (periodo === 'dia') return d >= hoje;
+    if (periodo === 'semana') { const s = new Date(hoje); s.setDate(hoje.getDate()-hoje.getDay()); return d >= s; }
+    if (periodo === 'mes') return d.getFullYear()===agora.getFullYear() && d.getMonth()===agora.getMonth();
+    if (periodo === 'ano') return d.getFullYear()===agora.getFullYear();
+    return true;
+  });
+}
+
+function fmtR(v) { return 'R$ '+parseFloat(v||0).toFixed(2).replace('.',','); }
+function fmtForma(f) {
+  const m = {dinheiro:'Dinheiro',pix:'Pix',cartao_credito:'Crédito',cartao_debito:'Débito'};
+  return m[f] || (f||'—');
+}
+function fmtData(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+const _PIE_COLORS = ['#C9A96E','#6C9BCF','#4CAF82','#E07B7B','#B088D0','#F0C040','#60C8C8','#E08840'];
+
+function renderGrafico(lista) {
+  const tit = {dia:'Entradas por hora',semana:'Entradas por dia da semana',mes:'Entradas por dia do mês',ano:'Entradas por mês'};
+  document.getElementById('tituloGrafico').textContent = tit[periodo] || 'Entradas';
+  const dias_semana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const grupos = {};
+  lista.forEach(e => {
+    const d = new Date(e.criado_em);
+    let chave;
+    if (periodo === 'dia') chave = String(d.getHours()).padStart(2,'0')+'h';
+    else if (periodo === 'semana') chave = dias_semana[d.getDay()];
+    else if (periodo === 'mes') chave = String(d.getDate()).padStart(2,'0');
+    else chave = meses[d.getMonth()];
+    grupos[chave] = (grupos[chave]||0) + parseFloat(e.valor||0);
+  });
+  const keys = Object.keys(grupos);
+  const box = document.getElementById('graficoBox');
+  if (!keys.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;">Sem dados para o período.</p>'; return; }
+
+  const total = keys.reduce((s, k) => s + grupos[k], 0);
+  // Canvas
+  let canvas = box.querySelector('canvas');
+  if (!canvas) { canvas = document.createElement('canvas'); canvas.style.display='block'; }
+  box.innerHTML = '';
+  box.style.display = 'flex'; box.style.flexDirection = 'column'; box.style.alignItems = 'center';
+  box.appendChild(canvas);
+
+  const size = Math.min(box.parentElement.clientWidth || 260, 240);
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  const cx = size/2, cy = size/2, R = size*0.43, ir = size*0.24;
+  let start = -Math.PI/2;
+  keys.forEach((k, i) => {
+    const slice = (grupos[k]/total)*2*Math.PI;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx, cy, R, start, start+slice); ctx.closePath();
+    ctx.fillStyle = _PIE_COLORS[i % _PIE_COLORS.length]; ctx.fill();
+    const bgC = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d0d0d';
+    ctx.strokeStyle = bgC; ctx.lineWidth = 2; ctx.stroke();
+    start += slice;
+  });
+  const bgC = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d0d0d';
+  ctx.beginPath(); ctx.arc(cx,cy,ir,0,2*Math.PI); ctx.fillStyle=bgC; ctx.fill();
+
+  // Legenda
+  const leg = document.createElement('div');
+  leg.style.cssText = 'display:flex;flex-direction:column;gap:.4rem;margin-top:.85rem;width:100%;';
+  leg.innerHTML = keys.map((k,i) => {
+    const pct = ((grupos[k]/total)*100).toFixed(1);
+    return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${_PIE_COLORS[i%_PIE_COLORS.length]};flex-shrink:0;"></span>
+      <span style="flex:1;color:var(--text-muted);">${k}</span>
+      <span style="color:var(--text);font-weight:500;">${fmtR(grupos[k])} <span style="color:var(--text-muted);font-size:.7rem;">${pct}%</span></span>
+    </div>`;
+  }).join('');
+  box.appendChild(leg);
+}
+
+function renderAll() {
+  const lista = filtrarPorPeriodo();
+  const totalV = lista.reduce((s,e)=>s+parseFloat(e.valor||0),0);
+  const lblMap = {dia:'Total hoje',semana:'Total semana',mes:'Total mês',ano:'Total ano',todos:'Total geral'};
+  document.getElementById('labelTotal').textContent = lblMap[periodo];
+  document.getElementById('valorTotal').textContent = fmtR(totalV);
+  document.getElementById('qtdEntradas').textContent = lista.length;
+  renderGrafico(lista);
+  const tbody = document.getElementById('tbodyEntradas');
+  const mbox  = document.getElementById('mobileEntradas');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;">Nenhuma entrada no período.</td></tr>';
+    mbox.innerHTML  = '<p style="color:var(--text-muted);font-size:.875rem;">Nenhuma entrada no período.</p>';
+    return;
+  }
+  tbody.innerHTML = lista.map(e => `<tr>
+    <td style="color:var(--text-muted);white-space:nowrap;">${fmtData(e.criado_em)}</td>
+    <td>${e.descricao||'—'}</td>
+    <td>${fmtForma(e.forma)}</td>
+    <td style="color:var(--gold)">${fmtR(e.valor)}</td>
+    <td><button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.7rem;color:var(--error);" onclick="deletarEntrada(${e.id},this)">✕</button></td>
+  </tr>`).join('');
+  mbox.innerHTML = lista.map(e => `<div class="entrada-card">
+    <div class="entrada-card-info">
+      <div class="entrada-card-desc">${e.descricao||'—'}</div>
+      <div class="entrada-card-meta">${fmtForma(e.forma)} · ${fmtData(e.criado_em)}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:.65rem;flex-shrink:0;">
+      <span class="entrada-card-val">${fmtR(e.valor)}</span>
+      <button class="g-btn g-btn-outline" style="padding:.25rem .55rem;font-size:.75rem;color:var(--error);min-height:36px;" onclick="deletarEntrada(${e.id},this)">✕</button>
+    </div>
+  </div>`).join('');
+}
+
+renderAll();
+</script>
+{% endblock %}

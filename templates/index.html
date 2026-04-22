@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}{{ tenant.nome if tenant else 'Barbearia' }} — Início{% endblock %}
+{% block content %}
+{% set _tagline = (preview_identity.tagline  | default('')) or (tema_config.tagline  | default('')) or 'Bem-vindo' %}
+{% set _cta     = (preview_identity.ctaTexto | default('')) or (tema_config.ctaTexto | default('')) or 'Marque seu corte' %}
+{% set _hero    = (preview_identity.heroUrl  | default('')) or (tema_config.heroUrl  | default('')) %}
+<section class="hero-central"{% if _hero %} style="background-image:url('{{ _hero }}');background-size:cover;background-position:center;"{% endif %}>
+  <div class="hero-stack stagger">
+    <span class="hero-eyebrow">✦ {{ _tagline }}</span>
+    {% if not session.get('user_id') %}
+      <button class="btn btn-gold btn-hero" id="abrirLoginBtn" onclick="abrirModal()">{{ _cta }}</button>
+    {% else %}
+      <a href="/servicos" class="btn btn-gold btn-hero">{{ _cta }}</a>
+    {% endif %}
+  </div>
+</section>
+{% if not session.get('user_id') or auto_rapido %}
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-close" id="modalClose" aria-label="Fechar">×</button>
+    <div class="auth-header">
+      <span class="logo-mark">✦</span>
+      <h2 class="auth-title" id="modalTitle">Entrar</h2>
+      <p class="auth-sub">Acesse sua conta para agendar</p>
+    </div>
+    <form class="auth-form" method="POST" action="{{ url_for('login') }}" novalidate
+          onsubmit="this.querySelector('[type=submit]').classList.add('btn-loading')">
+      <div class="field">
+        <label class="field-label" for="email">E-mail</label>
+        <input class="field-input" type="email" id="email" name="email"
+               placeholder="seu@email.com" required autocomplete="email"
+               oninput="this.value=this.value.toLowerCase()" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="password">Senha</label>
+        <div class="field-input-wrap">
+          <input class="field-input" type="password" id="password" name="password"
+                 placeholder="••••••••" required autocomplete="current-password" />
+          <button type="button" class="toggle-pw" aria-label="Mostrar senha" data-target="password">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-gold btn-full btn-lg">Entrar</button>
+    </form>
+    <div class="auth-divider" id="mDivider"><span>ou</span></div>
+    <button type="button" class="btn btn-outline btn-full" id="mBtnRapido" onclick="mostrarRapidoModal()">Continuar sem cadastro</button>
+
+    <form class="auth-form" id="mFormRapido" method="POST" action="{{ url_for('login_rapido') }}" novalidate style="display:none;margin-top:1rem;">
+      <div class="field">
+        <label class="field-label" for="mNome">Nome *</label>
+        <input class="field-input" type="text" id="mNome" name="nome" placeholder="Seu nome" required />
+      </div>
+      <div class="field">
+        <label class="field-label" for="mContato">WhatsApp / Contato <span class="required">*</span></label>
+        <input class="field-input" type="tel" id="mContato" name="contato" placeholder="(00) 00000-0000" required />
+      </div>
+      <div class="field">
+        <label class="field-label" for="mAlergia">Alergia ou observação</label>
+        <textarea class="field-input" id="mAlergia" name="alergia" rows="2" placeholder="Ex: alergia a amônia..."></textarea>
+      </div>
+      <button type="submit" class="btn btn-gold btn-full btn-lg">Continuar</button>
+      <p style="margin-top:1rem;font-size:0.8rem;color:var(--text-muted);text-align:center;line-height:1.4;">
+        <strong style="color:var(--text);">Você só irá receber lembretes se se cadastrar.</strong>
+      </p>
+      <p class="auth-switch" style="margin-top:0.6rem;">
+        <a href="#" class="link-gold" onclick="voltarLoginModal(event)">← Voltar para login</a>
+      </p>
+    </form>
+
+    <div class="modal-footer" id="mFooter">
+      <a href="{{ url_for('esqueci_senha') }}" class="link-muted">Esqueceu a senha?</a>
+      <a href="{{ url_for('register') }}" class="link-gold modal-register-link">Cadastrar</a>
+    </div>
+  </div>
+</div>
+<script>
+function mostrarRapidoModal() {
+  document.querySelector('.auth-form').style.display = 'none';
+  document.getElementById('mDivider').style.display = 'none';
+  document.getElementById('mBtnRapido').style.display = 'none';
+  document.getElementById('mFooter').style.display = 'none';
+  document.getElementById('mFormRapido').style.display = 'block';
+}
+function voltarLoginModal(e) {
+  e.preventDefault();
+  document.querySelector('.auth-form').style.display = 'block';
+  document.getElementById('mDivider').style.display = 'flex';
+  document.getElementById('mBtnRapido').style.display = 'block';
+  document.getElementById('mFooter').style.display = 'flex';
+  document.getElementById('mFormRapido').style.display = 'none';
+}
+{% if auto_rapido %}
+document.addEventListener('DOMContentLoaded', function() {
+  abrirModal();
+  mostrarRapidoModal();
+});
+{% elif preview_mode and not session.get('user_id') %}
+document.addEventListener('DOMContentLoaded', function() {
+  abrirModal();
+});
+{% endif %}
+</script>
+{% endif %}
+{% endblock %}

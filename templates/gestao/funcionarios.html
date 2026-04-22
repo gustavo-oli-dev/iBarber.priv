@@ -1,0 +1,360 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Funcionários{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+  <h1 class="g-page-title" style="margin:0">Funcionários</h1>
+  <button class="g-btn g-btn-primary" onclick="abrirModal()">+ Adicionar</button>
+</div>
+
+<!-- Gestor como Barbeiro -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
+  <div class="g-section-title" style="margin-bottom:.75rem;">Gestor como Barbeiro</div>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <!-- Foto do gestor -->
+    <div style="position:relative;flex-shrink:0;">
+      <div id="gestorFotoWrap" onclick="document.getElementById('inputFotoGestor').click()" style="width:56px;height:56px;border-radius:50%;border:2px solid var(--border);cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--surface-2,#1a1a1a);font-size:1.4rem;">
+        <span id="gestorFotoPlaceholder">👤</span>
+        <img id="gestorFotoImg" src="" style="display:none;width:100%;height:100%;object-fit:cover;" />
+      </div>
+      <div onclick="document.getElementById('inputFotoGestor').click()" style="position:absolute;bottom:0;right:0;background:var(--gold);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.65rem;color:#000;">✎</div>
+      <input type="file" id="inputFotoGestor" accept="image/*" style="display:none;" onchange="uploadFotoGestor(this)" />
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:.6rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+        <span style="font-size:.875rem;">Gestor aparece como barbeiro disponível</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="gestorAtivo" onchange="salvarGestor()" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <input id="gestorNome" class="g-input" placeholder="Nome do gestor como barbeiro" style="max-width:220px;" oninput="salvarGestorDebounce()" />
+    </div>
+  </div>
+</div>
+
+<!-- Gráfico de cortes por barbeiro -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
+  <div class="g-section-title" style="margin-bottom:.75rem;">Cortes por Barbeiro</div>
+  <div id="graficoBarbeiros"><p style="color:var(--text-muted);font-size:.875rem;">Carregando...</p></div>
+</div>
+
+<!-- Lista de funcionários -->
+<div id="listaFuncionarios"><p style="color:var(--text-muted);">Carregando...</p></div>
+
+<!-- Modal Adicionar/Editar -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:500px;margin-top:2rem;">
+    <div class="g-section-title" style="margin-bottom:1rem;" id="modalTitulo">Novo Funcionário</div>
+    <input type="hidden" id="editId" value="">
+    <div class="g-form-row">
+      <div class="g-form-group">
+        <label class="g-label">Nome</label>
+        <input id="fNome" class="g-input" placeholder="Nome completo" />
+      </div>
+      <div class="g-form-group">
+        <label class="g-label">E-mail</label>
+        <input id="fEmail" class="g-input" type="email" placeholder="email@exemplo.com" />
+      </div>
+    </div>
+    <div class="g-form-row">
+      <div class="g-form-group">
+        <label class="g-label">Telefone</label>
+        <input id="fTelefone" class="g-input" placeholder="(00) 00000-0000" />
+      </div>
+      <div class="g-form-group">
+        <label class="g-label" id="senhaLabel">Senha inicial</label>
+        <div style="position:relative;">
+          <input id="fSenha" class="g-input" type="password" placeholder="Mínimo 6 caracteres" style="padding-right:2.5rem;" />
+          <button type="button" onclick="toggleSenhaFunc()" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
+        </div>
+      </div>
+    </div>
+    <!-- Foto do funcionário -->
+    <div style="margin:.75rem 0 .75rem;display:flex;align-items:center;gap:1rem;">
+      <div id="modalFotoWrap" onclick="document.getElementById('inputFotoFunc').click()" style="width:60px;height:60px;border-radius:50%;border:2px solid var(--border);cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--surface-2,#1a1a1a);font-size:1.5rem;flex-shrink:0;">
+        <span id="modalFotoPlaceholder">👤</span>
+        <img id="modalFotoImg" src="" style="display:none;width:100%;height:100%;object-fit:cover;" />
+      </div>
+      <div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.3rem;">Foto do funcionário</div>
+        <button type="button" class="g-btn g-btn-outline" style="padding:.25rem .75rem;font-size:.78rem;" onclick="document.getElementById('inputFotoFunc').click()">Escolher foto</button>
+        <button type="button" id="btnRemoverFoto" class="g-btn g-btn-outline" style="padding:.25rem .75rem;font-size:.78rem;color:var(--error);margin-left:.5rem;display:none;" onclick="removerFotoFunc()">Remover</button>
+      </div>
+      <input type="file" id="inputFotoFunc" accept="image/*" style="display:none;" onchange="previewFotoFunc(this)" />
+    </div>
+    <div class="g-section-title" style="margin:.75rem 0 .5rem;">Permissões</div>
+    <div id="permsBox" class="perm-chips"></div>
+    <div style="display:flex;gap:.75rem;margin-top:1.25rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="g-btn g-btn-primary" id="btnSalvar" onclick="salvarFuncionario()">Salvar</button>
+      <button id="btnDesativar" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="desativarFuncionario()">Desativar</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+const TOKEN = "{{ token }}";
+const PERMS_LISTA = [
+  {key:'agendamentos',label:'Ver agendamentos'},
+  {key:'calendario',label:'Ver calendário'},
+  {key:'marcar',label:'Marcar horário'},
+  {key:'clientes',label:'Ver clientes'},
+  {key:'servicos',label:'Gerenciar serviços'},
+  {key:'precos',label:'Ver preços'},
+  {key:'pedidos',label:'Ver pedidos'},
+  {key:'entradas',label:'Entradas monetárias'},
+  {key:'fotos',label:'Gerenciar fotos'},
+];
+
+let funcionarios = [];
+let gestorDebTimer = null;
+
+function fmtR(v) { return 'R$ '+parseFloat(v||0).toFixed(2).replace('.',','); }
+
+async function carregar() {
+  const [rF, rG, rS] = await Promise.all([
+    fetch('/api/funcionarios', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    fetch('/api/gestor-barbeiro', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    fetch('/api/stats/barbeiros', {headers:{'Authorization':'Bearer '+TOKEN}}),
+  ]);
+  funcionarios = await rF.json();
+  const gestor = await rG.json();
+  const stats  = await rS.json();
+
+  document.getElementById('gestorAtivo').checked = gestor.ativo;
+  document.getElementById('gestorNome').value = gestor.nome || '';
+  _setFotoGestor(gestor.foto_url);
+
+  renderGrafico(stats);
+  renderLista();
+}
+
+const _FP = ['#C9A96E','#6C9BCF','#4CAF82','#E07B7B','#B088D0','#F0C040','#60C8C8','#E08840'];
+function renderGrafico(stats) {
+  const box = document.getElementById('graficoBarbeiros');
+  if (!stats || !stats.length) { box.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;">Sem dados.</p>'; return; }
+  const total = stats.reduce((s,x)=>s+x.total,0);
+  if (!total) { box.innerHTML = '<p style="color:var(--text-muted);font-size:.875rem;">Sem cortes registrados.</p>'; return; }
+  box.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+  let canvas = box.querySelector('canvas');
+  if (!canvas) { canvas = document.createElement('canvas'); }
+  box.innerHTML = ''; box.appendChild(canvas);
+  const size = Math.min(box.parentElement.clientWidth||260, 220);
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  const cx=size/2,cy=size/2,R=size*0.43,ir=size*0.24;
+  let start=-Math.PI/2;
+  stats.forEach((s,i)=>{
+    const slice=(s.total/total)*2*Math.PI;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,start,start+slice);ctx.closePath();
+    ctx.fillStyle=_FP[i%_FP.length];ctx.fill();
+    const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d0d0d';
+    ctx.strokeStyle=bg;ctx.lineWidth=2;ctx.stroke();
+    start+=slice;
+  });
+  const bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#0d0d0d';
+  ctx.beginPath();ctx.arc(cx,cy,ir,0,2*Math.PI);ctx.fillStyle=bg;ctx.fill();
+  const leg=document.createElement('div');
+  leg.style.cssText='display:flex;flex-direction:column;gap:.4rem;margin-top:.85rem;width:100%;';
+  leg.innerHTML=stats.map((s,i)=>{
+    const pct=((s.total/total)*100).toFixed(1);
+    return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${_FP[i%_FP.length]};flex-shrink:0;"></span>
+      <span style="flex:1;color:var(--text-muted);">${s.nome.split(' ')[0]}</span>
+      <span style="color:var(--text);font-weight:500;">${s.total} corte${s.total!==1?'s':''} <span style="color:var(--text-muted);font-size:.7rem;">${pct}%</span></span>
+    </div>`;
+  }).join('');
+  box.appendChild(leg);
+}
+
+function renderLista() {
+  const box = document.getElementById('listaFuncionarios');
+  const ativos = funcionarios.filter(f=>f.ativo);
+  const inativos = funcionarios.filter(f=>!f.ativo);
+  if (!funcionarios.length) { box.innerHTML = '<p style="color:var(--text-muted);">Nenhum funcionário cadastrado.</p>'; return; }
+  const renderFuncs = (list) => list.map(f => {
+    const perms = Object.entries(f.permissoes||{}).filter(([,v])=>v).map(([k])=>PERMS_LISTA.find(p=>p.key===k)?.label||k).join(', ');
+    const fotoHtml = f.foto_url
+      ? `<img src="${f.foto_url}" alt="${f.nome}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid var(--border);flex-shrink:0;" />`
+      : `<div style="width:44px;height:44px;border-radius:50%;background:var(--surface-2,#2a2a2a);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">${f.nome.charAt(0).toUpperCase()}</div>`;
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      ${fotoHtml}
+      <div style="flex:1;min-width:150px;">
+        <div style="font-weight:600;">${f.nome}</div>
+        <div style="font-size:.8rem;color:var(--text-muted);">${f.email} ${f.telefone?'· '+f.telefone:''}</div>
+        ${perms?`<div style="font-size:.75rem;color:var(--text-muted);margin-top:.2rem;">Perms: ${perms}</div>`:''}
+      </div>
+      <span class="g-badge ${f.ativo?'g-badge-ok':'g-badge-err'}">${f.ativo?'Ativo':'Inativo'}</span>
+      <button class="g-btn g-btn-outline" style="padding:.25rem .65rem;font-size:.75rem;" onclick="editarFuncionario(${f.id})">Editar</button>
+    </div>`;
+  }).join('');
+  let html = renderFuncs(ativos);
+  if (inativos.length) html += `<div style="margin-top:1rem;color:var(--text-muted);font-size:.8rem;margin-bottom:.5rem;">Inativos</div>` + renderFuncs(inativos);
+  box.innerHTML = html;
+}
+
+function abrirModal(f=null) {
+  document.getElementById('editId').value = f ? f.id : '';
+  document.getElementById('modalTitulo').textContent = f ? 'Editar Funcionário' : 'Novo Funcionário';
+  document.getElementById('fNome').value = f ? f.nome : '';
+  document.getElementById('fEmail').value = f ? f.email : '';
+  document.getElementById('fTelefone').value = f ? (f.telefone||'') : '';
+  document.getElementById('fSenha').value = '';
+  document.getElementById('senhaLabel').textContent = f ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial';
+  _fotoFuncFile = null;
+  document.getElementById('inputFotoFunc').value = '';
+  delete document.getElementById('modalFotoImg').dataset.deletar;
+  if (f && f.foto_url) {
+    document.getElementById('modalFotoImg').src = f.foto_url;
+    document.getElementById('modalFotoImg').style.display = 'block';
+    document.getElementById('modalFotoPlaceholder').style.display = 'none';
+    document.getElementById('btnRemoverFoto').style.display = '';
+  } else {
+    document.getElementById('modalFotoImg').src = '';
+    document.getElementById('modalFotoImg').style.display = 'none';
+    document.getElementById('modalFotoPlaceholder').style.display = '';
+    document.getElementById('btnRemoverFoto').style.display = 'none';
+  }
+  document.getElementById('btnDesativar').style.display = (f && f.ativo) ? '' : 'none';
+  const perms = f ? (f.permissoes||{}) : {};
+  document.getElementById('permsBox').innerHTML = PERMS_LISTA.map(p =>
+    `<button type="button" class="perm-chip${perms[p.key]?' active':''}" id="perm_${p.key}" onclick="this.classList.toggle('active')">${p.label}</button>`
+  ).join('');
+  document.getElementById('modal').style.display = 'flex';
+}
+function fecharModal() { document.getElementById('modal').style.display = 'none'; }
+
+function editarFuncionario(id) {
+  const f = funcionarios.find(x=>x.id===id);
+  if (f) abrirModal(f);
+}
+
+async function salvarFuncionario() {
+  const id = document.getElementById('editId').value;
+  const nome = document.getElementById('fNome').value.trim();
+  const email = document.getElementById('fEmail').value.trim();
+  const telefone = document.getElementById('fTelefone').value.trim();
+  const senha = document.getElementById('fSenha').value;
+  const permissoes = {};
+  PERMS_LISTA.forEach(p => { permissoes[p.key] = document.getElementById('perm_'+p.key).classList.contains('active'); });
+  if (!nome) { alert('Informe o nome'); return; }
+  const body = {nome, telefone, permissoes};
+  if (!id) { body.email = email; body.senha = senha; }
+  else { if (senha) body.nova_senha = senha; }
+  const url = id ? `/api/funcionarios/${id}` : '/api/funcionarios';
+  const method = id ? 'PUT' : 'POST';
+  const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify(body)});
+  if (r.ok) {
+    const data = await r.json();
+    const funcId = id ? parseInt(id) : data.id;
+    if (funcId) await _enviarFotoFunc(funcId);
+    fecharModal(); await carregar();
+  } else { const d=await r.json(); alert(d.erro||'Erro ao salvar'); }
+}
+
+async function desativarFuncionario() {
+  const id = document.getElementById('editId').value;
+  if (!id || !confirm('Desativar este funcionário?')) return;
+  const r = await fetch(`/api/funcionarios/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+  if (r.ok) { fecharModal(); await carregar(); }
+  else alert('Erro ao desativar');
+}
+
+async function salvarGestor() {
+  const ativo = document.getElementById('gestorAtivo').checked;
+  const nome  = document.getElementById('gestorNome').value.trim();
+  await fetch('/api/gestor-barbeiro', {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({ativo, nome})
+  });
+}
+function salvarGestorDebounce() {
+  clearTimeout(gestorDebTimer);
+  gestorDebTimer = setTimeout(salvarGestor, 600);
+}
+
+function toggleSenhaFunc() {
+  const inp = document.getElementById('fSenha');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── Foto funcionário (modal) ──────────────────────────
+let _fotoFuncFile = null;
+
+function previewFotoFunc(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _fotoFuncFile = file;
+  const url = URL.createObjectURL(file);
+  document.getElementById('modalFotoImg').src = url;
+  document.getElementById('modalFotoImg').style.display = 'block';
+  document.getElementById('modalFotoPlaceholder').style.display = 'none';
+  document.getElementById('btnRemoverFoto').style.display = '';
+}
+
+function removerFotoFunc() {
+  _fotoFuncFile = null;
+  document.getElementById('modalFotoImg').src = '';
+  document.getElementById('modalFotoImg').style.display = 'none';
+  document.getElementById('modalFotoPlaceholder').style.display = '';
+  document.getElementById('btnRemoverFoto').style.display = 'none';
+  document.getElementById('inputFotoFunc').value = '';
+  // Se estiver editando, marca para deletar no servidor
+  const id = document.getElementById('editId').value;
+  if (id) document.getElementById('modalFotoImg').dataset.deletar = '1';
+}
+
+async function _enviarFotoFunc(funcId) {
+  const del = document.getElementById('modalFotoImg').dataset.deletar;
+  if (del === '1') {
+    await fetch(`/api/funcionarios/${funcId}/foto`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
+    delete document.getElementById('modalFotoImg').dataset.deletar;
+    return;
+  }
+  if (!_fotoFuncFile) return;
+  const fd = new FormData();
+  fd.append('foto', _fotoFuncFile);
+  const r = await fetch(`/api/funcionarios/${funcId}/foto`, {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN}, body: fd
+  });
+  if (r.ok) {
+    const d = await r.json();
+    const f = funcionarios.find(x => x.id === funcId);
+    if (f) f.foto_url = d.foto_url;
+  }
+  _fotoFuncFile = null;
+}
+
+// ── Foto gestor ───────────────────────────────────────
+async function uploadFotoGestor(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('foto', file);
+  const r = await fetch('/api/gestor-foto', {
+    method:'POST', headers:{'Authorization':'Bearer '+TOKEN}, body: fd
+  });
+  if (r.ok) {
+    const d = await r.json();
+    document.getElementById('gestorFotoImg').src = d.foto_url;
+    document.getElementById('gestorFotoImg').style.display = 'block';
+    document.getElementById('gestorFotoPlaceholder').style.display = 'none';
+  }
+}
+
+function _setFotoGestor(url) {
+  if (url) {
+    document.getElementById('gestorFotoImg').src = url;
+    document.getElementById('gestorFotoImg').style.display = 'block';
+    document.getElementById('gestorFotoPlaceholder').style.display = 'none';
+  } else {
+    document.getElementById('gestorFotoImg').style.display = 'none';
+    document.getElementById('gestorFotoPlaceholder').style.display = '';
+  }
+}
+
+carregar();
+</script>
+{% endblock %}

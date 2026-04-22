@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BarberOS — Gestão completa para barbearias</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;
+  --surface:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.08);
+  --gold:#C9A96E;
+  --gold2:#e0be88;
+  --text:#f5f5f5;
+  --muted:#888;
+  --muted2:#555;
+  --radius:14px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+
+/* ── NAVBAR ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 clamp(1.5rem,5vw,5rem);
+  height:64px;
+  background:rgba(0,0,0,0.72);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{
+  font-size:1.1rem;font-weight:700;letter-spacing:0.12em;
+  display:flex;align-items:center;gap:8px;
+}
+.nav-logo span{color:var(--gold)}
+.nav-links{display:flex;align-items:center;gap:2rem}
+.nav-link{font-size:.875rem;color:var(--muted);font-weight:400;transition:color .2s}
+.nav-link:hover{color:var(--text)}
+.btn-nav{
+  background:var(--gold);color:#000;
+  padding:9px 22px;border-radius:8px;
+  font-size:.85rem;font-weight:600;
+  transition:background .2s,transform .15s;
+}
+.btn-nav:hover{background:var(--gold2);transform:scale(1.02)}
+
+/* ── HERO ── */
+.hero{
+  min-height:100dvh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:120px clamp(1.5rem,6vw,8rem) 80px;
+  position:relative;
+  overflow:hidden;
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% 20%, rgba(201,169,110,0.12) 0%, transparent 70%);
+  pointer-events:none;
+}
+.hero-tag{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(201,169,110,0.1);border:1px solid rgba(201,169,110,0.25);
+  color:var(--gold);font-size:.8rem;font-weight:500;letter-spacing:0.06em;
+  padding:6px 16px;border-radius:50px;
+  margin-bottom:2rem;text-transform:uppercase;
+}
+.hero h1{
+  font-size:clamp(2.4rem,6vw,5rem);
+  font-weight:800;line-height:1.08;letter-spacing:-0.03em;
+  max-width:820px;margin:0 auto 1.5rem;
+}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(135deg,#C9A96E,#e8d5a8,#C9A96E);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(1rem,2vw,1.25rem);color:var(--muted);
+  max-width:540px;margin:0 auto 2.5rem;font-weight:400;
+}
+.hero-ctas{display:flex;align-items:center;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{
+  background:var(--gold);color:#000;
+  padding:15px 36px;border-radius:10px;
+  font-size:1rem;font-weight:700;
+  transition:background .2s,transform .15s,box-shadow .2s;
+  box-shadow:0 0 0 0 rgba(201,169,110,0);
+}
+.btn-primary:hover{
+  background:var(--gold2);transform:translateY(-1px);
+  box-shadow:0 8px 32px rgba(201,169,110,0.3);
+}
+.btn-ghost{
+  color:var(--text);padding:15px 28px;
+  border-radius:10px;font-size:1rem;font-weight:500;
+  border:1px solid var(--border);
+  transition:border-color .2s,background .2s;
+}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.2);background:var(--surface)}
+
+/* Mockup hero */
+.hero-mockup{
+  margin-top:5rem;
+  width:100%;max-width:900px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 40px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04);
+  aspect-ratio:16/7;
+  display:flex;align-items:center;justify-content:center;
+}
+.mockup-inner{
+  display:flex;gap:2px;width:100%;height:100%;
+}
+.mockup-sidebar{
+  width:220px;flex-shrink:0;
+  background:rgba(255,255,255,0.02);
+  border-right:1px solid var(--border);
+  padding:1.5rem 1rem;
+  display:flex;flex-direction:column;gap:.5rem;
+}
+.mockup-item{
+  padding:.6rem .8rem;border-radius:8px;font-size:.75rem;color:var(--muted);
+}
+.mockup-item.active{background:rgba(201,169,110,0.12);color:var(--gold)}
+.mockup-content{
+  flex:1;padding:1.5rem;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;align-content:start;
+}
+.mockup-card{
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  border-radius:10px;padding:1rem;
+}
+.mockup-card-label{font-size:.65rem;color:var(--muted);margin-bottom:.3rem}
+.mockup-card-val{font-size:1.3rem;font-weight:700;color:var(--gold)}
+
+/* ── STATS ── */
+.stats{
+  border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  padding:3rem clamp(1.5rem,5vw,5rem);
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(2rem,6vw,6rem);flex-wrap:wrap;
+}
+.stat{text-align:center}
+.stat-num{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;letter-spacing:-0.02em;color:var(--text)}
+.stat-num span{color:var(--gold)}
+.stat-label{font-size:.85rem;color:var(--muted);margin-top:.2rem}
+
+/* ── SECTIONS ── */
+section{padding:clamp(4rem,8vw,7rem) clamp(1.5rem,5vw,5rem)}
+.section-label{
+  font-size:.75rem;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:1rem;
+}
+.section-title{
+  font-size:clamp(1.8rem,4vw,3rem);font-weight:800;
+  letter-spacing:-0.02em;line-height:1.15;
+  max-width:640px;margin-bottom:1rem;
+}
+.section-sub{font-size:1.05rem;color:var(--muted);max-width:520px;line-height:1.7}
+
+/* ── FEATURES ── */
+.features-wrap{max-width:1100px;margin:0 auto}
+.features-top{margin-bottom:4rem}
+.features-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:1.5px;
+  border:1.5px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.feature-item{
+  padding:2.5rem 2rem;
+  background:var(--surface);
+  transition:background .2s;
+}
+.feature-item:hover{background:rgba(255,255,255,0.06)}
+.feature-icon{
+  width:44px;height:44px;border-radius:10px;
+  background:rgba(201,169,110,0.1);border:1px solid rgba(201,169,110,0.2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;margin-bottom:1.2rem;
+}
+.feature-item h3{font-size:1rem;font-weight:600;margin-bottom:.5rem}
+.feature-item p{font-size:.875rem;color:var(--muted);line-height:1.65}
+
+/* ── HOW IT WORKS ── */
+.how-wrap{max-width:900px;margin:0 auto}
+.steps{display:flex;flex-direction:column;gap:0}
+.step{
+  display:grid;grid-template-columns:64px 1fr;gap:1.5rem;
+  padding:2rem 0;border-bottom:1px solid var(--border);
+  align-items:start;
+}
+.step:last-child{border-bottom:none}
+.step-num{
+  width:48px;height:48px;border-radius:50%;
+  background:rgba(201,169,110,0.1);border:1px solid rgba(201,169,110,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;font-weight:700;color:var(--gold);flex-shrink:0;
+}
+.step-body h3{font-size:1.05rem;font-weight:600;margin-bottom:.4rem}
+.step-body p{font-size:.9rem;color:var(--muted);line-height:1.65}
+
+/* ── PRICING ── */
+.pricing-wrap{max-width:1000px;margin:0 auto}
+.pricing-top{text-align:center;margin-bottom:3rem}
+.pricing-top .section-title{margin:0 auto 1rem;text-align:center}
+.pricing-top .section-sub{margin:0 auto;text-align:center}
+.plans-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:1px;
+  background:var(--border);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.plan{
+  background:#000;
+  padding:2.5rem 1.8rem;
+  transition:background .2s;
+  position:relative;
+}
+.plan:hover{background:rgba(255,255,255,0.03)}
+.plan.popular{background:rgba(201,169,110,0.06)}
+.plan-badge{
+  display:inline-block;
+  background:var(--gold);color:#000;
+  font-size:.7rem;font-weight:700;
+  padding:3px 10px;border-radius:50px;
+  margin-bottom:1rem;letter-spacing:.04em;
+}
+.plan-name{font-size:.8rem;color:var(--muted);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:.8rem}
+.plan-price{font-size:2.4rem;font-weight:800;letter-spacing:-0.03em;line-height:1}
+.plan-price sup{font-size:1rem;font-weight:500;vertical-align:super;margin-right:2px;color:var(--muted)}
+.plan-price sub{font-size:.9rem;font-weight:400;color:var(--muted)}
+.plan-period{font-size:.8rem;color:var(--muted2);margin:.5rem 0 1.5rem}
+.plan-economy{font-size:.8rem;color:#4caf82;font-weight:500;margin-bottom:1.5rem;min-height:1.2em}
+.btn-plan{
+  width:100%;padding:11px;border-radius:8px;
+  font-size:.9rem;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--text);
+  transition:background .2s,border-color .2s,transform .15s;
+}
+.btn-plan:hover{background:var(--surface);border-color:rgba(255,255,255,0.2)}
+.plan.popular .btn-plan{
+  background:var(--gold);color:#000;border-color:var(--gold);
+}
+.plan.popular .btn-plan:hover{background:var(--gold2)}
+
+/* ── CTA FINAL ── */
+.cta-section{
+  text-align:center;
+  padding:clamp(5rem,10vw,9rem) clamp(1.5rem,5vw,5rem);
+  position:relative;overflow:hidden;
+}
+.cta-section::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 60% 70% at 50% 50%, rgba(201,169,110,0.08) 0%, transparent 70%);
+  pointer-events:none;
+}
+.cta-section h2{
+  font-size:clamp(2rem,5vw,3.8rem);font-weight:800;
+  letter-spacing:-0.03em;line-height:1.1;
+  max-width:680px;margin:0 auto 1.2rem;
+}
+.cta-section p{font-size:1.05rem;color:var(--muted);margin-bottom:2.5rem}
+
+/* ── FOOTER ── */
+footer{
+  border-top:1px solid var(--border);
+  padding:2.5rem clamp(1.5rem,5vw,5rem);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;
+}
+.footer-logo{font-size:.9rem;font-weight:600;color:var(--muted);letter-spacing:.08em}
+.footer-logo span{color:var(--gold)}
+.footer-copy{font-size:.8rem;color:var(--muted2)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .nav-links{display:none}
+  .features-grid{grid-template-columns:1fr}
+  .mockup-sidebar{display:none}
+  .mockup-content{grid-template-columns:1fr 1fr}
+  .stats{gap:2rem}
+  .step{grid-template-columns:48px 1fr}
+}
+@media(max-width:480px){
+  .hero-ctas{flex-direction:column;width:100%}
+  .btn-primary,.btn-ghost{width:100%;text-align:center}
+  .mockup-content{grid-template-columns:1fr}
+  .plans-grid{grid-template-columns:1fr}
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.hero-tag,.hero h1,.hero-sub,.hero-ctas{animation:fadeUp .7s ease both}
+.hero h1{animation-delay:.1s}
+.hero-sub{animation-delay:.2s}
+.hero-ctas{animation-delay:.3s}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo"><span>✦</span> BarberOS</div>
+  <div class="nav-links">
+    <a class="nav-link" href="#funcionalidades">Funcionalidades</a>
+    <a class="nav-link" href="#como-funciona">Como funciona</a>
+    <a class="nav-link" href="#planos">Planos</a>
+  </div>
+  <a href="/personalizar" class="btn-nav">Começar agora</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">✦ Gestão para barbearias</div>
+  <h1>A sua barbearia<br/>no próximo <em>nível</em></h1>
+  <p class="hero-sub">Site de agendamento, app de gestão e controle financeiro — tudo em um lugar, do jeito que o seu negócio merece.</p>
+  <div class="hero-ctas">
+    <a href="/personalizar" class="btn-primary">Criar minha barbearia</a>
+    <a href="#como-funciona" class="btn-ghost">Ver como funciona</a>
+  </div>
+  <div style="margin-top:.9rem;font-size:.82rem;color:var(--muted)">
+    Já tem uma conta? <a href="/repersonalizar" style="color:var(--gold);text-decoration:none;font-weight:600">Personalizar meu site →</a>
+  </div>
+
+  <!-- Mockup -->
+  <div class="hero-mockup">
+    <div class="mockup-inner">
+      <div class="mockup-sidebar">
+        <div class="mockup-item active">📅 Agendamentos</div>
+        <div class="mockup-item">👥 Clientes</div>
+        <div class="mockup-item">✂️ Serviços</div>
+        <div class="mockup-item">💰 Financeiro</div>
+        <div class="mockup-item">⚙️ Configurações</div>
+      </div>
+      <div class="mockup-content">
+        <div class="mockup-card">
+          <div class="mockup-card-label">Hoje</div>
+          <div class="mockup-card-val">12</div>
+          <div style="font-size:.65rem;color:#555;margin-top:.2rem">agendamentos</div>
+        </div>
+        <div class="mockup-card">
+          <div class="mockup-card-label">Receita do mês</div>
+          <div class="mockup-card-val">R$4.8k</div>
+        </div>
+        <div class="mockup-card">
+          <div class="mockup-card-label">Clientes</div>
+          <div class="mockup-card-val">247</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat">
+    <div class="stat-num"><span>3</span>min</div>
+    <div class="stat-label">para configurar</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">24<span>/7</span></div>
+    <div class="stat-label">disponível online</div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="funcionalidades">
+  <div class="features-wrap">
+    <div class="features-top">
+      <div class="section-label">Funcionalidades</div>
+      <div class="section-title">Tudo que uma barbearia precisa</div>
+      <p class="section-sub">Desenvolvido especificamente para barbearias brasileiras. Sem complicação, sem nada que você não vai usar.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon">🌐</div>
+        <h3>Site de agendamento</h3>
+        <p>Seus clientes agendam pelo celular, 24h por dia. Link personalizado com a identidade da sua barbearia.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📱</div>
+        <h3>App de gestão mobile</h3>
+        <p>Gerencie tudo pelo celular. Agendamentos, clientes, preços e equipe na palma da mão.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">👨‍💼</div>
+        <h3>Gestão de funcionários</h3>
+        <p>Cadastre barbeiros com permissões individuais. Cada um acessa só o que precisa.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">💳</div>
+        <h3>PIX e cartão integrados</h3>
+        <p>Receba pagamentos no ato do agendamento via PIX ou cartão. Tudo pelo Mercado Pago.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">📊</div>
+        <h3>Relatórios e gráficos</h3>
+        <p>Acompanhe o crescimento da sua barbearia com gráficos de receita, serviços e agendamentos.</p>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">🎨</div>
+        <h3>Visual personalizável</h3>
+        <p>Escolha cores, fontes e estilo. O site e o app combinam com a identidade da sua marca.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="como-funciona" style="border-top:1px solid var(--border)">
+  <div class="how-wrap">
+    <div style="margin-bottom:3rem">
+      <div class="section-label">Como funciona</div>
+      <div class="section-title">Pronto em 3 minutos</div>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Personalize o visual</h3>
+          <p>Escolha as cores, fontes e o estilo do seu site e app. Veja tudo em tempo real antes de confirmar.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Escolha seu plano</h3>
+          <p>Selecione o plano que faz mais sentido para o tamanho da sua barbearia. Cancele quando quiser.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Receba seus links e app</h3>
+          <p>Link do site de agendamento, acesso ao app de gestão e link para instalar no celular — tudo gerado automaticamente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="planos" style="border-top:1px solid var(--border)">
+  <div class="pricing-wrap">
+    <div class="pricing-top">
+      <div class="section-label">Planos</div>
+      <div class="section-title">Simples e transparente</div>
+      <p class="section-sub">Um único plano com tudo incluso. Pague menos quanto mais tempo assinar.</p>
+    </div>
+    <div class="plans-grid">
+      <div class="plan">
+        <div class="plan-name">Mensal</div>
+        <div class="plan-price"><sup>R$</sup>49<sub>/mês</sub></div>
+        <div class="plan-period">Cobrado mensalmente</div>
+        <div class="plan-economy"></div>
+        <button class="btn-plan" onclick="escolherPlano('mensal')">Começar agora</button>
+      </div>
+      <div class="plan popular">
+        <div class="plan-badge">POPULAR</div>
+        <div class="plan-name">Trimestral</div>
+        <div class="plan-price"><sup>R$</sup>44<sub>/mês</sub></div>
+        <div class="plan-period">Cobrado R$132</div>
+        <div class="plan-economy">Economize R$15</div>
+        <button class="btn-plan" onclick="escolherPlano('trimestral')">Começar agora</button>
+      </div>
+      <div class="plan">
+        <div class="plan-name">Semestral</div>
+        <div class="plan-price"><sup>R$</sup>39<sub>/mês</sub></div>
+        <div class="plan-period">Cobrado R$234</div>
+        <div class="plan-economy">Economize R$60</div>
+        <button class="btn-plan" onclick="escolherPlano('semestral')">Começar agora</button>
+      </div>
+      <div class="plan">
+        <div class="plan-badge" style="background:#4caf82;color:#000">MELHOR CUSTO</div>
+        <div class="plan-name">Anual</div>
+        <div class="plan-price"><sup>R$</sup>34<sub>/mês</sub></div>
+        <div class="plan-period">Cobrado R$408</div>
+        <div class="plan-economy">Economize R$180</div>
+        <button class="btn-plan" onclick="escolherPlano('anual')">Começar agora</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="cta-section" style="border-top:1px solid var(--border)">
+  <h2>Pronto para modernizar<br/>sua barbearia?</h2>
+  <p>Junte-se a centenas de barbeiros que já usam o BarberOS.</p>
+  <div style="display:flex;align-items:center;gap:1.5rem;justify-content:center;flex-wrap:wrap">
+    <a href="/personalizar" class="btn-primary" style="font-size:1.05rem;padding:17px 44px">Criar minha barbearia grátis</a>
+    <a href="/repersonalizar" style="font-size:.9rem;color:var(--gold);text-decoration:none;font-weight:600;opacity:.85">Já tenho conta →</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo"><span>✦</span> BarberOS</div>
+  <div class="footer-copy">© 2026 BarberOS · Todos os direitos reservados</div>
+</footer>
+
+<script>
+function escolherPlano(plano) {
+  localStorage.setItem('plano_selecionado', plano);
+  window.location.href = '/personalizar';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Credenciais{% endblock %}
+{% block content %}
+<h1 class="g-page-title">Credenciais de Pagamento</h1>
+
+<div style="max-width:520px;">
+
+  <!-- PIX -->
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+      <div class="g-section-title" style="margin:0;">⚡ PIX</div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togglePix" onchange="salvarToggle('pix_ativo',this.checked)" {% if pix_ativo %}checked{% endif %} />
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1rem;">Chave PIX para receber pagamentos diretos. Obrigatório ter o Access Token do Mercado Pago configurado abaixo.</p>
+    <div class="g-form-group">
+      <label class="g-label">Chave PIX</label>
+      <input id="fPixChave" class="g-input" placeholder="CPF, e-mail, telefone ou chave aleatória" value="{{ pix_chave }}" />
+    </div>
+  </div>
+
+  <!-- Mercado Pago -->
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
+      <div class="g-section-title" style="margin:0;">💳 Cartão (Mercado Pago)</div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggleCartao" onchange="salvarToggle('cartao_ativo',this.checked)" {% if cartao_ativo %}checked{% endif %} />
+        <span class="toggle-track"></span>
+      </label>
+    </div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1rem;">Access Token e Public Key do Mercado Pago para pagamento com cartão e geração de QR PIX.</p>
+    <div class="g-form-group" style="margin-bottom:.75rem;">
+      <label class="g-label">Access Token</label>
+      <div style="position:relative;">
+        <input id="fMpToken" class="g-input" type="password" placeholder="APP_USR-..." value="{{ mp_token }}" style="padding-right:2.5rem;" />
+        <button type="button" onclick="toggleVer('fMpToken',this)" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
+      </div>
+    </div>
+    <div class="g-form-group">
+      <label class="g-label">Public Key</label>
+      <div style="position:relative;">
+        <input id="fMpPubKey" class="g-input" type="password" placeholder="APP_USR-..." value="{{ mp_public_key }}" style="padding-right:2.5rem;" />
+        <button type="button" onclick="toggleVer('fMpPubKey',this)" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="g-btn g-btn-primary" onclick="salvarCredenciais()" style="width:100%;margin-bottom:2rem;">Salvar credenciais</button>
+
+
+</div>
+
+<style>
+.toggle-switch { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-track {
+  position:absolute; inset:0; background:var(--border);
+  border-radius:12px; cursor:pointer; transition:.2s;
+}
+.toggle-track::after {
+  content:''; position:absolute; left:3px; top:3px;
+  width:18px; height:18px; background:#fff;
+  border-radius:50%; transition:.2s;
+}
+.toggle-switch input:checked + .toggle-track { background:var(--gold); }
+.toggle-switch input:checked + .toggle-track::after { transform:translateX(20px); }
+</style>
+
+<script>
+const TOKEN = "{{ token }}";
+
+function toggleVer(id, btn) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function salvarCredenciais() {
+  const r = await fetch('/api/credenciais', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({
+      pix_chave:     document.getElementById('fPixChave').value.trim(),
+      mp_token:      document.getElementById('fMpToken').value.trim(),
+      mp_public_key: document.getElementById('fMpPubKey').value.trim(),
+    })
+  });
+  if (r.ok) {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Salvo!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  } else {
+    alert('Erro ao salvar credenciais.');
+  }
+}
+
+async function salvarToggle(key, valor) {
+  await fetch('/api/credenciais', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({[key]: valor ? '1' : '0'})
+  });
+}
+</script>
+{% endblock %}

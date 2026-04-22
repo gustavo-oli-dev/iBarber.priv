@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#080808" />
+  <title>{% block title %}Gestão{% endblock %} — iBarber</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #080808;
+      --surface:   #111111;
+      --surface2:  #191919;
+      --border:    #222222;
+      --gold:      #C8C8C8;
+      --gold-dim:  #888888;
+      --gold-hover:#EBEBEB;
+      --text:      #F2F2F2;
+      --text-muted:#5A5A5A;
+      --error:     #e05555;
+      --success:   #4caf82;
+      --radius:    8px;
+      --sidebar-w: 240px;
+      --header-h:  56px;
+      --font-serif: 'Playfair Display', Georgia, serif;
+      --font-sans:  'Inter', system-ui, sans-serif;
+    }
+    html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 17px;
+      line-height: 1.6;
+      min-height: 100dvh;
+      overscroll-behavior: none;
+    }
+
+    /* ── Header ─────────────────────────────────── */
+    .g-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--header-h);
+      background: rgba(8,8,8,0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      align-items: center;
+      padding: 0 0.75rem 0 0.5rem;
+      z-index: 200;
+      gap: 0;
+    }
+    .g-menu-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+    .g-menu-toggle:hover, .g-menu-toggle:active { color: var(--text); background: var(--surface2); }
+    .g-menu-toggle svg { display: block; }
+    .g-logo {
+      font-family: var(--font-serif);
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      text-decoration: none;
+      padding: 0 0.5rem;
+    }
+    .g-logo-mark { color: var(--gold); font-size: 0.85rem; }
+    .g-header-spacer { flex: 1; }
+    .g-header-user {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    @media (max-width: 768px) { .g-header-nome { display: none; } }
+    .g-btn-logout {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-family: var(--font-sans);
+      transition: color 0.15s, background 0.15s;
+      text-decoration: none;
+    }
+    .g-btn-logout:hover, .g-btn-logout:active { color: var(--error); background: var(--surface2); }
+    /* ícone logout */
+    .g-btn-logout svg { display: block; }
+
+    /* ── Layout ─────────────────────────────────── */
+    .g-layout {
+      display: flex;
+      padding-top: var(--header-h);
+      min-height: 100dvh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────── */
+    .g-sidebar {
+      position: fixed;
+      top: var(--header-h);
+      left: 0;
+      bottom: 0;
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 1rem 0;
+      z-index: 150;
+      transition: transform 0.22s ease;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* mobile: sidebar oculta por padrão */
+    @media (max-width: 768px) {
+      .g-sidebar { transform: translateX(-100%); border-right: none; box-shadow: 4px 0 24px rgba(0,0,0,0.5); }
+      .g-sidebar.open { transform: translateX(0); }
+    }
+    /* desktop: sidebar sempre visível */
+    @media (min-width: 769px) {
+      .g-menu-toggle { display: none; }
+    }
+
+    .g-sidebar-group { margin-bottom: 1.25rem; }
+    .g-sidebar-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0 1.25rem 0.35rem;
+    }
+    .g-sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.6rem 1.25rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 400;
+      transition: color 0.15s, background 0.15s;
+      border-left: 2px solid transparent;
+      min-height: 44px;
+    }
+    .g-sidebar-link:hover, .g-sidebar-link:active {
+      color: var(--text);
+      background: var(--surface2);
+    }
+    .g-sidebar-link.active {
+      color: var(--gold);
+      background: rgba(200,200,200,0.06);
+      border-left-color: var(--gold);
+    }
+    .g-sidebar-link svg { flex-shrink: 0; opacity: 0.7; }
+    .g-sidebar-link.active svg { opacity: 1; }
+
+    /* ── Main ─────────────────────────────────── */
+    .g-main {
+      flex: 1;
+      min-width: 0;
+      padding: 1.5rem 2rem;
+    }
+    @media (min-width: 769px) {
+      .g-main { margin-left: var(--sidebar-w); }
+    }
+    @media (max-width: 768px) {
+      .g-main { padding: 1rem; }
+    }
+
+    .g-page-title {
+      font-family: var(--font-serif);
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      color: var(--text);
+    }
+    .g-page-title span { color: var(--gold); }
+
+    /* ── Overlay (mobile sidebar) ─────────────── */
+    .g-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 140;
+    }
+    .g-overlay.open { display: block; }
+
+    /* ── Cards / Grid ─────────────────────────── */
+    .g-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); }
+    .g-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+    .g-card-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .g-card-value { font-size: 1.6rem; font-weight: 600; color: var(--text); }
+    .g-card-value small { font-size: 0.85rem; color: var(--gold); margin-left: 0.2rem; }
+
+    /* ── Table ─────────────────────────────────── */
+    .g-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.g-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .g-table th {
+      text-align: left;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .g-table td {
+      padding: 0.75rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    .g-table tr:last-child td { border-bottom: none; }
+
+    /* ── Botões ─────────────────────────────────── */
+    .g-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1.1rem;
+      border-radius: var(--radius);
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.15s;
+      text-decoration: none;
+      min-height: 40px;
+      touch-action: manipulation;
+    }
+    .g-btn:active { opacity: 0.7; }
+    .g-btn-primary { background: var(--gold); color: #000; }
+    .g-btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+    .g-btn-danger { background: var(--error); color: #fff; }
+
+    /* ── Form ─────────────────────────────────── */
+    .g-form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+    .g-form-group { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; min-width: 160px; }
+    .g-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+    .g-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 0.6rem 0.85rem;
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      transition: border-color 0.15s;
+      width: 100%;
+      min-height: 44px;
+      -webkit-appearance: none;
+    }
+    .g-input:focus { outline: none; border-color: var(--gold-dim); }
+    .g-input::placeholder { color: var(--text-muted); }
+    @media (max-width: 768px) {
+      .g-form-row { flex-direction: column; }
+      .g-form-group { min-width: 0; }
+    }
+
+    /* ── Badge ─────────────────────────────────── */
+    .g-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 50px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .g-badge-ok   { background: rgba(76,175,130,0.15); color: var(--success); }
+    .g-badge-warn { background: rgba(240,192,64,0.15);  color: #f0c040; }
+    .g-badge-err  { background: rgba(224,85,85,0.15);   color: var(--error); }
+
+    /* ── Flash ─────────────────────────────────── */
+    .g-flash { padding: 0.75rem 1rem; border-radius: var(--radius); margin-bottom: 1rem; font-size: 0.875rem; }
+    .g-flash-success { background: rgba(76,175,130,0.1); color: var(--success); border: 1px solid var(--success); }
+    .g-flash-error   { background: rgba(224,85,85,0.1);  color: var(--error);   border: 1px solid var(--error); }
+
+    /* ── Section ─────────────────────────────── */
+    .g-section { margin-bottom: 1.75rem; }
+    .g-section-title { font-size: 0.78rem; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.85rem; }
+
+    /* ── Page header com título + ações ─────── */
+    .g-page-header { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; margin-bottom:1.25rem; }
+    .g-page-header .g-page-title { margin:0; min-width:0; }
+    .g-page-header-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+    @media (max-width: 400px) {
+      .g-btn { font-size:.78rem; padding:.45rem .75rem; }
+    }
+
+    /* ── Toggle Switch ───────────────────────── */
+    .toggle-switch { position:relative;display:inline-flex;align-items:center;gap:.6rem;cursor:pointer;user-select:none; }
+    .toggle-switch input[type="checkbox"] { position:absolute;opacity:0;width:0;height:0; }
+    .toggle-track { position:relative;width:44px;height:26px;background:var(--border);border-radius:999px;transition:background .22s;flex-shrink:0; }
+    .toggle-track::after { content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .22s cubic-bezier(.4,0,.2,1),box-shadow .22s;box-shadow:0 1px 4px rgba(0,0,0,.35); }
+    .toggle-switch input:checked + .toggle-track { background:var(--gold); }
+    .toggle-switch input:checked + .toggle-track::after { transform:translateX(18px); }
+
+    /* ── Permission Chips ────────────────────── */
+    .perm-chips { display:flex;flex-wrap:wrap;gap:.5rem; }
+    .perm-chip { display:inline-flex;align-items:center;padding:.3rem .85rem;border-radius:999px;border:1.5px solid var(--border);font-size:.78rem;cursor:pointer;transition:background .15s,border-color .15s,color .15s;background:transparent;color:var(--text-muted);user-select:none;font-family:inherit; }
+    .perm-chip.active { background:var(--gold);border-color:var(--gold);color:#000;font-weight:600; }
+  </style>
+  {% if gt_tema_override %}{{ gt_tema_override|safe }}<style>body{pointer-events:none;overflow-x:hidden}</style>{% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="g-header">
+    <button class="g-menu-toggle" id="menuToggle" aria-label="Abrir menu">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a class="g-logo" href="{{ url_for('gestao_dashboard') }}">
+      <span class="g-logo-mark">✦</span> iBarber
+    </a>
+    <div class="g-header-spacer"></div>
+    <div class="g-header-user">
+      <span class="g-header-nome">{{ gt_preview_nome if gt_preview_nome is defined and gt_preview_nome else session.get('gestao_nome', 'Admin') }}</span>
+      <a href="{{ url_for('gestao_logout') }}" class="g-btn-logout" title="Sair">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <!-- Overlay sidebar (mobile) -->
+  <div class="g-overlay" id="sidebarOverlay"></div>
+
+  <div class="g-layout">
+    <!-- Sidebar -->
+    <nav class="g-sidebar" id="sidebar">
+
+      <div class="g-sidebar-group">
+        <div class="g-sidebar-label">Uso Diário</div>
+        <a href="{{ url_for('gestao_dashboard') }}" class="g-sidebar-link {% if active == 'dashboard' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Início
+        </a>
+<a href="{{ url_for('gestao_agendamentos') }}" class="g-sidebar-link {% if active == 'agendamentos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Marcar Horário
+        </a>
+        <a href="{{ url_for('gestao_pedidos') }}" class="g-sidebar-link {% if active == 'pedidos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          Pedidos
+        </a>
+        <a href="{{ url_for('gestao_clientes') }}" class="g-sidebar-link {% if active == 'clientes' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Clientes
+        </a>
+        <a href="{{ url_for('gestao_entradas') }}" class="g-sidebar-link {% if active == 'entradas' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          Entrada Monetária
+        </a>
+      </div>
+
+      <div class="g-sidebar-group">
+        <div class="g-sidebar-label">Gestão</div>
+        <a href="{{ url_for('gestao_funcionarios') }}" class="g-sidebar-link {% if active == 'funcionarios' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+          Gestão de Funcionários
+        </a>
+        <a href="{{ url_for('gestao_servicos') }}" class="g-sidebar-link {% if active == 'servicos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M2 12h2M20 12h2"/></svg>
+          Serviços
+        </a>
+        <a href="{{ url_for('gestao_precos') }}" class="g-sidebar-link {% if active == 'precos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          Preços
+        </a>
+        <a href="{{ url_for('gestao_fotos') }}" class="g-sidebar-link {% if active == 'fotos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Fotos dos Serviços
+        </a>
+      </div>
+
+      <div class="g-sidebar-group">
+        <div class="g-sidebar-label">Análise</div>
+        <a href="{{ url_for('gestao_graficos') }}" class="g-sidebar-link {% if active == 'graficos' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Gráficos
+        </a>
+      </div>
+
+      <div class="g-sidebar-group">
+        <div class="g-sidebar-label">Configuração</div>
+        <a href="{{ url_for('gestao_horarios') }}" class="g-sidebar-link {% if active == 'horarios' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Horários e Dias
+        </a>
+        <a href="{{ url_for('gestao_contato') }}" class="g-sidebar-link {% if active == 'contato' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8 19.79 19.79 0 01.06 1.18 2 2 0 012.05 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+          Contato
+        </a>
+        <a href="{{ url_for('gestao_credenciais') }}" class="g-sidebar-link {% if active == 'credenciais' %}active{% endif %}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Credenciais
+        </a>
+      </div>
+
+    </nav>
+
+    <!-- Main content -->
+    <main class="g-main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="g-flash g-flash-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script>
+    const _menuToggle  = document.getElementById('menuToggle');
+    const _sidebar     = document.getElementById('sidebar');
+    const _overlay     = document.getElementById('sidebarOverlay');
+
+    function _openSidebar()  { _sidebar.classList.add('open');  _overlay.classList.add('open'); }
+    function _closeSidebar() { _sidebar.classList.remove('open'); _overlay.classList.remove('open'); }
+
+    _menuToggle.addEventListener('click', () =>
+      _sidebar.classList.contains('open') ? _closeSidebar() : _openSidebar()
+    );
+    _overlay.addEventListener('click', _closeSidebar);
+
+    // Fecha sidebar ao navegar (mobile)
+    document.querySelectorAll('.g-sidebar-link').forEach(l =>
+      l.addEventListener('click', () => { if (window.innerWidth <= 768) _closeSidebar(); })
+    );
+
+    // Live theme updates via postMessage
+    window.addEventListener('message', function(e) {
+      if (!e.data || e.data.tipo !== 'tema') return;
+      const t = e.data.tema;
+      const r = document.documentElement.style;
+      if (t.fundo)      r.setProperty('--bg',         t.fundo);
+      if (t.superficie) { r.setProperty('--surface',  t.superficie); r.setProperty('--surface2', t.superficie); }
+      if (t.borda)      r.setProperty('--border',     t.borda);
+      if (t.destaque)   { r.setProperty('--gold', t.destaque); r.setProperty('--gold-dim', t.destaque + '99'); r.setProperty('--gold-hover', t.destaque); }
+      if (t.texto)      { r.setProperty('--text', t.texto); r.setProperty('--text-muted', t.texto + '66'); }
+      if (t.fonteTitulo) r.setProperty('--font-serif', `'${t.fonteTitulo}', Georgia, serif`);
+      if (t.fonteCorpo)  r.setProperty('--font-sans',  `'${t.fonteCorpo}', system-ui, sans-serif`);
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

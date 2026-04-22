@@ -1,0 +1,205 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Pedidos{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+  <h1 class="g-page-title" style="margin:0">Pedidos</h1>
+</div>
+
+<!-- Filtros -->
+<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+  <button class="g-chip g-chip-active" onclick="setFiltroStatus('todos',this)">Todos</button>
+  <button class="g-chip" onclick="setFiltroStatus('pendente',this)">Pendente</button>
+  <button class="g-chip" onclick="setFiltroStatus('pago',this)">Realizado</button>
+  <button class="g-chip" onclick="setFiltroStatus('cancelado',this)">Cancelado</button>
+  <button class="g-chip" onclick="setFiltroStatus('nao_compareceu',this)">Não compareceu</button>
+  <input id="busca" class="g-input" style="max-width:220px;padding:0.35rem 0.7rem;font-size:0.85rem;" placeholder="Buscar cliente ou serviço..." oninput="renderPedidos()">
+</div>
+
+<!-- Desktop: tabela -->
+<div class="g-table-wrap desktop-only">
+  <table class="g-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Cliente</th>
+        <th>Serviços</th>
+        <th>Total</th>
+        <th>Status</th>
+        <th>Data</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbodyPedidos">
+      <tr><td colspan="7" style="color:var(--text-muted);text-align:center;">Carregando...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Mobile: cards -->
+<div id="cardsPedidos" class="mobile-only"></div>
+
+<style>
+.g-chip{background:var(--surface);border:1px solid var(--border);color:var(--text-muted);padding:0.3rem 0.85rem;border-radius:999px;font-size:0.8rem;cursor:pointer;transition:.15s}
+.g-chip:hover{border-color:var(--gold);color:var(--gold)}
+.g-chip-active{background:var(--gold);border-color:var(--gold);color:#000;font-weight:600}
+
+.desktop-only { display: block; }
+.mobile-only  { display: none; }
+@media (max-width: 640px) {
+  .desktop-only { display: none; }
+  .mobile-only  { display: block; }
+}
+
+.pedido-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .9rem 1rem;
+  margin-bottom: .65rem;
+}
+.pedido-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .45rem;
+  gap: .5rem;
+}
+.pedido-card-nome { font-weight: 600; font-size: .9rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pedido-card-total { color: var(--gold); font-weight: 700; font-size: .95rem; white-space: nowrap; }
+.pedido-card-servicos { font-size: .78rem; color: var(--text-muted); margin-bottom: .4rem; }
+.pedido-card-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .55rem; }
+.pedido-card-data { font-size: .75rem; color: var(--text-muted); }
+.pedido-card-acoes { display: flex; gap: .4rem; flex-wrap: wrap; }
+.pedido-card-acoes button { font-size: .78rem; padding: .3rem .7rem; min-height: 36px; }
+</style>
+
+<script>
+const TOKEN = "{{ token }}";
+const PEDIDOS = {{ pedidos_json|safe }};
+let filtroStatus = 'todos';
+
+function setFiltroStatus(s, el) {
+  filtroStatus = s;
+  document.querySelectorAll('.g-chip').forEach(c => c.classList.remove('g-chip-active'));
+  el.classList.add('g-chip-active');
+  renderPedidos();
+}
+
+function fmtData(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtR(v) { return 'R$ ' + parseFloat(v||0).toFixed(2).replace('.',','); }
+
+function badgeStatus(s) {
+  if (s==='pago')           return '<span class="g-badge g-badge-ok">Realizado</span>';
+  if (s==='cancelado')      return '<span class="g-badge g-badge-err">Cancelado</span>';
+  if (s==='nao_compareceu') return '<span class="g-badge" style="background:rgba(255,165,0,.15);border-color:#FFA500;color:#FFA500;">Não compareceu</span>';
+  return '<span class="g-badge g-badge-warn">Pendente</span>';
+}
+
+function renderPedidos() {
+  const busca = document.getElementById('busca').value.toLowerCase();
+  const filtered = PEDIDOS.filter(p => {
+    if (filtroStatus !== 'todos' && p.status !== filtroStatus) return false;
+    if (busca) {
+      const s = (p.usuario + ' ' + (p.itens||[]).map(i=>i.nome).join(' ')).toLowerCase();
+      if (!s.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  // Desktop table
+  const tbody = document.getElementById('tbodyPedidos');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-muted);text-align:center;">Nenhum pedido encontrado.</td></tr>';
+    document.getElementById('cardsPedidos').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem;">Nenhum pedido encontrado.</p>';
+    return;
+  }
+
+  const acoesBtns = (p) => p.status === 'pendente'
+    ? `<button class="g-btn g-btn-outline" style="padding:.2rem .6rem;font-size:.75rem;" onclick="marcarPago(${p.id},this)">Marcar realizado</button>
+       <button class="g-btn g-btn-outline" style="padding:.2rem .6rem;font-size:.75rem;color:#FFA500;margin-left:.3rem;" onclick="naoCompareceu(${p.id},this)">Não compareceu</button>
+       <button class="g-btn g-btn-outline" style="padding:.2rem .6rem;font-size:.75rem;color:var(--error);margin-left:.3rem;" onclick="cancelar(${p.id},this)">Cancelar</button>`
+    : '';
+
+  tbody.innerHTML = filtered.map(p => {
+    const servicos = (p.itens||[]).map(i=>i.nome).join(', ') || '—';
+    return `<tr>
+      <td style="color:var(--text-muted)">#${p.id}</td>
+      <td>${p.usuario}</td>
+      <td style="font-size:.8rem;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${servicos}</td>
+      <td style="color:var(--gold)">${fmtR(p.total)}</td>
+      <td>${badgeStatus(p.status)}</td>
+      <td style="color:var(--text-muted);white-space:nowrap;">${fmtData(p.criado_em)}</td>
+      <td style="white-space:nowrap;">${acoesBtns(p)}</td>
+    </tr>`;
+  }).join('');
+
+  // Mobile cards
+  document.getElementById('cardsPedidos').innerHTML = filtered.map(p => {
+    const servicos = (p.itens||[]).map(i=>i.nome).join(', ') || '—';
+    return `<div class="pedido-card">
+      <div class="pedido-card-top">
+        <div class="pedido-card-nome">${p.usuario}</div>
+        <div class="pedido-card-total">${fmtR(p.total)}</div>
+      </div>
+      <div class="pedido-card-servicos">${servicos}</div>
+      <div class="pedido-card-meta">
+        ${badgeStatus(p.status)}
+        <span class="pedido-card-data">${fmtData(p.criado_em)}</span>
+        <span style="color:var(--text-muted);font-size:.72rem;">#${p.id}</span>
+      </div>
+      ${p.status === 'pendente' ? `<div class="pedido-card-acoes">
+        <button class="g-btn g-btn-outline pedido-card-acoes" onclick="marcarPago(${p.id},this)">Realizado</button>
+        <button class="g-btn g-btn-outline pedido-card-acoes" style="color:#FFA500;" onclick="naoCompareceu(${p.id},this)">Não compareceu</button>
+        <button class="g-btn g-btn-outline pedido-card-acoes" style="color:var(--error);" onclick="cancelar(${p.id},this)">Cancelar</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function marcarPago(pid, btn) {
+  btn.disabled = true;
+  const r = await fetch(`/api/pedidos/${pid}/status`, {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({status:'pago'})
+  });
+  if (r.ok) {
+    const p = PEDIDOS.find(x=>x.id===pid);
+    if (p) p.status = 'pago';
+    renderPedidos();
+  } else { btn.disabled=false; alert('Erro ao atualizar pedido'); }
+}
+
+async function naoCompareceu(pid, btn) {
+  if (!confirm('Marcar como não compareceu?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/api/pedidos/${pid}/status`, {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({status:'nao_compareceu'})
+  });
+  if (r.ok) {
+    const p = PEDIDOS.find(x=>x.id===pid);
+    if (p) p.status = 'nao_compareceu';
+    renderPedidos();
+  } else { btn.disabled=false; alert('Erro ao atualizar pedido'); }
+}
+
+async function cancelar(pid, btn) {
+  if (!confirm('Cancelar este pedido?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/api/pedidos/${pid}/status`, {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({status:'cancelado'})
+  });
+  if (r.ok) {
+    const p = PEDIDOS.find(x=>x.id===pid);
+    if (p) p.status = 'cancelado';
+    renderPedidos();
+  } else { btn.disabled=false; alert('Erro ao cancelar pedido'); }
+}
+
+renderPedidos();
+</script>
+{% endblock %}
