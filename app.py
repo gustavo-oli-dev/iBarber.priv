@@ -380,6 +380,11 @@ def _gerar_slots(abertura='08:00', fechamento='18:00', duracao=40):
         cur += duracao
     return slots
 
+@app.route('/manifest.json')
+def manifest():
+    from flask import send_from_directory
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
+
 @app.route('/')
 def index():
     user = None
@@ -3124,7 +3129,7 @@ def admin_painel():
     if senha != API_TOKEN:
         return '''<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
         <form method="get" style="text-align:center">
-          <h2 style="color:#C9A96E;margin-bottom:1.5rem">✦ Admin — BarberOS</h2>
+          <h2 style="color:#C9A96E;margin-bottom:1.5rem">✦ Admin — iBarber</h2>
           <input name="key" type="password" placeholder="Token de acesso"
             style="padding:10px 16px;border-radius:6px;border:1px solid #333;background:#1e1e1e;color:#f0ece4;font-size:15px;width:260px">
           <br><br>
