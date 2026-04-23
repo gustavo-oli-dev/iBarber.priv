@@ -54,13 +54,15 @@ h1,h2{font-family:'Playfair Display',serif}
     <a class="btn-painel" id="btn-painel" href="#">Acessar meu painel →</a>
 
     <div class="sucesso-dica">
-      📱 <strong>Baixe o app admin</strong> e faça login com seu e-mail para gerenciar agendamentos, funcionários e preços pelo celular.
+      📱 <strong>App admin:</strong> faça login com seu e-mail no app iBarber para gerenciar agendamentos, funcionários e preços pelo celular.
     </div>
   </div>
 </div>
 <script>
 const slug = window.location.pathname.split('/').pop();
+// Site do cliente: dominio.com/slug
 const siteUrl   = `${location.origin}/${slug}`;
+// Painel de gestão
 const painelUrl = `${location.origin}/gestao/login`;
 document.getElementById('link-site').href        = siteUrl;
 document.getElementById('link-site').textContent  = siteUrl;

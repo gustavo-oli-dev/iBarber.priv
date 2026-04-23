@@ -442,7 +442,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <div class="font-list">
         <div>
           <div class="font-lbl">Nome exibido</div>
-          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João" oninput="onIdentidade('nomeDisplay',this.value)" />
+          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João" oninput="onIdentidade('nomeDisplay',this.value);updateUrlBar()" />
         </div>
         <div>
           <div class="font-lbl">Slogan</div>
@@ -511,6 +511,10 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <div class="toggle-group">
         <button class="tg-btn active" id="site-ag" onclick="setSite('ag')">Agendamento</button>
         <button class="tg-btn" id="site-gt" onclick="setSite('gt')">Gestão</button>
+      </div>
+      <div class="canvas-url">
+        <span class="canvas-url-lock">🔒</span>
+        <span id="canvas-url-text">seu-slug.ibarber.com</span>
       </div>
       <div class="toggle-group">
         <button class="tg-btn active" id="mode-global" onclick="setEditMode('global')" title="Editar ambos os sites">🌐 Global</button>
@@ -963,13 +967,18 @@ function showHideIframes() {
 }
 
 function updateUrlBar() {
-  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
-  const curId   = siteMode === 'ag' ? agScreen   : gtScreen;
-  const s       = screens.find(x => x.id === curId) || screens[0];
-  const agUrlMap = {inicio:'', 'sem-cadastro':'#sem-cadastro', logado:'servicos', register:'register', perfil:'perfil', esqueci:'esqueci-senha'};
-  const url     = siteMode === 'ag'
-    ? 'localhost:5000/' + (agUrlMap[curId] ?? curId)
-    : 'localhost:5000/gestao/' + curId;
+  const agUrlMap = {inicio:'', 'sem-cadastro':'', logado:'servicos', register:'register', perfil:'perfil', esqueci:'esqueci-senha'};
+  const slug = (document.getElementById('id-nome') && document.getElementById('id-nome').value.trim()
+    ? document.getElementById('id-nome').value.trim().toLowerCase().replace(/\s+/g,'-')
+    : 'sua-barbearia');
+  const base = 'ibarber.com/' + slug;
+  let path = '';
+  if (siteMode === 'ag') {
+    path = agUrlMap[agScreen] ?? agScreen;
+  } else {
+    path = 'gestao/' + gtScreen;
+  }
+  document.getElementById('canvas-url-text').textContent = base + (path ? '/' + path : '');
 }
 
 // ── Navigate to next step ─────────────────────────────────────────────────────

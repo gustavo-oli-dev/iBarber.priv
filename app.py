@@ -1077,27 +1077,28 @@ def get_tenant_by_slug(slug):
     return Tenant.query.filter_by(slug=slug, ativo=True).first()
 
 def get_tenant_atual():
+    # 1. Subdomínio (produção com *.dominio.com)
     host = request.host.split(':')[0]
     slug = host.split('.')[0]
-    if slug in ('www', 'localhost', '127', 'seuapp'):
-        return None
-    tenant = get_tenant_by_slug(slug)
-    if tenant and not tenant.assinatura_ativa:
-        return None
-    return tenant
+    _reservados = ('www', 'localhost', '127', 'seuapp', 'ibarber', '0', '192', '10')
+    if slug not in _reservados and '.' in request.host:
+        tenant = get_tenant_by_slug(slug)
+        if tenant and tenant.assinatura_ativa:
+            return tenant
+
+    # 2. Rota por caminho (dev / domínio único) via session
+    tid = session.get('path_tenant_id')
+    if tid:
+        tenant = db.session.get(Tenant, tid)
+        if tenant and tenant.assinatura_ativa:
+            return tenant
+
+    return None
 
 @app.context_processor
 def inject_tenant():
     try:
         t = get_tenant_atual()
-        if t is None:
-            uid = session.get('user_id')
-            if uid:
-                user = db.session.get(User, uid)
-                if user:
-                    t = Tenant.query.filter_by(ativo=True).first()
-            if t is None:
-                t = Tenant.query.filter_by(ativo=True).first()
     except Exception:
         t = None
 
@@ -2896,7 +2897,7 @@ def api_cadastro_personalizar():
         whatsapp=d.get('whatsapp', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
-        assinatura_ativa=True,
+        assinatura_ativa=False,
     )
     db.session.add(tenant)
     db.session.commit()
@@ -3319,6 +3320,29 @@ def _udp_broadcast():
         except Exception:
             pass
         time.sleep(2)
+
+@app.route('/<slug>')
+def tenant_site(slug):
+    """Rota pública do site de agendamento de cada barbearia."""
+    tenant = get_tenant_by_slug(slug)
+    if not tenant:
+        return ('<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;'
+                'display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">'
+                '<div><h2 style="color:#C9A96E">✦ iBarber</h2>'
+                '<p style="color:#888;margin-top:.5rem">Barbearia não encontrada.</p>'
+                '<a href="/landing" style="color:#C9A96E;margin-top:1rem;display:block">Criar meu site →</a>'
+                '</div></body></html>', 404)
+    if not tenant.assinatura_ativa:
+        return ('<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;'
+                'display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">'
+                f'<div><h2 style="color:#C9A96E">✦ {tenant.nome}</h2>'
+                '<p style="color:#888;margin-top:.5rem">Site em ativação — aguardando confirmação do pagamento.</p>'
+                '</div></body></html>', 402)
+    session['path_tenant_id'] = tenant.id
+    user = None
+    if 'user_id' in session:
+        user = db.session.get(User, session['user_id'])
+    return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
 
 if __name__ == '__main__':
     import threading
