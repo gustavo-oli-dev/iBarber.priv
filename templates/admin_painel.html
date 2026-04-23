@@ -14,39 +14,37 @@
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:15px;min-height:100vh}
 a{color:inherit;text-decoration:none}
 
-/* HEADER */
 .hd{height:56px;display:flex;align-items:center;gap:1rem;padding:0 1.5rem;background:rgba(8,8,8,.9);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
 .hd-logo{font-size:.95rem;font-weight:700;letter-spacing:.1em;display:flex;align-items:center;gap:6px}
 .hd-logo span{color:var(--gold)}
 .hd-badge{font-size:.7rem;background:rgba(201,169,110,.15);color:var(--gold);border:1px solid rgba(201,169,110,.3);border-radius:50px;padding:2px 10px;font-weight:600;letter-spacing:.05em}
 
-/* LAYOUT */
-.main{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+.main{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
 @media(max-width:768px){.grid2{grid-template-columns:1fr}}
 
-/* CARDS */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem}
 .card-title{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:1.25rem}
 .stat{font-size:2.2rem;font-weight:700;color:var(--text);line-height:1}
 .stat-lbl{font-size:.78rem;color:var(--muted);margin-top:.3rem}
 
-/* TABLE */
 .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
 table{width:100%;border-collapse:collapse;font-size:.83rem}
 th{padding:.65rem 1rem;text-align:left;font-size:.68rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;background:var(--surface)}
-td{padding:.75rem 1rem;border-bottom:1px solid var(--border);color:var(--text)}
+td{padding:.75rem 1rem;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(255,255,255,.02)}
 
-/* BADGE */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:50px;font-size:.7rem;font-weight:600}
 .badge-ok{background:rgba(76,175,130,.15);color:var(--success)}
 .badge-pend{background:rgba(201,169,110,.12);color:var(--gold)}
 .badge-off{background:rgba(85,85,85,.15);color:var(--muted)}
 .badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
 
-/* FORM */
+.venc-ok{color:var(--success);font-size:.78rem}
+.venc-warn{color:var(--gold);font-size:.78rem}
+.venc-exp{color:var(--error);font-size:.78rem}
+
 .field{margin-bottom:1rem}
 .lbl{font-size:.75rem;color:var(--muted);font-weight:500;margin-bottom:.4rem;display:block}
 .inp{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:.65rem .9rem;font-family:'Inter',sans-serif;font-size:.875rem;transition:border-color .15s}
@@ -57,19 +55,27 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .btn:active{opacity:.7}
 .btn-gold{background:var(--gold);color:#000}
 .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
-.btn-danger{background:none;border:1px solid var(--error);color:var(--error);font-size:.78rem;padding:.4rem .8rem}
+.btn-sm{font-size:.72rem;padding:.3rem .65rem}
+.btn-green{background:none;border:1px solid var(--success);color:var(--success)}
+.btn-warn{background:none;border:1px solid var(--gold);color:var(--gold)}
+.btn-danger{background:none;border:1px solid var(--error);color:var(--error)}
 .status-row{display:flex;align-items:center;gap:.5rem;font-size:.8rem;color:var(--muted);margin-bottom:1rem}
 .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .dot-ok{background:var(--success)}
 .dot-miss{background:var(--error)}
 
-/* ALERT */
 .alert{padding:.85rem 1rem;border-radius:8px;font-size:.82rem;margin-bottom:1rem;display:none}
 .alert-ok{background:rgba(76,175,130,.12);border:1px solid var(--success);color:var(--success)}
 .alert-err{background:rgba(224,85,85,.1);border:1px solid var(--error);color:var(--error)}
 
-/* ACTIONS col */
-.td-actions{display:flex;gap:.4rem;align-items:center}
+.td-actions{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.75rem;width:100%;max-width:380px}
+.modal-title{font-size:.95rem;font-weight:700;margin-bottom:1.25rem;color:var(--text)}
+.modal-actions{display:flex;gap:.75rem;margin-top:1.25rem;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -135,6 +141,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <a href="/personalizar" target="_blank" style="color:var(--gold)">→ Página personalizar</a>
         <a href="/planos" target="_blank" style="color:var(--gold)">→ Página de planos</a>
         <a href="/pagamento" target="_blank" style="color:var(--gold)">→ Página de pagamento</a>
+        <a href="/landing" target="_blank" style="color:var(--gold)">→ Landing page</a>
       </div>
     </div>
   </div>
@@ -150,6 +157,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
           <th>E-mail</th>
           <th>Status</th>
           <th>Plano</th>
+          <th>Vencimento</th>
           <th>Cadastro</th>
           <th></th>
         </tr>
@@ -163,7 +171,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
             <div style="font-weight:600">{{ t.nome }}</div>
             <div style="font-size:.72rem;color:var(--muted)">/{{ t.slug }}</div>
           </td>
-          <td>{{ t.email }}</td>
+          <td style="color:var(--muted);font-size:.8rem">{{ t.email }}</td>
           <td>
             {% if t.assinatura_ativa %}
               <span class="badge badge-ok"><span class="badge-dot"></span>Ativo</span>
@@ -174,22 +182,41 @@ tr:hover td{background:rgba(255,255,255,.02)}
             {% endif %}
           </td>
           <td>{{ asn.plano.capitalize() if asn else '—' }}</td>
-          <td style="color:var(--muted);white-space:nowrap">
-            {% if t.assinaturas %}
-              {{ t.assinaturas[0].criado_em.strftime('%d/%m/%Y') if t.assinaturas[0].criado_em else '—' }}
-            {% else %}—{% endif %}
+          <td>
+            {% if asn and asn.vencimento %}
+              {% set dias = asn.dias_restantes() %}
+              {% if dias > 7 %}
+                <span class="venc-ok">{{ asn.vencimento.strftime('%d/%m/%Y') }}</span>
+                <div style="font-size:.7rem;color:var(--muted)">{{ dias }}d restantes</div>
+              {% elif dias > 0 %}
+                <span class="venc-warn">{{ asn.vencimento.strftime('%d/%m/%Y') }}</span>
+                <div style="font-size:.7rem;color:var(--gold)">⚠ {{ dias }}d restantes</div>
+              {% else %}
+                <span class="venc-exp">{{ asn.vencimento.strftime('%d/%m/%Y') }}</span>
+                <div style="font-size:.7rem;color:var(--error)">Expirado</div>
+              {% endif %}
+            {% else %}
+              <span style="color:var(--muted)">—</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--muted);white-space:nowrap;font-size:.78rem">
+            {% if t.criado_em %}{{ t.criado_em.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
           </td>
           <td>
             <div class="td-actions">
-              <a href="/{{ t.slug }}" target="_blank" class="btn btn-outline" style="font-size:.75rem;padding:.35rem .75rem">Ver site</a>
-              {% if not t.assinatura_ativa %}
-              <button class="btn btn-danger" onclick="ativarManual({{ t.id }})">Ativar</button>
+              <a href="/{{ t.slug }}" target="_blank" class="btn btn-outline btn-sm">Ver</a>
+              {% if t.assinatura_ativa %}
+                <button class="btn btn-warn btn-sm" onclick="abrirVencimento({{ t.id }}, '{{ asn.vencimento.strftime('%Y-%m-%d') if asn and asn.vencimento else '' }}')">Data</button>
+                <button class="btn btn-danger btn-sm" onclick="desativar({{ t.id }})">Desativar</button>
+              {% else %}
+                <button class="btn btn-green btn-sm" onclick="ativarManual({{ t.id }})">Ativar</button>
               {% endif %}
+              <button class="btn btn-danger btn-sm" onclick="excluir({{ t.id }}, '{{ t.nome }}')" title="Excluir permanentemente">✕</button>
             </div>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:2rem">Nenhum cadastro ainda</td></tr>
+        <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:2rem">Nenhum cadastro ainda</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -197,9 +224,32 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 </main>
 
+<!-- MODAL: definir vencimento -->
+<div class="modal-overlay" id="modalVenc">
+  <div class="modal">
+    <div class="modal-title">📅 Data de vencimento</div>
+    <input type="hidden" id="vencTenantId">
+    <div class="field">
+      <label class="lbl">Nova data de vencimento</label>
+      <input class="inp" id="vencData" type="date">
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem">
+      <button class="btn btn-outline btn-sm" onclick="addDias(30)">+30 dias</button>
+      <button class="btn btn-outline btn-sm" onclick="addDias(90)">+90 dias</button>
+      <button class="btn btn-outline btn-sm" onclick="addDias(180)">+6 meses</button>
+      <button class="btn btn-outline btn-sm" onclick="addDias(365)">+1 ano</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="fecharVencimento()">Cancelar</button>
+      <button class="btn btn-gold" onclick="salvarVencimento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const KEY = '{{ key }}';
 
+// ── Credenciais ──────────────────────────────────────────────────────────────
 async function salvarCreds() {
   const token = document.getElementById('mp_token').value.trim();
   const pub   = document.getElementById('mp_pub').value.trim();
@@ -215,16 +265,79 @@ async function salvarCreds() {
   } catch(e) { mostrarAlert('err'); }
 }
 
+// ── Ativar ───────────────────────────────────────────────────────────────────
 async function ativarManual(id) {
   if (!confirm('Ativar assinatura manualmente?')) return;
-  const r = await fetch(`/api/admin/ativar/${id}`, {method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({key: KEY})});
+  const r = await fetch(`/api/admin/ativar/${id}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key: KEY})
+  });
   const d = await r.json();
   if (d.ok) location.reload();
   else alert('Erro: ' + (d.erro || 'desconhecido'));
 }
 
+// ── Desativar ────────────────────────────────────────────────────────────────
+async function desativar(id) {
+  if (!confirm('Desativar assinatura? O site do cliente ficará fora do ar.')) return;
+  const r = await fetch(`/api/admin/desativar/${id}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key: KEY})
+  });
+  const d = await r.json();
+  if (d.ok) location.reload();
+  else alert('Erro: ' + (d.erro || 'desconhecido'));
+}
+
+// ── Excluir ──────────────────────────────────────────────────────────────────
+async function excluir(id, nome) {
+  if (!confirm(`Excluir permanentemente "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
+  if (!confirm('Tem certeza? Todos os dados serão removidos.')) return;
+  const r = await fetch(`/api/admin/excluir/${id}`, {
+    method:'DELETE', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key: KEY})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('row-' + id)?.remove();
+  } else alert('Erro: ' + (d.erro || 'desconhecido'));
+}
+
+// ── Modal vencimento ─────────────────────────────────────────────────────────
+function abrirVencimento(id, dataAtual) {
+  document.getElementById('vencTenantId').value = id;
+  const hoje = dataAtual || new Date().toISOString().split('T')[0];
+  document.getElementById('vencData').value = hoje;
+  document.getElementById('modalVenc').classList.add('open');
+}
+function fecharVencimento() {
+  document.getElementById('modalVenc').classList.remove('open');
+}
+function addDias(n) {
+  const inp = document.getElementById('vencData');
+  const base = inp.value ? new Date(inp.value + 'T12:00:00') : new Date();
+  base.setDate(base.getDate() + n);
+  inp.value = base.toISOString().split('T')[0];
+}
+async function salvarVencimento() {
+  const id   = document.getElementById('vencTenantId').value;
+  const data = document.getElementById('vencData').value;
+  if (!data) return;
+  const r = await fetch(`/api/admin/vencimento/${id}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({key: KEY, vencimento: data})
+  });
+  const d = await r.json();
+  if (d.ok) { fecharVencimento(); location.reload(); }
+  else alert('Erro: ' + (d.erro || 'desconhecido'));
+}
+
+// Fechar modal clicando fora
+document.getElementById('modalVenc').addEventListener('click', function(e) {
+  if (e.target === this) fecharVencimento();
+});
+
+// ── Alert ────────────────────────────────────────────────────────────────────
 function mostrarAlert(tipo, msg) {
   const ok  = document.getElementById('alertOk');
   const err = document.getElementById('alertErr');
