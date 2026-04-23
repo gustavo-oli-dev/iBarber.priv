@@ -2448,29 +2448,33 @@ def api_gestor_foto():
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
 
 def _enviar_boas_vindas(tenant):
+    base = os.environ.get('APP_BASE_URL', 'https://ibarber.com.br')
+    site_url  = f'{base}/{tenant.slug}'
+    painel_url = f'{base}/gestao/login'
     corpo = f"""
-    <div style="font-family:Arial,sans-serif;max-width:500px;
+    <div style="font-family:Arial,sans-serif;max-width:520px;
       margin:0 auto;background:#0f0f0f;color:#f0f0f0;
-      padding:28px;border-radius:10px;">
-      <h2 style="color:#C9A96E;">✦ Barbearia no ar!</h2>
-      <p>Olá, <strong>{tenant.nome}</strong>!</p>
-      <p>Seu site está pronto:</p>
-      <a href="https://{tenant.slug}.seuapp.com.br"
-         style="color:#C9A96E;">
-         https://{tenant.slug}.seuapp.com.br
+      padding:32px;border-radius:12px;">
+      <h2 style="color:#C9A96E;margin-bottom:4px;">✦ iBarber</h2>
+      <h3 style="font-weight:400;color:#aaa;margin-bottom:24px;">Sua barbearia está no ar!</h3>
+      <p style="margin-bottom:16px;">Olá, <strong>{tenant.nome}</strong>! Tudo pronto. 🎉</p>
+      <p style="color:#888;margin-bottom:8px;">Site dos seus clientes:</p>
+      <a href="{site_url}" style="display:block;background:#1a1a1a;color:#C9A96E;
+         padding:12px 16px;border-radius:8px;margin-bottom:16px;word-break:break-all;">
+         {site_url}
       </a>
-      <p>Acesse seu painel:</p>
-      <a href="https://{tenant.slug}.seuapp.com.br/admin"
-         style="color:#C9A96E;">
-         https://{tenant.slug}.seuapp.com.br/admin
+      <p style="color:#888;margin-bottom:8px;">Seu painel de gestão:</p>
+      <a href="{painel_url}" style="display:block;background:#1a1a1a;color:#C9A96E;
+         padding:12px 16px;border-radius:8px;margin-bottom:24px;">
+         {painel_url}
       </a>
-      <p style="color:#888;font-size:13px;margin-top:24px;">
-        Baixe o app admin e logue com seu e-mail para
-        gerenciar tudo pelo celular.
+      <p style="color:#666;font-size:13px;border-top:1px solid #222;padding-top:16px;">
+        Baixe o app <strong style="color:#C9A96E;">iBarber Admin</strong> e faça login
+        com seu e-mail para gerenciar agendamentos, funcionários e preços pelo celular.
       </p>
     </div>
     """
-    _enviar_email(tenant.email, '✦ Sua barbearia está no ar!', corpo)
+    _enviar_email(tenant.email, '✦ Sua barbearia está no ar — iBarber', corpo)
 
 @app.route('/landing')
 def landing():
@@ -3198,6 +3202,60 @@ def api_admin_tenant_delete(tid):
         return jsonify({'erro': 'não encontrado'}), 404
     t.ativo = False
     t.assinatura_ativa = False
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/desativar/<int:tid>', methods=['POST'])
+def api_admin_desativar(tid):
+    data = request.get_json(force=True) or {}
+    if data.get('key') != API_TOKEN:
+        return jsonify({'erro': 'não autorizado'}), 401
+    t = db.session.get(Tenant, tid)
+    if not t:
+        return jsonify({'erro': 'não encontrado'}), 404
+    t.assinatura_ativa = False
+    asn = Assinatura.query.filter_by(tenant_id=tid, status='ativo').first()
+    if asn:
+        asn.status = 'inativo'
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/excluir/<int:tid>', methods=['DELETE'])
+def api_admin_excluir(tid):
+    data = request.get_json(force=True) or {}
+    if data.get('key') != API_TOKEN:
+        return jsonify({'erro': 'não autorizado'}), 401
+    t = db.session.get(Tenant, tid)
+    if not t:
+        return jsonify({'erro': 'não encontrado'}), 404
+    # Remove assinaturas, serviços e categorias do tenant
+    Assinatura.query.filter_by(tenant_id=tid).delete()
+    Servico.query.filter_by(tenant_id=tid).delete()
+    Categoria.query.filter_by(tenant_id=tid).delete()
+    db.session.delete(t)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/vencimento/<int:tid>', methods=['POST'])
+def api_admin_vencimento(tid):
+    data = request.get_json(force=True) or {}
+    if data.get('key') != API_TOKEN:
+        return jsonify({'erro': 'não autorizado'}), 401
+    t = db.session.get(Tenant, tid)
+    if not t:
+        return jsonify({'erro': 'não encontrado'}), 404
+    try:
+        nova_data = datetime.strptime(data['vencimento'], '%Y-%m-%d')
+    except (KeyError, ValueError):
+        return jsonify({'erro': 'data inválida'}), 400
+    asn = Assinatura.query.filter_by(tenant_id=tid).order_by(Assinatura.id.desc()).first()
+    if not asn:
+        asn = Assinatura(tenant_id=tid, plano='manual', valor_total=0, valor_mensal=0,
+                         status='ativo', inicio=datetime.utcnow())
+        db.session.add(asn)
+    asn.vencimento = nova_data
+    asn.status = 'ativo'
+    t.assinatura_ativa = True
     db.session.commit()
     return jsonify({'ok': True})
 
