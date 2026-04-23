@@ -2974,12 +2974,12 @@ def api_pagamento_criar_tema():
         'items': [{'title': 'BarberOS — Edição de Tema', 'quantity': 1,
                    'currency_id': 'BRL', 'unit_price': 5.00}],
         'back_urls': {
-            'success': f'https://seuapp.com.br/repersonalizar?pago={tenant.slug}',
-            'failure': 'https://seuapp.com.br/repersonalizar',
-            'pending': 'https://seuapp.com.br/repersonalizar',
+            'success': f'{request.host_url}repersonalizar?pago={tenant.slug}',
+            'failure': f'{request.host_url}repersonalizar',
+            'pending': f'{request.host_url}repersonalizar',
         },
         'auto_return': 'approved',
-        'notification_url': 'https://seuapp.com.br/api/pagamento/webhook',
+        'notification_url': f'{request.host_url}api/pagamento/webhook',
         'metadata': {'tenant_id': tenant.id, 'tipo': 'tema'},
     }
     res = req_http.post(
@@ -3246,14 +3246,43 @@ def api_pagamento_criar_v2():
 
 @app.route('/api/pagamento/webhook', methods=['POST'])
 def api_pagamento_webhook():
+    import hmac, hashlib
+
+    # Verificação de assinatura do Mercado Pago
+    mp_secret = os.environ.get('MP_WEBHOOK_SECRET', '')
+    if mp_secret:
+        sig_header = request.headers.get('X-Signature', '')
+        ts = ''
+        received = ''
+        for part in sig_header.split(','):
+            part = part.strip()
+            if part.startswith('ts='):
+                ts = part[3:]
+            elif part.startswith('v1='):
+                received = part[3:]
+        data_id = request.args.get('data.id', '') or (request.get_json(force=True) or {}).get('data', {}).get('id', '')
+        manifest = f'id:{data_id};request-id:{request.headers.get("X-Request-Id","")};ts:{ts};'
+        expected = hmac.new(mp_secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+        if received and not hmac.compare_digest(expected, received):
+            return '', 401
+
     data = request.get_json(force=True) or {}
     if data.get('type') != 'payment':
         return '', 200
+
     mp_token = get_mp_token()
-    payment_id = data['data']['id']
+    payment_id = str(data.get('data', {}).get('id', ''))
+    if not payment_id:
+        return '', 200
+
+    # Idempotência — ignora se já processado
+    ja_processado = Assinatura.query.filter_by(mp_payment_id=payment_id, status='ativo').first()
+    if ja_processado:
+        return '', 200
+
     res = req_http.get(
         f'https://api.mercadopago.com/v1/payments/{payment_id}',
-        headers={'Authorization': f'Bearer {mp_token}'},
+        headers={'Authorization': f'Bearer {mp_token}'}, timeout=15,
     )
     payment = res.json()
     if payment.get('status') == 'approved':
@@ -3273,11 +3302,17 @@ def api_pagamento_webhook():
                 meses = PLANOS.get(plano, {}).get('meses', 1)
                 assinatura = Assinatura.query.filter_by(
                     tenant_id=tenant_id, status='pendente').first()
-                if assinatura:
-                    assinatura.status = 'ativo'
-                    assinatura.mp_payment_id = str(payment_id)
-                    assinatura.inicio = datetime.utcnow()
-                    assinatura.vencimento = datetime.utcnow() + timedelta(days=30 * meses)
+                if not assinatura:
+                    assinatura = Assinatura(
+                        tenant_id=tenant_id, plano=plano,
+                        valor_total=PLANOS.get(plano, {}).get('total', 0),
+                        valor_mensal=PLANOS.get(plano, {}).get('mensal', 0),
+                    )
+                    db.session.add(assinatura)
+                assinatura.status = 'ativo'
+                assinatura.mp_payment_id = payment_id
+                assinatura.inicio = datetime.utcnow()
+                assinatura.vencimento = datetime.utcnow() + timedelta(days=30 * meses)
                 tenant.ativo = True
                 tenant.assinatura_ativa = True
                 db.session.commit()
