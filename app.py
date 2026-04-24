@@ -1141,13 +1141,51 @@ def inject_tenant():
     if t and getattr(t, 'tema', None):
         try:
             raw = json.loads(t.tema)
-            # Formato novo do personalizar: {ag: {...}, gt: {...}}
             if isinstance(raw, dict) and 'ag' in raw and isinstance(raw.get('ag'), dict):
                 tema_config = raw['ag']
-            else:
+            elif isinstance(raw, dict):
                 tema_config = raw
         except Exception:
             pass
+
+    # Gera CSS de variáveis do tema em Python (mais seguro que Jinja2)
+    tema_css = ''
+    tema_font_link = ''
+    if tema_config:
+        css = [':root{']
+        if tema_config.get('fundo'):       css.append(f"--bg:{tema_config['fundo']};")
+        if tema_config.get('superficie'):  css.append(f"--surface:{tema_config['superficie']};--surface2:{tema_config['superficie']};")
+        if tema_config.get('borda'):       css.append(f"--border:{tema_config['borda']};")
+        if tema_config.get('destaque'):    d=tema_config['destaque']; css.append(f"--gold:{d};--gold-dim:{d}cc;--gold-hover:{d}dd;")
+        if tema_config.get('texto'):       tx=tema_config['texto']; css.append(f"--text:{tx};--text-muted:{tx}88;--placeholder:{tx}55;")
+        if tema_config.get('fonteTitulo'): css.append(f"--font-serif:'{tema_config['fonteTitulo']}',Georgia,serif;")
+        if tema_config.get('fonteCorpo'):  css.append(f"--font-sans:'{tema_config['fonteCorpo']}',system-ui,sans-serif;")
+        if tema_config.get('cardRadius') is not None: css.append(f"--radius:{tema_config['cardRadius']}px;")
+        css.append('}')
+        tema_css = '<style>' + ''.join(css) + '</style>'
+        # Fontes customizadas do Google Fonts
+        fonts_qs = []
+        tf = tema_config.get('fonteTitulo', '')
+        cf = tema_config.get('fonteCorpo', '')
+        if tf: fonts_qs.append(f"family={tf.replace(' ','+')}:wght@400;600;700")
+        if cf: fonts_qs.append(f"family={cf.replace(' ','+')}:wght@300;400;500")
+        if fonts_qs:
+            tema_font_link = f'<link href="https://fonts.googleapis.com/css2?{"&".join(fonts_qs)}&display=swap" rel="stylesheet">'
+    # JS para btnEstilo e heroUrl (não podem ser feitos só em CSS)
+    tema_js = ''
+    if tema_config:
+        js_parts = ['<script>(function(){']
+        bs = tema_config.get('btnEstilo', '')
+        cr = tema_config.get('cardRadius', 6)
+        if bs:
+            br = '999px' if bs == 'pilula' else '0px' if bs == 'angular' else f'{cr}px'
+            js_parts.append(f"document.querySelectorAll('.btn,.btn-gold').forEach(function(el){{el.style.borderRadius='{br}';}});")
+        hero = tema_config.get('heroUrl', '')
+        if hero:
+            js_parts.append(f"var h=document.querySelector('.hero-central');if(h){{h.style.backgroundImage=\"url('{hero}')\";h.style.backgroundSize='cover';h.style.backgroundPosition='center';}}")
+        js_parts.append('})();</script>')
+        if len(js_parts) > 2:
+            tema_js = ''.join(js_parts)
 
     # Sobrescreve campos de identidade via URL params (modo preview)
     preview_identity = {}
@@ -1161,7 +1199,9 @@ def inject_tenant():
             'heroUrl':     args.get('heroUrl',     ''),
         }
 
-    return {'tenant': t, 'tema_config': tema_config, 'preview_identity': preview_identity}
+    return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
+            'tema_font_link': tema_font_link, 'tema_js': tema_js,
+            'preview_identity': preview_identity}
 
 def _get_tenant_para_api():
     """Retorna o tenant a partir do token JWT-like do app Flutter."""

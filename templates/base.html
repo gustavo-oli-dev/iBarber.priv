@@ -12,23 +12,8 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/icon-192.png') }}">
   <link rel="manifest" href="/manifest.json">
   {% if tema_override %}{{ tema_override|safe }}{% endif %}
-  {% if tema_config and not preview_mode %}
-  {% set _tf = tema_config.fonteTitulo | default('') %}
-  {% set _cf = tema_config.fonteCorpo  | default('') %}
-  {% if _tf or _cf %}
-  <link href="https://fonts.googleapis.com/css2?{% if _tf %}family={{ _tf | replace(' ', '+') }}:wght@400;600;700{% endif %}{% if _tf and _cf %}&{% endif %}{% if _cf %}family={{ _cf | replace(' ', '+') }}:wght@300;400;500{% endif %}&display=swap" rel="stylesheet" />
-  {% endif %}
-  <style>:root{
-    {% if tema_config.fundo %}--bg:{{ tema_config.fundo }};{% endif %}
-    {% if tema_config.superficie %}--surface:{{ tema_config.superficie }};--surface2:{{ tema_config.superficie }};{% endif %}
-    {% if tema_config.borda %}--border:{{ tema_config.borda }};{% endif %}
-    {% if tema_config.destaque %}--gold:{{ tema_config.destaque }};--gold-dim:{{ tema_config.destaque }}cc;--gold-hover:{{ tema_config.destaque }}dd;{% endif %}
-    {% if tema_config.texto %}--text:{{ tema_config.texto }};--text-muted:{{ tema_config.texto }}88;--placeholder:{{ tema_config.texto }}55;{% endif %}
-    {% if _tf %}--font-serif:'{{ _tf }}',Georgia,serif;{% endif %}
-    {% if _cf %}--font-sans:'{{ _cf }}',system-ui,sans-serif;{% endif %}
-    {% if tema_config.cardRadius %}--radius:{{ tema_config.cardRadius }}px;{% endif %}
-  }</style>
-  {% endif %}
+  {% if not preview_mode and tema_font_link %}{{ tema_font_link|safe }}{% endif %}
+  {% if not preview_mode and tema_css %}{{ tema_css|safe }}{% endif %}
   {% if preview_mode %}
   <style>
     body{overflow-x:hidden;pointer-events:none}
@@ -91,22 +76,7 @@
     <p>© 2026 {{ (preview_identity.nomeDisplay | default('')) or (tema_config.nomeDisplay | default('')) or (tenant.nome if tenant else 'Barbearia') }}. Todos os direitos reservados.</p>
   </footer>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-  {% if tema_config and not preview_mode %}
-  <script>
-  (function(){
-    {% if tema_config.btnEstilo %}
-    var bs = '{{ tema_config.btnEstilo }}';
-    var cr = {{ tema_config.cardRadius | default(6) }};
-    var br = bs==='pilula' ? '999px' : bs==='angular' ? '0px' : cr+'px';
-    document.querySelectorAll('.btn,.btn-gold').forEach(function(el){ el.style.borderRadius=br; });
-    {% endif %}
-    {% if tema_config.heroUrl %}
-    var heroEl = document.querySelector('.hero-central');
-    if(heroEl){ heroEl.style.backgroundImage="url('{{ tema_config.heroUrl }}')"; heroEl.style.backgroundSize='cover'; heroEl.style.backgroundPosition='center'; }
-    {% endif %}
-  })();
-  </script>
-  {% endif %}
+  {% if not preview_mode and tema_js %}{{ tema_js|safe }}{% endif %}
   <script>
   // Informa rota atual ao editor pai
   if (window.parent !== window) {
