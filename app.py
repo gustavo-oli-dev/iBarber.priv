@@ -1609,8 +1609,8 @@ def api_status_pagamentos():
     pix_ok = bool(pix_chave and pix_chave.value and pix_chave.value.strip()) and mp_ok
     pix_ativo_s    = _get_setting('pix_ativo', _tid)
     cartao_ativo_s = _get_setting('cartao_ativo', _tid)
-    pix_ligado    = pix_ativo_s.value    == '1' if pix_ativo_s    else True
-    cartao_ligado = cartao_ativo_s.value == '1' if cartao_ativo_s else True
+    pix_ligado    = pix_ativo_s.value    != '0' if pix_ativo_s    else False
+    cartao_ligado = cartao_ativo_s.value != '0' if cartao_ativo_s else False
     return jsonify({'pix': pix_ok and pix_ligado, 'cartao': mp_ok and cartao_ligado})
 
 @app.route('/api/criar-pagamento', methods=['POST'])
@@ -2854,8 +2854,8 @@ def gestao_credenciais():
         pix_chave=_sv('pix_chave'),
         mp_token=_sv('mp_token'),
         mp_public_key=_sv('mp_public_key'),
-        pix_ativo=(_sv('pix_ativo') != '0'),
-        cartao_ativo=(_sv('cartao_ativo') != '0'),
+        pix_ativo=(_sv('pix_ativo') == '1'),
+        cartao_ativo=(_sv('cartao_ativo') == '1'),
     )
 
 @app.route('/gestao/graficos')
