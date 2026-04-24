@@ -1207,7 +1207,13 @@ def api_categorias_listar():
     if session.get('is_preview'):
         return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
     try:
-        tid = session.get('tenant_id') or (_get_tenant_para_api().id if _get_tenant_para_api() else None)
+        tid = session.get('tenant_id') or session.get('path_tenant_id')
+        if not tid:
+            t = _get_tenant_para_api()
+            tid = t.id if t else None
+        if not tid:
+            t = get_tenant_atual()
+            tid = t.id if t else None
         q = Categoria.query.filter_by(ativo=True)
         if tid: q = q.filter_by(tenant_id=tid)
         cats = q.order_by(Categoria.ordem).all()
@@ -1253,7 +1259,13 @@ def api_servicos_listar():
         return jsonify(_PREVIEW_SVCS)
     try:
         q = Servico.query.filter_by(ativo=True)
-        tid = session.get('tenant_id')
+        tid = session.get('tenant_id') or session.get('path_tenant_id')
+        if not tid:
+            t = _get_tenant_para_api()
+            tid = t.id if t else None
+        if not tid:
+            t = get_tenant_atual()
+            tid = t.id if t else None
         if tid: q = q.filter_by(tenant_id=tid)
         svs = q.order_by(Servico.categoria_id, Servico.ordem).all()
         return jsonify([{
@@ -3059,24 +3071,6 @@ def api_cadastro():
         assinatura_ativa=True,
     )
     db.session.add(tenant)
-    db.session.flush()
-    precos_s = _get_setting('precos')
-    precos = json.loads(precos_s.value) if precos_s else {}
-    _iniciais = [
-        ('Corte degradê','corte',0), ('Corte social','corte',1),
-        ('Corte social na 0','corte',2),
-        ('Cavanhaque e bigode','barba',0), ('Cavanhaque','barba',1),
-        ('Bigode','barba',2), ('Barba completa','barba',3),
-        ('Luzes','outros',0), ('Pigmentação de cabelo','outros',1),
-        ('Reflexo','outros',2), ('Nevou','outros',3),
-        ('Pigmentação de barba','outros',4), ('Sobrancelha','outros',5),
-    ]
-    for nome, cat, ordem in _iniciais:
-        db.session.add(Servico(
-            nome=nome, categoria=cat,
-            preco=precos.get(nome, 0), ordem=ordem,
-            tenant_id=tenant.id,
-        ))
     db.session.commit()
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
 
