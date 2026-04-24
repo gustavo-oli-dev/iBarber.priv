@@ -1217,8 +1217,8 @@ def api_tenant_config_get():
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     tenant = _get_tenant_para_api()
     if not tenant: return jsonify({'erro': 'não encontrado'}), 404
-    fab_wpp_default  = {'mostrar': True,  'texto': 'Fale conosco!',    'cor': '#25D366', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 24}
-    fab_maps_default = {'mostrar': True,  'texto': 'Estamos aqui!',   'cor': '#4285F4', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 80}
+    fab_wpp_default  = {'mostrar': False, 'texto': 'Fale conosco!',    'cor': '#25D366', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 24}
+    fab_maps_default = {'mostrar': False, 'texto': 'Estamos aqui!',   'cor': '#4285F4', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 80}
     fab_wpp  = json.loads(tenant.fab_wpp)  if tenant.fab_wpp  else fab_wpp_default
     fab_maps = json.loads(tenant.fab_maps) if tenant.fab_maps else fab_maps_default
     return jsonify({'nome': tenant.nome, 'whatsapp': tenant.whatsapp or '', 'maps_url': tenant.maps_url or '',
