@@ -1214,9 +1214,25 @@ def inject_tenant():
             'heroUrl':     args.get('heroUrl',     ''),
         }
 
+    # FAB visibility — só mostra se o tenant configurou explicitamente mostrar=True
+    fab_wpp_mostrar = False
+    fab_maps_mostrar = False
+    if t and not session.get('is_preview'):
+        try:
+            wpp_cfg = json.loads(t.fab_wpp) if t.fab_wpp else {}
+            fab_wpp_mostrar = bool(wpp_cfg.get('mostrar', False))
+        except Exception:
+            pass
+        try:
+            maps_cfg = json.loads(t.fab_maps) if t.fab_maps else {}
+            fab_maps_mostrar = bool(maps_cfg.get('mostrar', False))
+        except Exception:
+            pass
+
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
-            'preview_identity': preview_identity}
+            'preview_identity': preview_identity,
+            'fab_wpp_mostrar': fab_wpp_mostrar, 'fab_maps_mostrar': fab_maps_mostrar}
 
 def _get_tenant_para_api():
     """Retorna o tenant a partir do token JWT-like do app Flutter."""
@@ -3495,6 +3511,8 @@ def tenant_site(slug):
                 '<p style="color:#888;margin-top:.5rem">Site em ativação — aguardando confirmação do pagamento.</p>'
                 '</div></body></html>', 402)
     session['path_tenant_id'] = tenant.id
+    session.pop('is_preview', None)
+    session.pop('tenant_id', None)
     user = None
     if 'user_id' in session:
         user = db.session.get(User, session['user_id'])

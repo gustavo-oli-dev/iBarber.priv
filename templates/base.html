@@ -160,7 +160,7 @@
   {% set has_wpp  = wpp | length > 0 %}
   {% set has_maps = tenant.maps_url | default('', true) | length > 0 %}
 
-  {% if has_wpp %}
+  {% if has_wpp and fab_wpp_mostrar %}
   <a class="fab fab-wpp {% if not has_maps %}fab-wpp-only{% endif %}"
      href="https://wa.me/55{{ wpp }}" target="_blank" rel="noopener" aria-label="WhatsApp"
      data-fab-cfg="{{ tenant.fab_wpp or '{}' }}">
@@ -169,7 +169,7 @@
   </a>
   {% endif %}
 
-  {% if has_maps %}
+  {% if has_maps and fab_maps_mostrar %}
   <a class="fab fab-maps {% if not has_wpp %}fab-wpp-only{% endif %}"
      href="{{ tenant.maps_url }}" target="_blank" rel="noopener" aria-label="Google Maps"
      data-fab-cfg="{{ tenant.fab_maps or '{}' }}">
