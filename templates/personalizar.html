@@ -325,6 +325,19 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
   font-family:'Inter',sans-serif;letter-spacing:.02em;
 }
 
+/* ── MOBILE ── */
+@media(max-width:767px){
+  :root{--panel:100vw;--screens:0px}
+  html,body{overflow:auto}
+  .main{flex-direction:column;overflow:auto}
+  .panel{width:100%;flex-shrink:0;border-right:none;border-bottom:1px solid var(--border)}
+  .screens-sidebar{display:none}
+  .canvas{display:none}
+  .topbar{padding:0 .75rem}
+  .steps{gap:0;font-size:.65rem}
+  .step-conn{width:14px}
+  .btn-avancar{padding:6px 12px;font-size:.75rem}
+}
 </style>
 </head>
 <body>
