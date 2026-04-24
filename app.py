@@ -134,8 +134,35 @@ class PedidoItem(db.Model):
     preco     = db.Column(db.Float, default=0)
 
 class Setting(db.Model):
-    key   = db.Column(db.String(50),  primary_key=True)
+    key   = db.Column(db.String(100), primary_key=True)  # "global:KEY" ou "{tenant_id}:KEY"
     value = db.Column(db.String(500))
+
+def _sk(key, tenant_id=None):
+    """Monta a chave do Setting com prefixo de tenant."""
+    return f"{tenant_id}:{key}" if tenant_id else f"global:{key}"
+
+def _get_setting(key, tenant_id=None):
+    return db.session.get(Setting, _sk(key, tenant_id))
+
+def _upsert_setting(key, value, tenant_id=None):
+    full = _sk(key, tenant_id)
+    s = db.session.get(Setting, full)
+    if s:
+        s.value = value
+    else:
+        db.session.add(Setting(key=full, value=value))
+
+def _gestao_tid():
+    """Retorna tenant_id do gestor logado, ou None."""
+    return session.get('gestao_tenant_id')
+
+def _api_tid():
+    """Retorna tenant_id a partir do contexto atual (gestão session ou path_tenant_id)."""
+    tid = session.get('gestao_tenant_id')
+    if tid:
+        return tid
+    t = get_tenant_atual()
+    return t.id if t else None
 
 class LembreteEnviado(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
@@ -293,7 +320,7 @@ def get_mp_token():
     if t:
         return t
     try:
-        s = db.session.get(Setting, 'admin_mp_access_token')
+        s = _get_setting('admin_mp_access_token')
         return s.value if s and s.value else ''
     except Exception:
         return ''
@@ -339,18 +366,22 @@ SLOTS_PADRAO = {
     6: [],                     # Dom – fechado
 }
 
-def _gestor_como_barbeiro():
+def _gestor_como_barbeiro(tenant_id=None):
     """Retorna (ativo: bool, nome: str) do gestor como barbeiro."""
-    s = db.session.get(Setting, 'gestor_e_barbeiro')
+    if tenant_id is None:
+        tenant_id = _api_tid()
+    s = _get_setting('gestor_e_barbeiro', tenant_id)
     ativo = s and s.value == '1'
-    n = db.session.get(Setting, 'gestor_nome')
+    n = _get_setting('gestor_nome', tenant_id)
     nome = n.value if n and n.value else 'Proprietário'
     return ativo, nome
 
-def _funcionarios_ativos_para_data(data_str):
+def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     """Retorna lista de dicts {id, nome} dos barbeiros disponíveis na data.
     id=0 representa o gestor (proprietário) quando habilitado."""
-    todos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    if tenant_id is None:
+        tenant_id = _api_tid()
+    todos = Funcionario.query.filter_by(ativo=True, tenant_id=tenant_id).order_by(Funcionario.nome).all()
     ausentes_ids = {
         a.funcionario_id
         for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
@@ -363,9 +394,9 @@ def _funcionarios_ativos_para_data(data_str):
         }
         for f in todos if f.id not in ausentes_ids
     ]
-    gestor_ativo, gestor_nome = _gestor_como_barbeiro()
+    gestor_ativo, gestor_nome = _gestor_como_barbeiro(tenant_id)
     if gestor_ativo:
-        gf = db.session.get(Setting, 'gestor_foto')
+        gf = _get_setting('gestor_foto', tenant_id)
         gestor_foto = f'/static/uploads/{gf.value}' if gf and gf.value else None
         lista.insert(0, {'id': 0, 'nome': gestor_nome, 'foto_url': gestor_foto})
     return lista
@@ -499,7 +530,7 @@ def servicos():
             'hora': ag.data_hora.strftime('%H:%M'),
             'forma_pagamento': _forma_label.get(ag.forma_pagamento or '', ''),
         }
-    sd = db.session.get(Setting, 'dias_agenda')
+    sd = _get_setting('dias_agenda', _api_tid())
     dias_agenda = int(sd.value) if sd and sd.value else 20
     return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda)
 
@@ -902,7 +933,7 @@ def agendar():
         return jsonify({'erro': 'Você já possui um agendamento marcado.'}), 400
 
     data_str = data_hora.strftime('%Y-%m-%d')
-    dias_s = db.session.get(Setting, 'dias_fechados')
+    dias_s = _get_setting('dias_fechados', _api_tid())
     if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
         return jsonify({'erro': 'Este dia não está disponível.'}), 400
 
@@ -1109,7 +1140,12 @@ def inject_tenant():
     tema_config = {}
     if t and getattr(t, 'tema', None):
         try:
-            tema_config = json.loads(t.tema)
+            raw = json.loads(t.tema)
+            # Formato novo do personalizar: {ag: {...}, gt: {...}}
+            if isinstance(raw, dict) and 'ag' in raw and isinstance(raw.get('ag'), dict):
+                tema_config = raw['ag']
+            else:
+                tema_config = raw
         except Exception:
             pass
 
@@ -1270,12 +1306,13 @@ def api_horarios_disponiveis():
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
 
-    dias_s = db.session.get(Setting, 'dias_fechados')
+    _tid = _api_tid()
+    dias_s = _get_setting('dias_fechados', _tid)
     dias_fechados = json.loads(dias_s.value) if dias_s and dias_s.value else []
     if data_str in dias_fechados:
         return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
 
-    duracao_s = db.session.get(Setting, 'intervalo_minutos')
+    duracao_s = _get_setting('intervalo_minutos', _tid)
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
     # horário especial para esta data sobrepõe o semanal
@@ -1283,7 +1320,7 @@ def api_horarios_disponiveis():
     if he:
         todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
     else:
-        config_s = db.session.get(Setting, 'horario_funcionamento')
+        config_s = _get_setting('horario_funcionamento', _tid)
         if config_s and config_s.value:
             config  = json.loads(config_s.value)
             dia_key = _DIAS_KEYS[data_obj.weekday()]
@@ -1355,21 +1392,17 @@ def api_barbeiros_disponiveis():
 def api_gestor_barbeiro():
     """Lê/salva se o gestor conta como barbeiro e seu nome."""
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    ativo, nome = _gestor_como_barbeiro()
+    _tid = _api_tid()
+    ativo, nome = _gestor_como_barbeiro(_tid)
     if request.method == 'GET':
-        gf = db.session.get(Setting, 'gestor_foto')
+        gf = _get_setting('gestor_foto', _tid)
         foto_url = f'/static/uploads/{gf.value}' if gf and gf.value else None
         return jsonify({'ativo': ativo, 'nome': nome, 'foto_url': foto_url})
     data = request.get_json(silent=True) or {}
     if 'ativo' in data:
-        s = db.session.get(Setting, 'gestor_e_barbeiro')
-        val = '1' if data['ativo'] else '0'
-        if s: s.value = val
-        else: db.session.add(Setting(key='gestor_e_barbeiro', value=val))
+        _upsert_setting('gestor_e_barbeiro', '1' if data['ativo'] else '0', _tid)
     if 'nome' in data:
-        n = db.session.get(Setting, 'gestor_nome')
-        if n: n.value = data['nome']
-        else: db.session.add(Setting(key='gestor_nome', value=data['nome']))
+        _upsert_setting('gestor_nome', data['nome'], _tid)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -1401,27 +1434,21 @@ def api_escala(data_str):
 @app.route('/api/config-horarios', methods=['GET', 'POST'])
 def api_config_horarios():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    _tid = _api_tid()
     if request.method == 'POST':
         data     = request.get_json(silent=True) or {}
         intervalo = data.pop('intervalo_minutos', None)
         if intervalo is not None:
-            si = db.session.get(Setting, 'intervalo_minutos')
-            if si: si.value = str(int(intervalo))
-            else: db.session.add(Setting(key='intervalo_minutos', value=str(int(intervalo))))
+            _upsert_setting('intervalo_minutos', str(int(intervalo)), _tid)
         dias_agenda = data.pop('dias_agenda', None)
         if dias_agenda is not None:
-            sd = db.session.get(Setting, 'dias_agenda')
-            if sd: sd.value = str(int(dias_agenda))
-            else: db.session.add(Setting(key='dias_agenda', value=str(int(dias_agenda))))
-        s   = db.session.get(Setting, 'horario_funcionamento')
-        val = json.dumps(data, ensure_ascii=False)
-        if s: s.value = val
-        else: db.session.add(Setting(key='horario_funcionamento', value=val))
+            _upsert_setting('dias_agenda', str(int(dias_agenda)), _tid)
+        _upsert_setting('horario_funcionamento', json.dumps(data, ensure_ascii=False), _tid)
         db.session.commit()
         return jsonify({'ok': True})
-    s  = db.session.get(Setting, 'horario_funcionamento')
-    si = db.session.get(Setting, 'intervalo_minutos')
-    sd = db.session.get(Setting, 'dias_agenda')
+    s  = _get_setting('horario_funcionamento', _tid)
+    si = _get_setting('intervalo_minutos', _tid)
+    sd = _get_setting('dias_agenda', _tid)
     cfg = json.loads(s.value) if s and s.value else \
           {k: {'aberto': k != 'dom', 'abertura': '08:00', 'fechamento': '18:00'} for k in _DIAS_KEYS}
     cfg['intervalo_minutos'] = int(si.value) if si and si.value else 40
@@ -1431,13 +1458,14 @@ def api_config_horarios():
 @app.route('/api/config-publica', methods=['GET'])
 def api_config_publica():
     """Configurações públicas lidas pelo site (sem autenticação)."""
-    sd = db.session.get(Setting, 'dias_agenda')
+    sd = _get_setting('dias_agenda', _api_tid())
     return jsonify({'dias_agenda': int(sd.value) if sd and sd.value else 20})
 
 @app.route('/api/dias-fechados', methods=['GET', 'POST', 'DELETE'])
 def api_dias_fechados():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    s = db.session.get(Setting, 'dias_fechados')
+    _tid = _api_tid()
+    s = _get_setting('dias_fechados', _tid)
     dias = json.loads(s.value) if s and s.value else []
     if request.method in ('POST', 'DELETE'):
         data_val = (request.get_json(silent=True) or {}).get('data', '')
@@ -1445,9 +1473,7 @@ def api_dias_fechados():
             dias.append(data_val); dias.sort()
         elif request.method == 'DELETE' and data_val in dias:
             dias.remove(data_val)
-        val = json.dumps(dias)
-        if s: s.value = val
-        else: db.session.add(Setting(key='dias_fechados', value=val))
+        _upsert_setting('dias_fechados', json.dumps(dias), _tid)
         db.session.commit()
         return jsonify({'ok': True, 'dias': dias})
     return jsonify({'dias': dias})
@@ -1547,30 +1573,30 @@ def api_agendamento_status(ag_id):
 def api_credenciais():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
     _keys = ['pix_chave', 'mp_token', 'mp_public_key', 'pix_ativo', 'cartao_ativo']
+    _tid = _api_tid()
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         for k in _keys:
             if k in data:
-                s = db.session.get(Setting, k)
-                if s: s.value = str(data[k])
-                else: db.session.add(Setting(key=k, value=str(data[k])))
+                _upsert_setting(k, str(data[k]), _tid)
         db.session.commit()
         return jsonify({'ok': True})
     result = {}
     for k in _keys:
-        s = db.session.get(Setting, k)
+        s = _get_setting(k, _tid)
         result[k] = s.value if s else ''
     return jsonify(result)
 
 @app.route('/api/status-pagamentos', methods=['GET'])
 def api_status_pagamentos():
     """Retorna quais métodos de pagamento estão configurados (sem expor credenciais)."""
-    mp_token  = db.session.get(Setting, 'mp_token')
-    pix_chave = db.session.get(Setting, 'pix_chave')
+    _tid = _api_tid()
+    mp_token  = _get_setting('mp_token', _tid)
+    pix_chave = _get_setting('pix_chave', _tid)
     mp_ok  = bool(mp_token  and mp_token.value  and mp_token.value.strip())
     pix_ok = bool(pix_chave and pix_chave.value and pix_chave.value.strip()) and mp_ok
-    pix_ativo_s    = db.session.get(Setting, 'pix_ativo')
-    cartao_ativo_s = db.session.get(Setting, 'cartao_ativo')
+    pix_ativo_s    = _get_setting('pix_ativo', _tid)
+    cartao_ativo_s = _get_setting('cartao_ativo', _tid)
     pix_ligado    = pix_ativo_s.value    == '1' if pix_ativo_s    else True
     cartao_ligado = cartao_ativo_s.value == '1' if cartao_ativo_s else True
     return jsonify({'pix': pix_ok and pix_ligado, 'cartao': mp_ok and cartao_ligado})
@@ -1582,7 +1608,8 @@ def criar_pagamento():
     metodo    = data.get('metodo', 'pix')
     pedido_id = data.get('pedido_id')
 
-    mp_token_s = db.session.get(Setting, 'mp_token')
+    _tid = _api_tid()
+    mp_token_s = _get_setting('mp_token', _tid)
     mp_token   = mp_token_s.value if mp_token_s else ''
 
     if not mp_token:
@@ -1635,7 +1662,7 @@ def criar_pagamento():
 @app.route('/api/verificar-pagamento/<int:mp_payment_id>', methods=['GET'])
 def verificar_pagamento(mp_payment_id):
     pedido_id  = request.args.get('pedido_id', type=int)
-    mp_token_s = db.session.get(Setting, 'mp_token')
+    mp_token_s = _get_setting('mp_token', _api_tid())
     if not mp_token_s or not mp_token_s.value:
         return jsonify({'status': 'unknown'}), 400
     r = req_http.get(
@@ -1901,7 +1928,7 @@ def api_agendamentos():
         if not user:
             return jsonify({'erro': 'usuário não encontrado'}), 404
         data_str = data_hora.strftime('%Y-%m-%d')
-        dias_s = db.session.get(Setting, 'dias_fechados')
+        dias_s = _get_setting('dias_fechados', _api_tid())
         if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
             return jsonify({'erro': 'Este dia não está disponível.'}), 400
         slot_ocupado = (Agendamento.query
@@ -2422,8 +2449,9 @@ def api_funcionario_foto(fid):
 @app.route('/api/gestor-foto', methods=['POST', 'DELETE'])
 def api_gestor_foto():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    _tid = _api_tid()
     if request.method == 'DELETE':
-        s = db.session.get(Setting, 'gestor_foto')
+        s = _get_setting('gestor_foto', _tid)
         if s and s.value:
             p = os.path.join(UPLOAD_FOLDER, s.value)
             if os.path.exists(p): os.remove(p)
@@ -2436,14 +2464,13 @@ def api_gestor_foto():
     ext = os.path.splitext(secure_filename(arquivo.filename))[1].lower()
     if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
         return jsonify({'erro': 'formato inválido'}), 400
-    s = db.session.get(Setting, 'gestor_foto')
+    s = _get_setting('gestor_foto', _tid)
     if s and s.value:
         old = os.path.join(UPLOAD_FOLDER, s.value)
         if os.path.exists(old): os.remove(old)
     filename = f"gestor_{uuid.uuid4().hex}{ext}"
     arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
-    if s: s.value = filename
-    else: db.session.add(Setting(key='gestor_foto', value=filename))
+    _upsert_setting('gestor_foto', filename, _tid)
     db.session.commit()
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
 
@@ -2744,26 +2771,19 @@ def gestao_horarios():
                 'abertura': request.form.get(f'abertura_{k}', '08:00'),
                 'fechamento': request.form.get(f'fechamento_{k}', '18:00'),
             }
-        s = db.session.get(Setting, 'horario_funcionamento')
-        val = json.dumps(horarios, ensure_ascii=False)
-        if s: s.value = val
-        else: db.session.add(Setting(key='horario_funcionamento', value=val))
-        slot = request.form.get('slot_minutos', '40')
-        si = db.session.get(Setting, 'intervalo_minutos')
-        if si: si.value = slot
-        else: db.session.add(Setting(key='intervalo_minutos', value=slot))
-        dias_ag = request.form.get('dias_agenda', '20')
-        sd = db.session.get(Setting, 'dias_agenda')
-        if sd: sd.value = dias_ag
-        else: db.session.add(Setting(key='dias_agenda', value=dias_ag))
+        _tid = tenant.id
+        _upsert_setting('horario_funcionamento', json.dumps(horarios, ensure_ascii=False), _tid)
+        _upsert_setting('intervalo_minutos', request.form.get('slot_minutos', '40'), _tid)
+        _upsert_setting('dias_agenda', request.form.get('dias_agenda', '20'), _tid)
         db.session.commit()
         flash('Horários salvos.', 'success')
         return redirect(url_for('gestao_horarios'))
-    config_s = db.session.get(Setting, 'horario_funcionamento')
+    _tid = tenant.id
+    config_s = _get_setting('horario_funcionamento', _tid)
     config_dias = json.loads(config_s.value) if config_s and config_s.value else {}
-    slot_s = db.session.get(Setting, 'intervalo_minutos')
-    dias_ag_s = db.session.get(Setting, 'dias_agenda')
-    dias_fechados_s = db.session.get(Setting, 'dias_fechados')
+    slot_s = _get_setting('intervalo_minutos', _tid)
+    dias_ag_s = _get_setting('dias_agenda', _tid)
+    dias_fechados_s = _get_setting('dias_fechados', _tid)
     dias_fechados = json.loads(dias_fechados_s.value) if dias_fechados_s and dias_fechados_s.value else []
     especiais = HorarioEspecial.query.order_by(HorarioEspecial.data).all()
     config_geral = {
@@ -2815,7 +2835,7 @@ def gestao_credenciais():
         session['gestao_nome'] = tenant.nome
         flash('Dados atualizados.', 'success')
         return redirect(url_for('gestao_credenciais'))
-    def _sv(key): s = db.session.get(Setting, key); return s.value if s else ''
+    def _sv(key): s = _get_setting(key, tenant.id); return s.value if s else ''
     return render_template('gestao/credenciais.html',
         active='credenciais', tenant=tenant,
         token=_gerar_token(tenant.id, 0),
@@ -3040,7 +3060,7 @@ def api_cadastro():
     )
     db.session.add(tenant)
     db.session.flush()
-    precos_s = db.session.get(Setting, 'precos')
+    precos_s = _get_setting('precos')
     precos = json.loads(precos_s.value) if precos_s else {}
     _iniciais = [
         ('Corte degradê','corte',0), ('Corte social','corte',1),
@@ -3141,7 +3161,7 @@ def admin_painel():
           <button type="submit" style="padding:10px 28px;background:#C9A96E;color:#000;border:none;border-radius:6px;font-weight:bold;cursor:pointer">Entrar</button>
         </form></body></html>''', 401
     tenants = Tenant.query.order_by(Tenant.id.desc()).all()
-    mp_pub  = db.session.get(Setting, 'admin_mp_public_key')
+    mp_pub  = _get_setting('admin_mp_public_key')
     return render_template('admin_painel.html',
         tenants=tenants, key=senha,
         mp_public_key=mp_pub.value if mp_pub else '',
@@ -3158,16 +3178,10 @@ def api_admin_credenciais():
             continue
         if k == 'mp_token':
             os.environ['MP_ACCESS_TOKEN'] = v
-            s = db.session.get(Setting, 'admin_mp_access_token')
-            if s: s.value = v
-            else: db.session.add(Setting(key='admin_mp_access_token', value=v))
-            f = db.session.get(Setting, 'admin_mp_token_set')
-            if f: f.value = '1'
-            else: db.session.add(Setting(key='admin_mp_token_set', value='1'))
+            _upsert_setting('admin_mp_access_token', v)
+            _upsert_setting('admin_mp_token_set', '1')
         else:
-            s = db.session.get(Setting, 'admin_mp_public_key')
-            if s: s.value = v
-            else: db.session.add(Setting(key='admin_mp_public_key', value=v))
+            _upsert_setting('admin_mp_public_key', v)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -3269,7 +3283,7 @@ def api_pagamento_criar_v2():
     if plano not in PLANOS:
         return jsonify({'erro': 'plano inválido'}), 400
     mp_token     = get_mp_token()
-    mp_pub_key_s = db.session.get(Setting, 'admin_mp_public_key')
+    mp_pub_key_s = _get_setting('admin_mp_public_key')
     mp_pub_key = mp_pub_key_s.value if mp_pub_key_s else ''
     amount = PLANOS[plano]['total']
     preference = {
