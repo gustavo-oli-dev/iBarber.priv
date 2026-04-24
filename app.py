@@ -426,10 +426,7 @@ def manifest():
 
 @app.route('/')
 def index():
-    user = None
-    if 'user_id' in session:
-        user = db.session.get(User, session['user_id'])
-    return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
+    return redirect(url_for('personalizar'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
