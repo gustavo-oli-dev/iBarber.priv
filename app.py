@@ -286,10 +286,18 @@ with app.app_context():
             _tbl.create(db.engine)
     # auto-migrate: add new columns if missing
     _tenant_cols = {c['name'] for c in _inspector.get_columns('tenant')} if 'tenant' in _existing else set()
-    for _col, _type in [('fab_wpp', 'TEXT'), ('fab_maps', 'TEXT')]:
+    for _col, _type in [
+        ('fab_wpp',        'TEXT'),
+        ('fab_maps',       'TEXT'),
+        ('whatsapp',       'VARCHAR(20)'),
+        ('maps_url',       'VARCHAR(500)'),
+        ('tema_editacoes', 'INTEGER DEFAULT 0'),
+        ('tema_pendente',  'TEXT'),
+    ]:
         if _col not in _tenant_cols:
             with db.engine.connect() as _conn:
-                _conn.execute(db.text(f'ALTER TABLE tenant ADD COLUMN {_col} TEXT'))
+                _conn.execute(db.text(f'ALTER TABLE tenant ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     _user_cols = {c['name'] for c in _inspector.get_columns('user')} if 'user' in _existing else set()
     if 'guest' not in _user_cols:
         with db.engine.connect() as _conn:
