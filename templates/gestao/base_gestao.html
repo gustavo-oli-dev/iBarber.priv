@@ -12,7 +12,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   {% if tema_font_link %}{{ tema_font_link|safe }}{% endif %}
-  {% if tema_css %}{{ tema_css|safe }}{% endif %}
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -337,6 +336,7 @@
     .perm-chip { display:inline-flex;align-items:center;padding:.3rem .85rem;border-radius:999px;border:1.5px solid var(--border);font-size:.78rem;cursor:pointer;transition:background .15s,border-color .15s,color .15s;background:transparent;color:var(--text-muted);user-select:none;font-family:inherit; }
     .perm-chip.active { background:var(--gold);border-color:var(--gold);color:#000;font-weight:600; }
   </style>
+  {% if tema_css %}{{ tema_css|safe }}{% endif %}
   {% if gt_tema_override %}{{ gt_tema_override|safe }}<style>body{pointer-events:none;overflow-x:hidden}</style>{% endif %}
   {% block head %}{% endblock %}
 </head>
