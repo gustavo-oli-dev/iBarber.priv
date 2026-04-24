@@ -1141,6 +1141,13 @@ def inject_tenant():
     except Exception:
         t = None
 
+    # Fallback: gestão logada
+    if t is None and session.get('gestao_tenant_id'):
+        try:
+            t = db.session.get(Tenant, session['gestao_tenant_id'])
+        except Exception:
+            t = None
+
     # Fallback para preview sem banco
     if t is None and session.get('is_preview'):
         t = _MockTenant()
