@@ -342,6 +342,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
   .screens-sidebar{display:none}
   .canvas{display:none}
   #mob-preview-btn{display:flex}
+  #mob-screen-select{display:block!important}
 }
 @media(min-width:768px){
   #mob-preview-btn{display:none}
@@ -373,6 +374,13 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 
   <!-- ── LEFT PANEL (editor) ── -->
   <aside class="panel">
+
+    <!-- Seletor de tela — só aparece no mobile -->
+    <div id="mob-screen-select" style="padding:.6rem 1rem;border-bottom:1px solid var(--border);display:none;">
+      <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
+        style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.82rem;cursor:pointer;">
+      </select>
+    </div>
 
     <div id="edit-scope-bar">
       <span>✏️</span> <span id="edit-scope-label">Editando: Site de Agendamento</span>
@@ -761,6 +769,7 @@ function renderScreensSidebar() {
     div.onclick = () => setScreen(siteMode, s.id);
     list.appendChild(div);
   });
+  _buildMobScreenSelect();
 }
 
 function postThemeToThumbs() {}
@@ -1009,7 +1018,32 @@ function updateUrlBar() {
 }
 
 function abrirPreviewMobile() {
-  window.open('/preview/ag/inicio?' + _agParams(T.ag), '_blank');
+  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
+  const cur = siteMode === 'ag' ? agScreen : gtScreen;
+  const s = screens.find(x => x.id === cur) || screens[0];
+  window.open(s.urlFn(), '_blank');
+}
+
+function _buildMobScreenSelect() {
+  const sel = document.getElementById('mob-screen-sel');
+  if (!sel) return;
+  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
+  const cur = siteMode === 'ag' ? agScreen : gtScreen;
+  sel.innerHTML = '';
+  const grp1 = document.createElement('optgroup');
+  grp1.label = siteMode === 'ag' ? 'Site de Agendamento' : 'Painel de Gestão';
+  screens.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.label;
+    if (s.id === cur) o.selected = true;
+    grp1.appendChild(o);
+  });
+  sel.appendChild(grp1);
+}
+
+function onMobScreenChange(id) {
+  if (siteMode === 'ag') { agScreen = id; }
+  else { gtScreen = id; }
 }
 
 // ── Navigate to next step ─────────────────────────────────────────────────────
