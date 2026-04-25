@@ -327,10 +327,11 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 
 /* ── MOBILE ── */
 @media(max-width:767px){
-  :root{--panel:100vw;--screens:0px}
-  html,body{overflow:auto}
-  .main{flex-direction:column;overflow:auto}
-  .panel{width:100%;flex-shrink:0;border-right:none;border-bottom:1px solid var(--border)}
+  :root{--panel:100%;--screens:0px}
+  html,body{overflow:auto;height:auto}
+  .main{flex-direction:column;overflow:visible;height:auto}
+  .panel{width:100%;max-width:100%;flex-shrink:0;border-right:none;border-bottom:1px solid var(--border);overflow-x:visible}
+  .p-sec{padding:1.1rem 1rem}
   .screens-sidebar{display:none}
   .canvas{display:none}
   .topbar{padding:0 .75rem}
