@@ -5,7 +5,7 @@
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Pagamento não concluído</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -25,5 +25,6 @@ p{color:#888;line-height:1.7;margin-bottom:24px}
   <p>Não foi possível processar seu pagamento. Nenhum valor foi cobrado.</p>
   <a class="btn" href="/">Voltar ao início</a>
 </div>
+<script>document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});</script>
 </body>
 </html>

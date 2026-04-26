@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>iBarber — Gestão completa para barbearias</title>
 <meta name="description" content="Site de agendamento, app de gestão e controle financeiro para barbearias. Configure em 3 minutos. PIX, cartão e muito mais."/>
 <meta name="keywords" content="barbearia, agendamento online, app barbearia, gestão barbearia, iBarber"/>
@@ -581,6 +581,7 @@ const countObserver = new IntersectionObserver(entries => {
   });
 }, {threshold: 0.5});
 document.querySelectorAll('.stats').forEach(el => countObserver.observe(el));
+document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 </script>
 </body>
 </html>

@@ -5,7 +5,7 @@
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Admin — iBarber</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -347,6 +347,7 @@ function mostrarAlert(tipo, msg) {
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 3500);
 }
+document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 </script>
 </body>
 </html>
