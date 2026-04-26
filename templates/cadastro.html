@@ -155,7 +155,7 @@ body{display:flex;flex-direction:column}
 
     </div>
 
-    <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta e pagar →</button>
+    <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta e pagar</button>
     <div class="err-geral" id="err-geral"></div>
   </div>
 </main>
@@ -235,7 +235,7 @@ async function submeter() {
   } catch(e) {
     showErr('err-geral','Erro de conexão. Tente novamente.');
   } finally {
-    btn.disabled = false; btn.textContent = 'Criar conta e pagar →';
+    btn.disabled = false; btn.textContent = 'Criar conta e pagar';
   }
 }
 </script>

@@ -345,7 +345,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <input type="password" id="l-senha" placeholder="Sua senha" onkeydown="if(event.key==='Enter')entrar()">
     </div>
     <div class="err-login" id="err-login"></div>
-    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar e personalizar →</button>
+    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar e personalizar</button>
     <div class="login-footer">
       Ainda não tem conta? <a href="/personalizar">Criar minha barbearia</a>
     </div>
@@ -392,7 +392,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <div class="pay-body-cartao" id="cartao-content" style="display:none">
         <div class="card-icon">💳</div>
         <div class="card-desc">Você será redirecionado para o Mercado Pago para pagar R$5,00 com cartão de crédito ou débito.</div>
-        <button class="btn-mp" id="btn-mp" onclick="irMP()">Pagar R$5,00 →</button>
+        <button class="btn-mp" id="btn-mp" onclick="irMP()">Pagar R$5,00</button>
       </div>
     </div>
 
@@ -471,7 +471,7 @@ async function entrar() {
     errEl.textContent = 'Erro de conexão.';
     errEl.style.display = 'block';
   } finally {
-    btn.disabled = false; btn.textContent = 'Entrar e personalizar →';
+    btn.disabled = false; btn.textContent = 'Entrar e personalizar';
   }
 }
 
