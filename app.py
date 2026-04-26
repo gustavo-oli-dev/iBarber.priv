@@ -1232,20 +1232,26 @@ def inject_tenant():
             'heroUrl':     args.get('heroUrl',     ''),
         }
 
-    # FAB visibility — só mostra se o tenant configurou explicitamente mostrar=True
+    # FAB visibility — aparece por padrão se campo preenchido; respeita toggle se configurado via app
     fab_wpp_mostrar = False
     fab_maps_mostrar = False
     if t and not session.get('is_preview'):
         try:
-            wpp_cfg = json.loads(t.fab_wpp) if t.fab_wpp else {}
-            fab_wpp_mostrar = bool(wpp_cfg.get('mostrar', False))
+            if t.fab_wpp:
+                wpp_cfg = json.loads(t.fab_wpp)
+                fab_wpp_mostrar = bool(wpp_cfg.get('mostrar', False))
+            else:
+                fab_wpp_mostrar = bool(t.whatsapp)
         except Exception:
-            pass
+            fab_wpp_mostrar = bool(t.whatsapp)
         try:
-            maps_cfg = json.loads(t.fab_maps) if t.fab_maps else {}
-            fab_maps_mostrar = bool(maps_cfg.get('mostrar', False))
+            if t.fab_maps:
+                maps_cfg = json.loads(t.fab_maps)
+                fab_maps_mostrar = bool(maps_cfg.get('mostrar', False))
+            else:
+                fab_maps_mostrar = bool(t.maps_url)
         except Exception:
-            pass
+            fab_maps_mostrar = bool(t.maps_url)
 
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
