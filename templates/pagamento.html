@@ -17,7 +17,6 @@
 }
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow-x:hidden;max-width:100vw}
 body{display:flex;flex-direction:column}
-@media(max-width:767px){.steps,.tb-sep{display:none}}
 
 /* TOPBAR */
 .topbar{
@@ -113,6 +112,7 @@ body{display:flex;flex-direction:column}
 
 /* GLOW */
 .glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
+@media(max-width:767px){.steps,.tb-sep{display:none!important}}
 </style>
 </head>
 <body>
