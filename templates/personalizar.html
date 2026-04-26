@@ -375,13 +375,6 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
   <!-- ── LEFT PANEL (editor) ── -->
   <aside class="panel">
 
-    <!-- Seletor de tela — só aparece no mobile -->
-    <div id="mob-screen-select" style="padding:.6rem 1rem;border-bottom:1px solid var(--border);display:none;">
-      <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
-        style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.82rem;cursor:pointer;">
-      </select>
-    </div>
-
     <div id="edit-scope-bar">
       <span>✏️</span> <span id="edit-scope-label">Editando: Site de Agendamento</span>
     </div>
@@ -527,11 +520,16 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
     </div>
 
-    <!-- Botão preview mobile -->
+    <!-- Botão preview + seletor de tela — só aparecem no mobile -->
     <div id="mob-preview-btn" style="padding:1rem;border-top:1px solid var(--border);">
       <button onclick="abrirPreviewMobile()" style="width:100%;padding:12px;background:var(--surface);border:1.5px solid var(--gold);color:var(--gold);border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer;">
         👁 Ver preview do site
       </button>
+      <div id="mob-screen-select" style="margin-top:.6rem;display:none;">
+        <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
+          style="width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:.82rem;cursor:pointer;">
+        </select>
+      </div>
     </div>
   </aside>
 
