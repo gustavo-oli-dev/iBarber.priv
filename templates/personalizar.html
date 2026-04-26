@@ -523,27 +523,33 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
     </div>
 
     <!-- Controles mobile — só aparecem no mobile -->
-    <div id="mob-preview-btn" style="padding:1rem;border-top:1px solid var(--border);">
-      <!-- Modo de edição -->
-      <div style="display:flex;gap:.5rem;margin-bottom:.75rem;">
+    <div id="mob-preview-btn" style="padding:1rem;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:.5rem;">
+      <!-- Linha 1: Global + Única -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
         <button id="mob-mode-global" onclick="setEditMode('global')"
-          style="flex:1;padding:9px;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;border:1.5px solid var(--gold);background:var(--gold);color:#000;">
+          style="padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:1.5px solid var(--gold);background:var(--gold);color:#000;">
           🌐 Global
         </button>
         <button id="mob-mode-single" onclick="setEditMode('single')"
-          style="flex:1;padding:9px;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--text);">
+          style="padding:11px;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--text);">
           ✏️ Única
         </button>
       </div>
-      <!-- Preview -->
-      <button onclick="abrirPreviewMobile()" style="width:100%;padding:11px;background:var(--surface);border:1.5px solid var(--gold);color:var(--gold);border-radius:8px;font-size:.82rem;font-weight:600;cursor:pointer;">
-        👁 Ver preview do site
-      </button>
-      <!-- Seletor de tela (só quando modo Única) -->
-      <div id="mob-screen-select" style="margin-top:.6rem;display:none;">
-        <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
-          style="width:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:11px 10px;font-size:.82rem;cursor:pointer;font-weight:600;">
-        </select>
+      <!-- Linha 2: Preview + Screens -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
+        <button onclick="abrirPreviewMobile()"
+          style="padding:11px;background:var(--surface);border:1.5px solid var(--gold);color:var(--gold);border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;">
+          👁 Preview
+        </button>
+        <div id="mob-screen-select" style="display:none;">
+          <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
+            style="width:100%;height:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:11px 8px;font-size:.82rem;cursor:pointer;font-weight:700;">
+          </select>
+        </div>
+        <button id="mob-screen-placeholder" onclick="setEditMode('single')"
+          style="padding:11px;background:var(--surface);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;">
+          🖥 Telas
+        </button>
       </div>
     </div>
   </aside>
@@ -993,7 +999,9 @@ function setEditMode(mode) {
     ms.style.color        = mode==='single' ? '#000' : 'var(--text)';
     ms.style.borderColor  = mode==='single' ? 'var(--gold)' : 'var(--border)';
     const mss = document.getElementById('mob-screen-select');
+    const msp = document.getElementById('mob-screen-placeholder');
     if(mss) mss.style.display = mode==='single' ? 'block' : 'none';
+    if(msp) msp.style.display = mode==='single' ? 'none' : 'block';
   }
   syncPickers();
 }
