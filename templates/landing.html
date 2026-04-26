@@ -58,11 +58,12 @@ nav{
 .nav-link:hover{color:var(--text)}
 .btn-nav{
   background:var(--gold);color:#000;
-  padding:9px 22px;border-radius:8px;
-  font-size:.85rem;font-weight:600;
-  transition:background .2s,transform .15s;
+  padding:10px 22px;border-radius:50px;
+  font-size:.82rem;font-weight:700;letter-spacing:.02em;
+  transition:background .2s,box-shadow .2s,transform .15s;
+  white-space:nowrap;
 }
-.btn-nav:hover{background:var(--gold2);transform:scale(1.02)}
+.btn-nav:hover{background:var(--gold2);box-shadow:0 4px 18px rgba(201,169,110,.35);transform:translateY(-1px)}
 
 /* ── HERO ── */
 .hero{
@@ -101,25 +102,33 @@ nav{
   font-size:clamp(1rem,2vw,1.25rem);color:var(--muted);
   max-width:540px;margin:0 auto 2.5rem;font-weight:400;
 }
-.hero-ctas{display:flex;align-items:center;gap:1rem;justify-content:center;flex-wrap:wrap}
+.hero-ctas{display:flex;align-items:center;gap:.85rem;justify-content:center;flex-wrap:wrap}
 .btn-primary{
   background:var(--gold);color:#000;
-  padding:15px 36px;border-radius:10px;
-  font-size:1rem;font-weight:700;
+  padding:14px 34px;border-radius:50px;
+  font-size:.95rem;font-weight:700;letter-spacing:.02em;
   transition:background .2s,transform .15s,box-shadow .2s;
-  box-shadow:0 0 0 0 rgba(201,169,110,0);
+  box-shadow:0 4px 20px rgba(201,169,110,.25);
 }
 .btn-primary:hover{
-  background:var(--gold2);transform:translateY(-1px);
-  box-shadow:0 8px 32px rgba(201,169,110,0.3);
+  background:var(--gold2);transform:translateY(-2px);
+  box-shadow:0 10px 36px rgba(201,169,110,.4);
 }
 .btn-ghost{
-  color:var(--text);padding:15px 28px;
-  border-radius:10px;font-size:1rem;font-weight:500;
-  border:1px solid var(--border);
-  transition:border-color .2s,background .2s;
+  color:var(--text);padding:14px 28px;
+  border-radius:50px;font-size:.95rem;font-weight:600;
+  border:1.5px solid rgba(255,255,255,.15);
+  transition:border-color .2s,background .2s,transform .15s;
 }
-.btn-ghost:hover{border-color:rgba(255,255,255,0.2);background:var(--surface)}
+.btn-ghost:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.05);transform:translateY(-1px)}
+.btn-secondary{
+  color:var(--gold);padding:14px 28px;
+  border-radius:50px;font-size:.95rem;font-weight:600;
+  border:1.5px solid rgba(201,169,110,.35);
+  transition:border-color .2s,background .2s,transform .15s;
+  white-space:nowrap;
+}
+.btn-secondary:hover{border-color:var(--gold);background:rgba(201,169,110,.07);transform:translateY(-1px)}
 
 /* Mockup hero */
 .hero-mockup{
@@ -263,16 +272,17 @@ section{padding:clamp(4rem,8vw,7rem) clamp(1.5rem,5vw,5rem)}
 .plan-period{font-size:.8rem;color:var(--muted2);margin:.5rem 0 1.5rem}
 .plan-economy{font-size:.8rem;color:#4caf82;font-weight:500;margin-bottom:1.5rem;min-height:1.2em}
 .btn-plan{
-  width:100%;padding:11px;border-radius:8px;
-  font-size:.9rem;font-weight:600;cursor:pointer;
-  border:1px solid var(--border);background:transparent;color:var(--text);
-  transition:background .2s,border-color .2s,transform .15s;
+  width:100%;padding:13px;border-radius:50px;
+  font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.02em;
+  border:1.5px solid rgba(255,255,255,.15);background:transparent;color:var(--text);
+  transition:background .2s,border-color .2s,transform .15s,box-shadow .2s;
 }
-.btn-plan:hover{background:var(--surface);border-color:rgba(255,255,255,0.2)}
+.btn-plan:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
 .plan.popular .btn-plan{
   background:var(--gold);color:#000;border-color:var(--gold);
+  box-shadow:0 4px 18px rgba(201,169,110,.3);
 }
-.plan.popular .btn-plan:hover{background:var(--gold2)}
+.plan.popular .btn-plan:hover{background:var(--gold2);box-shadow:0 8px 28px rgba(201,169,110,.45);transform:translateY(-2px)}
 
 /* ── CTA FINAL ── */
 .cta-section{
@@ -356,9 +366,7 @@ footer{
   <div class="hero-ctas">
     <a href="/personalizar" class="btn-primary">Criar minha barbearia</a>
     <a href="#como-funciona" class="btn-ghost">Ver como funciona</a>
-  </div>
-  <div style="margin-top:.9rem;font-size:.82rem;color:var(--muted)">
-    Já tem uma conta? <a href="/repersonalizar" style="color:var(--gold);text-decoration:none;font-weight:600">Personalizar meu site →</a>
+    <a href="/repersonalizar" class="btn-secondary">Já tenho conta</a>
   </div>
 
   <!-- Mockup -->
@@ -525,9 +533,9 @@ footer{
 <section class="cta-section" style="border-top:1px solid var(--border)">
   <h2>Pronto para modernizar<br/>sua barbearia?</h2>
   <p>Junte-se a centenas de barbeiros que já usam o iBarber.</p>
-  <div style="display:flex;align-items:center;gap:1.5rem;justify-content:center;flex-wrap:wrap">
-    <a href="/personalizar" class="btn-primary" style="font-size:1.05rem;padding:17px 44px">Criar minha barbearia grátis</a>
-    <a href="/repersonalizar" style="font-size:.9rem;color:var(--gold);text-decoration:none;font-weight:600;opacity:.85">Já tenho conta →</a>
+  <div style="display:flex;align-items:center;gap:.85rem;justify-content:center;flex-wrap:wrap">
+    <a href="/personalizar" class="btn-primary">Criar minha barbearia grátis</a>
+    <a href="/repersonalizar" class="btn-secondary">Já tenho conta</a>
   </div>
 </section>
 
