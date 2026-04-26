@@ -363,6 +363,8 @@ function iniciarPollingPix() {
     } catch(e) {}
   }, 5000);
 }
+document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
+document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 </script>
 </body>
 </html>
