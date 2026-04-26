@@ -1096,7 +1096,7 @@ function onMobScreenChange(id) {
 // ── Navigate to next step ─────────────────────────────────────────────────────
 function irParaPlanos() {
   localStorage.setItem('onb_tema', JSON.stringify({ag: T.ag, gt: T.gt}));
-  window.location.href = '/planos';
+  location.replace('/planos');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────

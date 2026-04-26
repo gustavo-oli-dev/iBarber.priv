@@ -231,7 +231,7 @@ async function submeter() {
     if(d.ok) {
       localStorage.setItem('onb_tenant_id', d.tenant_id);
       localStorage.setItem('onb_slug', d.slug);
-      window.location.href = '/pagamento';
+      location.replace('/pagamento');
     } else {
       showErr('err-geral', d.erro || 'Erro ao criar a conta');
     }

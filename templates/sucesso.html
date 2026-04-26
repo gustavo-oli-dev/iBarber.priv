@@ -69,6 +69,9 @@ document.getElementById('link-site').textContent  = siteUrl;
 document.getElementById('link-admin').href        = painelUrl;
 document.getElementById('link-admin').textContent = painelUrl;
 document.getElementById('btn-painel').href        = painelUrl;
+document.getElementById('btn-painel').onclick = function(e){
+  e.preventDefault(); location.replace(painelUrl);
+};
 
 // Clear onboarding state
 ['onb_tema','onb_plano','onb_tenant_id','onb_slug'].forEach(k => localStorage.removeItem(k));
