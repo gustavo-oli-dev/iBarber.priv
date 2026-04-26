@@ -78,7 +78,7 @@ body{display:flex;flex-direction:column}
 .card-eco{font-size:.72rem;font-weight:600;color:var(--gold);background:rgba(201,169,110,.12);border-radius:6px;padding:4px 8px;display:inline-block}
 
 /* CTA */
-.cta-wrap{margin-top:2.5rem;width:100%;max-width:920px;display:flex;justify-content:flex-end}
+.cta-wrap{margin-top:2.5rem;width:100%;max-width:920px;display:flex;justify-content:space-between;align-items:center}
 .btn-continuar{
   background:var(--gold);color:#000;padding:13px 32px;border-radius:10px;
   font-size:.95rem;font-weight:800;border:none;cursor:pointer;
@@ -107,9 +107,6 @@ body{display:flex;flex-direction:column}
     <div class="step-item"><div class="step-num">3</div> Cadastro</div>
     <div class="step-conn"></div>
     <div class="step-item"><div class="step-num">4</div> Pagamento</div>
-  </div>
-  <div class="topbar-right">
-    <button class="btn-back" onclick="history.back()">Voltar</button>
   </div>
 </header>
 
@@ -189,6 +186,7 @@ body{display:flex;flex-direction:column}
   </div>
 
   <div class="cta-wrap">
+    <button class="btn-back" onclick="history.back()">Voltar</button>
     <button class="btn-continuar" id="btn-continuar" onclick="continuar()" disabled>Continuar</button>
   </div>
 </main>

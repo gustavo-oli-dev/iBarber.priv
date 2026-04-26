@@ -72,11 +72,13 @@ body{display:flex;flex-direction:column}
 .divider{grid-column:1/-1;height:1px;background:var(--border);margin:.25rem 0}
 
 .btn-criar{
-  width:100%;padding:13px;background:var(--gold);color:#000;border:none;
+  flex:1;padding:13px;background:var(--gold);color:#000;border:none;
   border-radius:9px;font-size:.95rem;font-weight:800;cursor:pointer;
-  transition:background .2s,transform .15s;margin-top:1.25rem;
+  transition:background .2s,transform .15s;
   letter-spacing:.02em;
 }
+.btn-row{display:flex;gap:.75rem;margin-top:1.25rem;align-items:center}
+.btn-row .btn-back{padding:13px 20px;border-radius:9px;font-size:.95rem}
 .btn-criar:hover{background:var(--gold2);transform:translateY(-1px)}
 .btn-criar:disabled{opacity:.4;cursor:default;transform:none}
 
@@ -102,9 +104,6 @@ body{display:flex;flex-direction:column}
     <div class="step-item active"><div class="step-num">3</div> Cadastro</div>
     <div class="step-conn"></div>
     <div class="step-item"><div class="step-num">4</div> Pagamento</div>
-  </div>
-  <div class="topbar-right">
-    <button class="btn-back" onclick="history.back()">Voltar</button>
   </div>
 </header>
 
@@ -156,7 +155,10 @@ body{display:flex;flex-direction:column}
 
     </div>
 
-    <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta e pagar</button>
+    <div class="btn-row">
+      <button class="btn-back" onclick="history.back()">Voltar</button>
+      <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta e pagar</button>
+    </div>
     <div class="err-geral" id="err-geral"></div>
   </div>
 </main>
