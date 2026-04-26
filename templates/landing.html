@@ -2,11 +2,22 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>iBarber — Gestão completa para barbearias</title>
+<meta name="description" content="Site de agendamento, app de gestão e controle financeiro para barbearias. Configure em 3 minutos. PIX, cartão e muito mais."/>
+<meta name="keywords" content="barbearia, agendamento online, app barbearia, gestão barbearia, iBarber"/>
+<meta property="og:title" content="iBarber — Gestão completa para barbearias"/>
+<meta property="og:description" content="Site de agendamento, app de gestão e controle financeiro para barbearias. Configure em 3 minutos."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://ibarber.shop"/>
+<meta property="og:image" content="https://ibarber.shop/static/images/icon-192.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="iBarber — Gestão completa para barbearias"/>
+<meta name="twitter:description" content="Site de agendamento, app de gestão e controle financeiro para barbearias."/>
+<link rel="canonical" href="https://ibarber.shop"/>
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>iBarber — Gestão completa para barbearias</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -313,6 +324,15 @@ footer{
 .hero h1{animation-delay:.1s}
 .hero-sub{animation-delay:.2s}
 .hero-ctas{animation-delay:.3s}
+
+/* Scroll reveal */
+.reveal{opacity:0;transform:translateY(32px);transition:opacity .65s ease,transform .65s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-delay-1{transition-delay:.1s}
+.reveal-delay-2{transition-delay:.2s}
+.reveal-delay-3{transition-delay:.3s}
+.reveal-delay-4{transition-delay:.4s}
+.reveal-delay-5{transition-delay:.5s}
 </style>
 </head>
 <body>
@@ -372,12 +392,12 @@ footer{
 
 <!-- STATS -->
 <div class="stats">
-  <div class="stat">
-    <div class="stat-num"><span>3</span>min</div>
+  <div class="stat reveal">
+    <div class="stat-num"><span data-count="3">0</span>min</div>
     <div class="stat-label">para configurar</div>
   </div>
-  <div class="stat">
-    <div class="stat-num">24<span>/7</span></div>
+  <div class="stat reveal reveal-delay-1">
+    <div class="stat-num"><span data-count="24" data-suffix="/7">0</span></div>
     <div class="stat-label">disponível online</div>
   </div>
 </div>
@@ -391,32 +411,32 @@ footer{
       <p class="section-sub">Desenvolvido especificamente para barbearias brasileiras. Sem complicação, sem nada que você não vai usar.</p>
     </div>
     <div class="features-grid">
-      <div class="feature-item">
+      <div class="feature-item reveal">
         <div class="feature-icon">🌐</div>
         <h3>Site de agendamento</h3>
         <p>Seus clientes agendam pelo celular, 24h por dia. Link personalizado com a identidade da sua barbearia.</p>
       </div>
-      <div class="feature-item">
+      <div class="feature-item reveal reveal-delay-1">
         <div class="feature-icon">📱</div>
         <h3>App de gestão mobile</h3>
         <p>Gerencie tudo pelo celular. Agendamentos, clientes, preços e equipe na palma da mão.</p>
       </div>
-      <div class="feature-item">
+      <div class="feature-item reveal reveal-delay-2">
         <div class="feature-icon">👨‍💼</div>
         <h3>Gestão de funcionários</h3>
         <p>Cadastre barbeiros com permissões individuais. Cada um acessa só o que precisa.</p>
       </div>
-      <div class="feature-item">
+      <div class="feature-item reveal reveal-delay-3">
         <div class="feature-icon">💳</div>
         <h3>PIX e cartão integrados</h3>
         <p>Receba pagamentos no ato do agendamento via PIX ou cartão. Tudo pelo Mercado Pago.</p>
       </div>
-      <div class="feature-item">
+      <div class="feature-item reveal reveal-delay-4">
         <div class="feature-icon">📊</div>
         <h3>Relatórios e gráficos</h3>
         <p>Acompanhe o crescimento da sua barbearia com gráficos de receita, serviços e agendamentos.</p>
       </div>
-      <div class="feature-item">
+      <div class="feature-item reveal reveal-delay-5">
         <div class="feature-icon">🎨</div>
         <h3>Visual personalizável</h3>
         <p>Escolha cores, fontes e estilo. O site e o app combinam com a identidade da sua marca.</p>
@@ -433,21 +453,21 @@ footer{
       <div class="section-title">Pronto em 3 minutos</div>
     </div>
     <div class="steps">
-      <div class="step">
+      <div class="step reveal">
         <div class="step-num">1</div>
         <div class="step-body">
           <h3>Personalize o visual</h3>
           <p>Escolha as cores, fontes e o estilo do seu site e app. Veja tudo em tempo real antes de confirmar.</p>
         </div>
       </div>
-      <div class="step">
+      <div class="step reveal reveal-delay-2">
         <div class="step-num">2</div>
         <div class="step-body">
           <h3>Escolha seu plano</h3>
           <p>Selecione o plano que faz mais sentido para o tamanho da sua barbearia. Cancele quando quiser.</p>
         </div>
       </div>
-      <div class="step">
+      <div class="step reveal reveal-delay-4">
         <div class="step-num">3</div>
         <div class="step-body">
           <h3>Receba seus links e app</h3>
@@ -522,6 +542,37 @@ function escolherPlano(plano) {
   localStorage.setItem('plano_selecionado', plano);
   window.location.href = '/personalizar';
 }
+
+// ── Scroll reveal ──────────────────────────────────────────────────────────────
+const revealObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+}, {threshold: 0.12});
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+// ── Contador animado ───────────────────────────────────────────────────────────
+function animateCount(el) {
+  const target = parseInt(el.dataset.count);
+  const suffix = el.dataset.suffix || '';
+  const duration = 1400;
+  const start = performance.now();
+  function tick(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.floor(ease * target) + suffix;
+    if(progress < 1) requestAnimationFrame(tick);
+    else el.textContent = target + suffix;
+  }
+  requestAnimationFrame(tick);
+}
+const countObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if(e.isIntersecting) {
+      e.target.querySelectorAll('[data-count]').forEach(animateCount);
+      countObserver.unobserve(e.target);
+    }
+  });
+}, {threshold: 0.5});
+document.querySelectorAll('.stats').forEach(el => countObserver.observe(el));
 </script>
 </body>
 </html>
