@@ -114,6 +114,7 @@ class User(db.Model):
     receber_lembretes  = db.Column(db.Boolean,     default=True)
     guest              = db.Column(db.Boolean,     default=False)
     criado_em          = db.Column(db.DateTime,    default=datetime.utcnow)
+    tenant_id          = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     pedidos        = db.relationship('Pedido', backref='usuario', lazy=True,
                                      cascade='all, delete-orphan')
 
@@ -123,6 +124,7 @@ class Pedido(db.Model):
     total     = db.Column(db.Float,   default=0)
     status    = db.Column(db.String(20), default='pendente')   # pendente | pago | cancelado
     criado_em = db.Column(db.DateTime,  default=datetime.utcnow)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     itens     = db.relationship('PedidoItem', backref='pedido', lazy=True,
                                 cascade='all, delete-orphan')
 
@@ -201,6 +203,7 @@ class Agendamento(db.Model):
     forma_pagamento = db.Column(db.String(20), nullable=True)  # dinheiro | pix | cartao
     funcionario_id  = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
     criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     usuario         = db.relationship('User', lazy='select')
     funcionario     = db.relationship('Funcionario', lazy='select', foreign_keys=[funcionario_id])
 
@@ -312,6 +315,20 @@ with app.app_context():
     if 'pedido_id' not in _entrada_cols:
         with db.engine.connect() as _conn:
             _conn.execute(db.text('ALTER TABLE entrada_monetaria ADD COLUMN pedido_id INTEGER REFERENCES pedido(id)'))
+            _conn.commit()
+    if 'tenant_id' not in _user_cols:
+        with db.engine.connect() as _conn:
+            _conn.execute(db.text('ALTER TABLE user ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
+            _conn.commit()
+    _pedido_cols = {c['name'] for c in _inspector.get_columns('pedido')} if 'pedido' in _existing else set()
+    if 'tenant_id' not in _pedido_cols:
+        with db.engine.connect() as _conn:
+            _conn.execute(db.text('ALTER TABLE pedido ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
+            _conn.commit()
+    _ag_cols = {c['name'] for c in _inspector.get_columns('agendamento')} if 'agendamento' in _existing else set()
+    if 'tenant_id' not in _ag_cols:
+        with db.engine.connect() as _conn:
+            _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
             _conn.commit()
 
 
@@ -462,7 +479,8 @@ def register():
         hashed = generate_password_hash(password)
         user = User(name=name, email=email, password=hashed,
                     contact=contact or None, observation=observation or None,
-                    receber_lembretes=receber_lembretes)
+                    receber_lembretes=receber_lembretes,
+                    tenant_id=session.get('path_tenant_id'))
         db.session.add(user)
         db.session.commit()
         session['user_id'] = user.id
@@ -509,6 +527,7 @@ def login_rapido():
         observation=alergia or None,
         receber_lembretes=False,
         guest=True,
+        tenant_id=session.get('path_tenant_id'),
     )
     db.session.add(user)
     db.session.commit()
@@ -903,7 +922,8 @@ def confirmar_pedido():
     itens = data.get('itens', [])
     total = _sf(data.get('total', 0))
 
-    pedido = Pedido(user_id=session['user_id'], total=total)
+    pedido = Pedido(user_id=session['user_id'], total=total,
+                    tenant_id=session.get('path_tenant_id') or session.get('tenant_id'))
     db.session.add(pedido)
     db.session.flush()
     for item in itens:
@@ -965,7 +985,8 @@ def agendar():
             funcionario_id = random.choice(livres)['id']
 
     ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
-                     data_hora=data_hora, funcionario_id=funcionario_id)
+                     data_hora=data_hora, funcionario_id=funcionario_id,
+                     tenant_id=session.get('path_tenant_id') or session.get('tenant_id'))
     db.session.add(ag)
     db.session.commit()
 
@@ -2693,7 +2714,7 @@ def gestao_agendamentos():
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
     token = _gerar_token(tenant.id, 0)
-    clientes = User.query.order_by(User.name).all()
+    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
     clientes_json = json.dumps([
         {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
         for c in clientes
@@ -2718,6 +2739,7 @@ def gestao_pedidos():
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     pedidos = (Pedido.query
+               .filter_by(tenant_id=tenant.id)
                .options(joinedload(Pedido.usuario), joinedload(Pedido.itens))
                .order_by(Pedido.criado_em.desc()).limit(500).all())
     pedidos_json = json.dumps([{
@@ -2734,7 +2756,7 @@ def gestao_clientes():
     if redir: return redir
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
-    clientes = User.query.order_by(User.name).all()
+    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
     clientes_json = json.dumps([{
         'id': c.id, 'name': c.name, 'email': c.email,
         'contact': c.contact or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
