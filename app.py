@@ -426,7 +426,7 @@ def manifest():
 
 @app.route('/')
 def index():
-    return redirect(url_for('personalizar'))
+    return redirect(url_for('landing'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
