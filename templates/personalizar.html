@@ -535,21 +535,17 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
           ✏️ Única
         </button>
       </div>
-      <!-- Linha 2: Preview + Screens -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;">
+      <!-- Linha 2: Preview + Screens (só quando Única) -->
+      <div id="mob-linha2" style="display:grid;grid-template-columns:1fr;gap:.5rem;">
         <button onclick="abrirPreviewMobile()"
           style="padding:11px;background:var(--surface);border:1.5px solid var(--gold);color:var(--gold);border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;">
           👁 Preview
         </button>
-        <div id="mob-screen-select" style="display:none;">
-          <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
-            style="width:100%;height:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:11px 8px;font-size:.82rem;cursor:pointer;font-weight:700;">
-          </select>
-        </div>
-        <button id="mob-screen-placeholder" onclick="setEditMode('single')"
-          style="padding:11px;background:var(--surface);border:1.5px solid var(--border);color:var(--muted);border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;">
-          🖥 Telas
-        </button>
+      </div>
+      <div id="mob-screen-select" style="display:none;">
+        <select id="mob-screen-sel" onchange="onMobScreenChange(this.value)"
+          style="width:100%;background:var(--surface);color:var(--text);border:1.5px solid var(--border);border-radius:8px;padding:11px 8px;font-size:.82rem;cursor:pointer;font-weight:700;">
+        </select>
       </div>
     </div>
   </aside>
@@ -999,9 +995,7 @@ function setEditMode(mode) {
     ms.style.color        = mode==='single' ? '#000' : 'var(--text)';
     ms.style.borderColor  = mode==='single' ? 'var(--gold)' : 'var(--border)';
     const mss = document.getElementById('mob-screen-select');
-    const msp = document.getElementById('mob-screen-placeholder');
     if(mss) mss.style.display = mode==='single' ? 'block' : 'none';
-    if(msp) msp.style.display = mode==='single' ? 'none' : 'block';
   }
   syncPickers();
 }
