@@ -531,20 +531,34 @@ body { overflow: hidden; }
       const funcionarios = data.funcionarios || [];
       document.getElementById('calLoadingBarbeiro').style.display = 'none';
       if (funcionarios.length === 0) {
-        // Sem barbeiros — confirmar direto e ir para pagamento
-        await _confirmarSemBarbeiro();
+        // Sem barbeiros — abre modal de confirmação com "sem preferência" pré-selecionado
+        calBarbeiroSel = null;
+        _abrirModalConfirmacao(hora);
       } else {
         _abrirModalBarbeiro(funcionarios, hora);
       }
     } catch(_) {
       document.getElementById('calLoadingBarbeiro').style.display = 'none';
-      await _confirmarSemBarbeiro();
+      calBarbeiroSel = null;
+      _abrirModalConfirmacao(hora);
     }
   }
 
   async function _confirmarSemBarbeiro() {
     calBarbeiroSel = null;
     await confirmarAgendamento();
+  }
+
+  function _abrirModalConfirmacao(hora) {
+    const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const d = new Date(calDiaSel);
+    document.getElementById('barbeiroSubtitulo').textContent =
+      `${DIAS_PT[d.getDay()]}, ${d.getDate()} de ${meses[d.getMonth()]} às ${hora}`;
+    document.getElementById('barbeiroGrid').innerHTML = '';
+    document.getElementById('barbeiroConfirmarBtn').style.display = 'block';
+    document.getElementById('calModal').style.display = 'none';
+    document.getElementById('barbeiroOverlay').style.display = 'block';
+    document.getElementById('barbeiroModal').style.display   = 'flex';
   }
 
   function _abrirModalBarbeiro(funcionarios, hora) {
