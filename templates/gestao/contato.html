@@ -7,6 +7,10 @@
   <div class="g-section" style="margin-bottom:1.5rem;">
     <div class="g-section-title">Informações de contato</div>
     <div class="g-form-group" style="margin-bottom:1rem;">
+      <label class="g-label">Telefone de contato</label>
+      <input class="g-input" name="contato" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.contato or '' }}" />
+    </div>
+    <div class="g-form-group" style="margin-bottom:1rem;">
       <label class="g-label">WhatsApp</label>
       <input class="g-input" name="whatsapp" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.whatsapp or '' }}" />
     </div>

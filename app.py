@@ -14,6 +14,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 load_dotenv()
 
+APP_VERSION = '1.0.0'
+
 if not os.environ.get('SECRET_KEY'):
     raise RuntimeError('SECRET_KEY não definida no ambiente')
 
@@ -21,6 +23,7 @@ app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 app.jinja_env.cache = {}
+app.jinja_env.globals['APP_VERSION'] = APP_VERSION
 origens = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://localhost:8888,http://localhost:9999,http://localhost:7777').split(',')
 CORS(app, origins=origens, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')

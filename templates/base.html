@@ -101,6 +101,15 @@
       if (t.texto)       r.setProperty('--placeholder',  t.texto + '55');
       if (t.fonteTitulo) r.setProperty('--font-serif', "'" + t.fonteTitulo + "', Georgia, serif");
       if (t.fonteCorpo)  r.setProperty('--font-sans',  "'" + t.fonteCorpo  + "', system-ui, sans-serif");
+      [t.fonteTitulo, t.fonteCorpo].filter(Boolean).forEach(function(font) {
+        var id = 'gf-' + font.replace(/\s+/g, '-');
+        if (!document.getElementById(id)) {
+          var l = document.createElement('link');
+          l.id = id; l.rel = 'stylesheet';
+          l.href = 'https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font) + ':wght@400;600;700&display=swap';
+          document.head.appendChild(l);
+        }
+      });
       if (t.cardRadius)  r.setProperty('--radius',       t.cardRadius + 'px');
       if (t.btnEstilo) {
         const br = t.btnEstilo === 'pilula' ? '999px' : t.btnEstilo === 'angular' ? '0px' : (t.cardRadius || 6) + 'px';
