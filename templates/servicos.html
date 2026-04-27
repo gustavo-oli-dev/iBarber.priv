@@ -150,37 +150,22 @@ body { overflow: hidden; }
   padding-top: .35rem;
   border-top: 1px solid #2a2a2a;
 }
-.hist-fab {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 1.5rem;
-  width: 52px;
-  height: 52px;
-  background: #1a1a1a;
-  border: 1.5px solid #C9A96E;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 200;
-  box-shadow: 0 4px 14px rgba(0,0,0,.5);
-  transition: transform .2s, box-shadow .2s;
-  color: #C9A96E;
-}
-.hist-fab:hover { transform: scale(1.08); box-shadow: 0 6px 18px rgba(0,0,0,.6); }
 </style>
 <section class="servicos-section">
   {% if agendamento_info %}
   <div style="max-width:480px;width:90%;margin:0 auto;">
-    <div style="border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem;background:rgba(201,169,110,0.06);">
+    <div style="border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem 1rem;background:rgba(201,169,110,0.06);">
       <p style="color:#C9A96E;font-size:1.15rem;font-weight:600;text-align:center;margin:0;line-height:1.5;">Seu agendamento é {{ agendamento_info.dia }}, às {{ agendamento_info.hora }}</p>
       {% if agendamento_info.forma_pagamento %}
       <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.4rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
       {% endif %}
-    </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:0.5rem;">
-      <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.35rem 0.9rem;font-size:0.8rem;cursor:pointer;">Cancelamento</button>
+      <div style="border-top:1px solid rgba(201,169,110,0.2);margin-top:.85rem;padding-top:.7rem;display:flex;justify-content:space-between;align-items:center;">
+        <button onclick="abrirHistorico()" style="background:none;border:none;color:#C9A96E;font-size:0.78rem;cursor:pointer;padding:0;display:flex;align-items:center;gap:0.3rem;opacity:0.8;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Ver histórico
+        </button>
+        <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Cancelar</button>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -216,11 +201,6 @@ body { overflow: hidden; }
   </button>
   <a href="{{ url_for('index') }}" class="btn btn-outline" id="btnVoltarInicio">Voltar</a>
 </section>
-<button class="hist-fab" id="histFab" onclick="abrirHistorico()" title="Histórico de pedidos">
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-</button>
 <button class="carrinho-fab" id="carrinhoFab" onclick="abrirCarrinho()" style="display:none;">
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
@@ -988,7 +968,6 @@ body { overflow: hidden; }
     document.getElementById('carrinhoOverlay').classList.add('aberto');
     document.body.style.overflow = 'hidden';
     document.querySelectorAll('.fab').forEach(f => f.style.display = 'none');
-    document.getElementById('histFab').style.display = 'none';
   }
   function fecharCarrinho() {
     const p = document.getElementById('carrinhoPainel');
@@ -996,7 +975,6 @@ body { overflow: hidden; }
     document.getElementById('carrinhoOverlay').classList.remove('aberto');
     document.body.style.overflow = '';
     document.querySelectorAll('.fab').forEach(f => f.style.display = '');
-    document.getElementById('histFab').style.display = 'flex';
     setTimeout(() => { p.style.display = 'none'; }, 300);
   }
   // ── Lightbox ─────────────────────────────────────────────
