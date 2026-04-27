@@ -409,7 +409,7 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     id=0 representa o gestor (proprietário) quando habilitado."""
     if tenant_id is None:
         tenant_id = _api_tid()
-    todos = Funcionario.query.filter_by(ativo=True, tenant_id=tenant_id).order_by(Funcionario.nome).all()
+    todos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
     ausentes_ids = {
         a.funcionario_id
         for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
@@ -1426,7 +1426,7 @@ def api_horarios_disponiveis():
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
     # horário especial para esta data sobrepõe o semanal
-    he = HorarioEspecial.query.filter_by(data=data_str).first()
+    he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
     if he:
         todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
     else:
@@ -1450,7 +1450,8 @@ def api_horarios_disponiveis():
     agendados = (Agendamento.query
                  .filter(Agendamento.data_hora >= inicio,
                          Agendamento.data_hora < fim,
-                         Agendamento.status == 'ativo')
+                         Agendamento.status == 'ativo',
+                         Agendamento.tenant_id == _tid)
                  .all())
     # Capacidade por slot = número de funcionários ativos nessa data (mínimo 1)
     ativos = _funcionarios_ativos_para_data(data_str)
