@@ -1232,14 +1232,14 @@ def inject_tenant():
             'heroUrl':     args.get('heroUrl',     ''),
         }
 
-    # FAB visibility — aparece por padrão se campo preenchido; respeita toggle se configurado via app
+    # FAB visibility — mostra se campo preenchido; só respeita toggle 'mostrar' se explicitamente definido
     fab_wpp_mostrar = False
     fab_maps_mostrar = False
     if t and not session.get('is_preview'):
         try:
             if t.fab_wpp:
                 wpp_cfg = json.loads(t.fab_wpp)
-                fab_wpp_mostrar = bool(wpp_cfg.get('mostrar', False))
+                fab_wpp_mostrar = bool(wpp_cfg['mostrar']) if 'mostrar' in wpp_cfg else bool(t.whatsapp)
             else:
                 fab_wpp_mostrar = bool(t.whatsapp)
         except Exception:
@@ -1247,7 +1247,7 @@ def inject_tenant():
         try:
             if t.fab_maps:
                 maps_cfg = json.loads(t.fab_maps)
-                fab_maps_mostrar = bool(maps_cfg.get('mostrar', False))
+                fab_maps_mostrar = bool(maps_cfg['mostrar']) if 'mostrar' in maps_cfg else bool(t.maps_url)
             else:
                 fab_maps_mostrar = bool(t.maps_url)
         except Exception:
@@ -1276,7 +1276,7 @@ def api_tenant_config_get():
     fab_maps_default = {'mostrar': False, 'texto': 'Estamos aqui!',   'cor': '#4285F4', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 80}
     fab_wpp  = json.loads(tenant.fab_wpp)  if tenant.fab_wpp  else fab_wpp_default
     fab_maps = json.loads(tenant.fab_maps) if tenant.fab_maps else fab_maps_default
-    return jsonify({'nome': tenant.nome, 'whatsapp': tenant.whatsapp or '', 'maps_url': tenant.maps_url or '',
+    return jsonify({'nome': tenant.nome, 'email': tenant.email, 'whatsapp': tenant.whatsapp or '', 'maps_url': tenant.maps_url or '',
                     'fab_wpp': fab_wpp, 'fab_maps': fab_maps})
 
 @app.route('/api/tenant/config', methods=['PUT'])
@@ -1694,6 +1694,29 @@ def api_credenciais():
         result[k] = s.value if s else ''
     return jsonify(result)
 
+@app.route('/api/credenciais/conta', methods=['POST'])
+def api_credenciais_conta():
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tenant = db.session.get(Tenant, tid)
+    if not tenant: return jsonify({'erro': 'não encontrado'}), 404
+    data = request.get_json(silent=True) or {}
+    senha_atual = data.get('senha_atual', '').strip()
+    email_novo  = data.get('email', '').strip().lower()
+    senha_nova  = data.get('senha', '').strip()
+    if not check_password_hash(tenant.password, senha_atual):
+        return jsonify({'erro': 'Senha atual incorreta'}), 400
+    if email_novo and email_novo != tenant.email:
+        if Tenant.query.filter(Tenant.email == email_novo, Tenant.id != tid).first():
+            return jsonify({'erro': 'E-mail já em uso'}), 400
+        tenant.email = email_novo
+    if senha_nova:
+        if len(senha_nova) < 6:
+            return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
+        tenant.password = generate_password_hash(senha_nova)
+    db.session.commit()
+    return jsonify({'ok': True})
+
 @app.route('/api/status-pagamentos', methods=['GET'])
 def api_status_pagamentos():
     """Retorna quais métodos de pagamento estão configurados (sem expor credenciais)."""
@@ -2016,6 +2039,91 @@ def api_stats_categorias():
     resultado = sorted([{'categoria': k, 'total': v} for k, v in contagem.items()],
                        key=lambda x: x['total'], reverse=True)
     return jsonify(resultado)
+
+@app.route('/api/export', methods=['GET'])
+def api_export():
+    # Accept token via _token query param (for <a> download links) or Authorization header
+    _qt = request.args.get('_token', '')
+    if _qt:
+        tid = _extrair_tenant_token(_qt)[0]
+    else:
+        tid = verificar_token(request)
+    if not tid:
+        return jsonify({'erro': 'token inválido'}), 401
+    from flask import Response
+    import csv, io
+    from calendar import monthrange
+    tipo   = request.args.get('tipo', 'agendamentos')
+    mes    = request.args.get('mes', '')
+    inicio = request.args.get('inicio', '')
+    fim    = request.args.get('fim', '')
+
+    d_ini = None; d_fim = None
+    if mes:
+        y, m = map(int, mes.split('-'))
+        d_ini = datetime(y, m, 1)
+        d_fim = datetime(y, m, monthrange(y, m)[1], 23, 59, 59)
+    elif inicio:
+        try: d_ini = datetime.strptime(inicio, '%Y-%m-%d')
+        except: pass
+    if fim and not mes:
+        try: d_fim = datetime.strptime(fim + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+        except: pass
+
+    out = io.StringIO()
+    w   = csv.writer(out)
+    STATUS_MAP = {'ativo':'Ativo','cancelado':'Cancelado','concluido':'Concluído','nao_compareceu':'Não compareceu','pendente':'Pendente','pago':'Pago'}
+    FORMA_MAP  = {'pix':'PIX','cartao_credito':'Cartão Crédito','cartao_debito':'Cartão Débito','dinheiro':'Dinheiro','pagar_no_local':'No local'}
+
+    if tipo == 'agendamentos':
+        w.writerow(['Data','Hora','Cliente','Contato','Serviços','Barbeiro','Status','Forma Pagamento'])
+        q = Agendamento.query
+        if tid: q = q.filter(Agendamento.tenant_id == tid)
+        if d_ini: q = q.filter(Agendamento.data_hora >= d_ini)
+        if d_fim: q = q.filter(Agendamento.data_hora <= d_fim)
+        for ag in q.order_by(Agendamento.data_hora.desc()).all():
+            user   = db.session.get(User, ag.user_id)
+            pedido = db.session.get(Pedido, ag.pedido_id) if ag.pedido_id else None
+            servs  = ', '.join(i.nome for i in pedido.itens) if pedido else '—'
+            barb   = ag.funcionario.nome if ag.funcionario else 'Proprietário'
+            w.writerow([ag.data_hora.strftime('%d/%m/%Y'), ag.data_hora.strftime('%H:%M'),
+                        user.name if user else '—', user.contact if user else '—',
+                        servs, barb, STATUS_MAP.get(ag.status, ag.status),
+                        FORMA_MAP.get(ag.forma_pagamento or '', ag.forma_pagamento or '—')])
+
+    elif tipo == 'financeiro':
+        w.writerow(['Data','Descrição','Valor (R$)','Forma Pagamento'])
+        q = EntradaMonetaria.query
+        if d_ini: q = q.filter(EntradaMonetaria.criado_em >= d_ini)
+        if d_fim: q = q.filter(EntradaMonetaria.criado_em <= d_fim)
+        for e in q.order_by(EntradaMonetaria.criado_em.desc()).all():
+            w.writerow([e.criado_em.strftime('%d/%m/%Y'), e.descricao,
+                        f'{e.valor:.2f}'.replace('.',','), FORMA_MAP.get(e.forma or '', e.forma or '—')])
+
+    elif tipo == 'clientes':
+        w.writerow(['Nome','Email','Contato','Cadastrado em'])
+        q = User.query
+        if tid: q = q.filter(User.tenant_id == tid)
+        for c in q.order_by(User.name).all():
+            w.writerow([c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
+
+    elif tipo == 'servicos':
+        w.writerow(['Data','Cliente','Serviço','Categoria','Preço (R$)','Status'])
+        q = Pedido.query
+        if tid: q = q.filter(Pedido.tenant_id == tid)
+        if d_ini: q = q.filter(Pedido.criado_em >= d_ini)
+        if d_fim: q = q.filter(Pedido.criado_em <= d_fim)
+        for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).all():
+            for item in p.itens:
+                w.writerow([p.criado_em.strftime('%d/%m/%Y'),
+                            p.usuario.name if p.usuario else '—',
+                            item.nome, item.categoria or '—',
+                            f'{item.preco:.2f}'.replace('.',','),
+                            STATUS_MAP.get(p.status, p.status)])
+
+    nome = f'ibarber_{tipo}_{mes or inicio or "todos"}.csv'
+    return Response('﻿' + out.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{nome}"'})
 
 @app.route('/api/agendamentos', methods=['GET', 'POST'])
 def api_agendamentos():
@@ -2913,10 +3021,26 @@ def gestao_contato():
         tenant.whatsapp = request.form.get('whatsapp', '').strip() or None
         tenant.maps_url = request.form.get('maps_url', '').strip() or None
         tenant.contato  = request.form.get('contato', '').strip() or None
+        # Texto dos botões FAB
+        wpp_texto  = request.form.get('wpp_texto', '').strip()
+        maps_texto = request.form.get('maps_texto', '').strip()
+        try: wpp_cfg  = json.loads(tenant.fab_wpp  or '{}')
+        except: wpp_cfg = {}
+        try: maps_cfg = json.loads(tenant.fab_maps or '{}')
+        except: maps_cfg = {}
+        if wpp_texto:  wpp_cfg['texto']  = wpp_texto
+        if maps_texto: maps_cfg['texto'] = maps_texto
+        if wpp_texto or wpp_cfg:  tenant.fab_wpp  = json.dumps(wpp_cfg)
+        if maps_texto or maps_cfg: tenant.fab_maps = json.dumps(maps_cfg)
         db.session.commit()
         flash('Contato atualizado.', 'success')
         return redirect(url_for('gestao_contato'))
-    return render_template('gestao/contato.html', active='contato', tenant=tenant)
+    try: wpp_texto  = json.loads(tenant.fab_wpp  or '{}').get('texto', '')
+    except: wpp_texto = ''
+    try: maps_texto = json.loads(tenant.fab_maps or '{}').get('texto', '')
+    except: maps_texto = ''
+    return render_template('gestao/contato.html', active='contato', tenant=tenant,
+                           wpp_texto=wpp_texto, maps_texto=maps_texto)
 
 @app.route('/gestao/credenciais', methods=['GET', 'POST'])
 def gestao_credenciais():

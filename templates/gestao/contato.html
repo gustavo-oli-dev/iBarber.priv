@@ -4,15 +4,33 @@
 <h1 class="g-page-title">Contato</h1>
 
 <form method="POST" action="{{ url_for('gestao_contato') }}" style="max-width:520px;">
-  <div class="g-section">
+  <div class="g-section" style="margin-bottom:1.5rem;">
     <div class="g-section-title">Informações de contato</div>
     <div class="g-form-group" style="margin-bottom:1rem;">
       <label class="g-label">WhatsApp</label>
       <input class="g-input" name="whatsapp" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.whatsapp or '' }}" />
     </div>
-    <div class="g-form-group" style="margin-bottom:1rem;">
+    <div class="g-form-group">
       <label class="g-label">Link do Google Maps</label>
       <input class="g-input" name="maps_url" type="url" placeholder="https://maps.google.com/..." value="{{ tenant.maps_url or '' }}" />
+    </div>
+  </div>
+
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div class="g-section-title">Botão WhatsApp (site)</div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Texto exibido no botão flutuante do WhatsApp no site de agendamento.</p>
+    <div class="g-form-group">
+      <label class="g-label">Nome do botão</label>
+      <input class="g-input" name="wpp_texto" placeholder="Ex: Nos ache, Fale conosco, Chame no Zap…" value="{{ wpp_texto or '' }}" />
+    </div>
+  </div>
+
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div class="g-section-title">Botão Localização (site)</div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Texto exibido no botão flutuante do Maps no site de agendamento.</p>
+    <div class="g-form-group">
+      <label class="g-label">Nome do botão</label>
+      <input class="g-input" name="maps_texto" placeholder="Ex: Como chegar, Estamos aqui, Ver no mapa…" value="{{ maps_texto or '' }}" />
     </div>
   </div>
 

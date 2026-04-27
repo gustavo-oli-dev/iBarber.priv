@@ -44,7 +44,64 @@ canvas.gr    { display: block; }
 {% endblock %}
 
 {% block content %}
-<h1 class="g-page-title">Gráficos</h1>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem;">
+  <h1 class="g-page-title" style="margin:0;">Gráficos</h1>
+  <button class="g-btn g-btn-outline" onclick="abrirExport()" style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Exportar planilha
+  </button>
+</div>
+
+<!-- Modal Exportar -->
+<div id="modal-export" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:1.5rem;width:100%;max-width:420px;">
+    <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:1.25rem;">Exportar planilha CSV</div>
+
+    <!-- Tipo -->
+    <div style="margin-bottom:1rem;">
+      <div style="font-size:.75rem;color:var(--text-muted);font-weight:600;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em;">O que exportar</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
+        <label class="exp-tipo-btn" data-val="agendamentos">📅 Agendamentos</label>
+        <label class="exp-tipo-btn" data-val="financeiro">💰 Financeiro</label>
+        <label class="exp-tipo-btn" data-val="clientes">👤 Clientes</label>
+        <label class="exp-tipo-btn" data-val="servicos">✂️ Serviços</label>
+      </div>
+    </div>
+
+    <!-- Período -->
+    <div style="margin-bottom:1rem;">
+      <div style="font-size:.75rem;color:var(--text-muted);font-weight:600;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em;">Período</div>
+      <div style="display:flex;flex-direction:column;gap:.4rem;">
+        <label class="exp-per-btn" data-val="todos">Todos os registros</label>
+        <label class="exp-per-btn" data-val="mes">Mês específico</label>
+        <label class="exp-per-btn" data-val="periodo">Período personalizado</label>
+      </div>
+      <div id="exp-mes-wrap" style="display:none;margin-top:.6rem;">
+        <input id="exp-mes" type="month" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.85rem;">
+      </div>
+      <div id="exp-periodo-wrap" style="display:none;margin-top:.6rem;gap:.5rem;">
+        <input id="exp-inicio" type="date" placeholder="Início" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.85rem;">
+        <input id="exp-fim"    type="date" placeholder="Fim"    style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:.85rem;">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.25rem;">
+      <button class="g-btn g-btn-outline" onclick="fecharExport()">Cancelar</button>
+      <button class="g-btn g-btn-primary" onclick="confirmarExport()">Baixar CSV</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.exp-tipo-btn,.exp-per-btn{
+  display:block;padding:.55rem .85rem;border-radius:8px;font-size:.82rem;
+  cursor:pointer;border:1px solid var(--border);color:var(--text-muted);
+  background:var(--surface);transition:.15s;user-select:none;text-align:center;
+}
+.exp-tipo-btn.sel,.exp-per-btn.sel{border-color:var(--gold);color:var(--gold);background:rgba(201,169,110,.08);}
+.exp-per-btn{text-align:left;}
+#exp-periodo-wrap{gap:.5rem;}
+</style>
 
 <!-- Tabs -->
 <div class="tab-bar">
@@ -325,6 +382,68 @@ function _fmtForma(f) {
   const map = {pix:'PIX', cartao_credito:'Crédito', cartao_debito:'Débito', dinheiro:'Dinheiro', pagar_no_local:'No local'};
   return map[f] || f;
 }
+
+// ── Export modal ──────────────────────────────────────────────────
+let expTipo = 'agendamentos', expPer = 'todos';
+
+function abrirExport() {
+  expTipo = 'agendamentos';
+  expPer  = 'todos';
+  document.querySelectorAll('.exp-tipo-btn').forEach(b => b.classList.toggle('sel', b.dataset.val === expTipo));
+  document.querySelectorAll('.exp-per-btn').forEach(b =>  b.classList.toggle('sel', b.dataset.val === expPer));
+  document.getElementById('exp-mes-wrap').style.display     = 'none';
+  document.getElementById('exp-periodo-wrap').style.display = 'none';
+  document.getElementById('modal-export').style.display     = 'flex';
+}
+
+function fecharExport() {
+  document.getElementById('modal-export').style.display = 'none';
+}
+
+function confirmarExport() {
+  const params = new URLSearchParams({ tipo: expTipo, _token: TOKEN });
+  if (expPer === 'mes') {
+    const mes = document.getElementById('exp-mes').value;
+    if (!mes) { alert('Selecione o mês'); return; }
+    params.set('mes', mes);
+  } else if (expPer === 'periodo') {
+    const ini = document.getElementById('exp-inicio').value;
+    const fim = document.getElementById('exp-fim').value;
+    if (!ini || !fim) { alert('Informe início e fim'); return; }
+    params.set('inicio', ini);
+    params.set('fim', fim);
+  }
+  const a = document.createElement('a');
+  a.href = `/api/export?${params}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  fecharExport();
+}
+
+// Tipo buttons
+document.querySelectorAll('.exp-tipo-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    expTipo = btn.dataset.val;
+    document.querySelectorAll('.exp-tipo-btn').forEach(b => b.classList.toggle('sel', b === btn));
+  });
+});
+
+// Período buttons
+document.querySelectorAll('.exp-per-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    expPer = btn.dataset.val;
+    document.querySelectorAll('.exp-per-btn').forEach(b => b.classList.toggle('sel', b === btn));
+    document.getElementById('exp-mes-wrap').style.display     = expPer === 'mes'     ? 'block' : 'none';
+    document.getElementById('exp-periodo-wrap').style.display = expPer === 'periodo' ? 'flex'  : 'none';
+  });
+});
+
+// Fechar ao clicar no backdrop
+document.getElementById('modal-export').addEventListener('click', function(e) {
+  if (e.target === this) fecharExport();
+});
 
 carregar();
 // Redesenha ao redimensionar (canvas precisa de tamanho explícito)

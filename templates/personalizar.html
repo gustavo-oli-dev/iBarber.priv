@@ -543,6 +543,17 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 
     <!-- Controles mobile — só aparecem no mobile -->
     <div id="mob-preview-btn" style="padding:1rem;border-top:1px solid var(--border);flex-direction:column;gap:.5rem;">
+      <!-- Toggle Agendamento / Gestão -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
+        <button id="mob-site-ag" onclick="setSite('ag')"
+          style="padding:9px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;border:1.5px solid var(--gold);background:var(--gold);color:#000;">
+          📅 Agendamento
+        </button>
+        <button id="mob-site-gt" onclick="setSite('gt')"
+          style="padding:9px;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:transparent;color:var(--text);">
+          ⚙️ Gestão
+        </button>
+      </div>
       <!-- Preview + Screens (só quando Única) -->
       <div id="mob-linha2" style="display:grid;grid-template-columns:1fr;gap:.5rem;">
         <button onclick="abrirPreviewMobile()"
@@ -857,6 +868,18 @@ window.addEventListener('message', function(e) {
 function _updateSiteToggle() {
   document.getElementById('site-ag').classList.toggle('active', siteMode==='ag');
   document.getElementById('site-gt').classList.toggle('active', siteMode==='gt');
+  // Sincroniza toggle mobile
+  const mAg = document.getElementById('mob-site-ag');
+  const mGt = document.getElementById('mob-site-gt');
+  if (mAg && mGt) {
+    const isAg = siteMode === 'ag';
+    mAg.style.background  = isAg ? 'var(--gold)' : 'transparent';
+    mAg.style.color       = isAg ? '#000' : 'var(--text)';
+    mAg.style.borderColor = isAg ? 'var(--gold)' : 'var(--border)';
+    mGt.style.background  = !isAg ? 'var(--gold)' : 'transparent';
+    mGt.style.color       = !isAg ? '#000' : 'var(--text)';
+    mGt.style.borderColor = !isAg ? 'var(--gold)' : 'var(--border)';
+  }
   updateUrlBar();
 }
 
