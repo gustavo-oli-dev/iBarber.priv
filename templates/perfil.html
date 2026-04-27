@@ -1,6 +1,19 @@
 {% extends 'base.html' %}
 {% block title %}Configurações — Barbearia{% endblock %}
 {% block content %}
+<style>
+.toggle-row {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.7rem .9rem;background:var(--surface,#161616);
+  border:1px solid var(--border,#2a2a2a);border-radius:var(--radius,6px);
+}
+.toggle-switch{position:relative;width:40px;height:22px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-track{position:absolute;inset:0;background:#333;border-radius:22px;transition:background .2s;cursor:pointer;}
+.toggle-track:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;left:3px;top:3px;background:#888;transition:.2s;}
+.toggle-switch input:checked + .toggle-track{background:var(--gold,#C9A96E);}
+.toggle-switch input:checked + .toggle-track:before{transform:translateX(18px);background:#000;}
+</style>
 <section class="auth-section">
   <div class="auth-card">
     <div class="auth-header">
@@ -40,43 +53,59 @@
 
     {% else %}
       {# ── Usuário cadastrado: exibição completa ── #}
+      {% set email_sintetico = user.email and user.email.endswith('@ibarber.local') %}
       <div class="field">
         <label class="field-label">Nome</label>
         <p class="field-value">{{ user.name }}</p>
       </div>
+      {% if user.contact %}
+      <div class="field">
+        <label class="field-label">WhatsApp</label>
+        <p class="field-value">{{ user.contact }}</p>
+      </div>
+      {% endif %}
+      {% if not email_sintetico %}
       <div class="field">
         <label class="field-label">E-mail</label>
         <p class="field-value">{{ user.email }}</p>
       </div>
-      {% if user.contact %}
-      <div class="field">
-        <label class="field-label">Contato</label>
-        <p class="field-value">{{ user.contact }}</p>
-      </div>
       {% endif %}
-      <a href="{{ url_for('esqueci_senha') }}" class="btn btn-outline btn-full">Alterar senha</a>
-      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:1rem;">
+      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:0.5rem;">
         <div class="field">
           <label class="field-label">Observação</label>
           <textarea class="field-input" name="observation" rows="3"
                     placeholder="Adicione uma observação..."
                     style="resize:vertical;">{{ user.observation or '' }}</textarea>
         </div>
-        <button type="submit" class="btn btn-gold btn-full" style="margin-top:0.5rem;">Salvar observação</button>
+        <button type="submit" class="btn btn-outline btn-full" style="margin-top:0.5rem;">Salvar observação</button>
       </form>
-      <form method="POST" action="{{ url_for('salvar_lembretes') }}" style="margin-top:1rem;">
-        <div class="toggle-row">
-          <span style="font-size:.85rem;color:var(--text-muted);">Receber lembretes de agendamento por e-mail</span>
-          <label class="toggle-switch">
-            <input type="checkbox" name="receber_lembretes" value="1"
+
+      {# ── Toggle lembretes ── #}
+      <div style="margin-top:1rem;">
+        <div class="toggle-row" onclick="toggleLembretePerfil()" style="cursor:pointer;">
+          <div>
+            <div style="font-size:.9rem;color:var(--text);">Lembretes de agendamento</div>
+            <div style="font-size:.74rem;color:var(--text-muted);margin-top:.1rem;">Receba avisos por e-mail antes do horário</div>
+          </div>
+          <label class="toggle-switch" onclick="event.stopPropagation()">
+            <input type="checkbox" id="chkLembretePerfil"
                    {% if user.receber_lembretes %}checked{% endif %}
-                   onchange="this.form.submit()" />
+                   onchange="mostrarEmailPerfil(this.checked)" />
             <span class="toggle-track"></span>
           </label>
         </div>
-      </form>
+        <div id="campoEmailPerfil" style="display:{{ 'block' if (user.receber_lembretes or email_sintetico and user.receber_lembretes) else 'none' }};margin-top:.5rem;">
+          <input class="field-input" type="email" id="inputEmailPerfil"
+                 placeholder="seu@email.com"
+                 value="{{ '' if email_sintetico else user.email }}"
+                 oninput="this.value=this.value.toLowerCase()" />
+        </div>
+        <button class="btn btn-gold btn-full" style="margin-top:.5rem;" onclick="salvarLembretePerfil()">Salvar preferências</button>
+        <p id="erroLembrete" style="color:#c0392b;font-size:.78rem;text-align:center;margin-top:.4rem;display:none;"></p>
+        <p id="okLembrete"   style="color:#4caf82;font-size:.78rem;text-align:center;margin-top:.4rem;display:none;">Salvo!</p>
+      </div>
+
       <div class="perfil-links">
-        <a href="{{ url_for('esqueci_senha') }}" class="link-muted">Esqueceu a senha?</a>
         <a href="{{ url_for('logout') }}" class="link-danger">Sair da conta</a>
       </div>
     {% endif %}
@@ -86,4 +115,36 @@
     </a>
   </div>
 </section>
+<script>
+function toggleLembretePerfil() {
+  const chk = document.getElementById('chkLembretePerfil');
+  if (!chk) return;
+  chk.checked = !chk.checked;
+  mostrarEmailPerfil(chk.checked);
+}
+function mostrarEmailPerfil(mostrar) {
+  const campo = document.getElementById('campoEmailPerfil');
+  if (campo) campo.style.display = mostrar ? 'block' : 'none';
+}
+async function salvarLembretePerfil() {
+  const chk   = document.getElementById('chkLembretePerfil');
+  const email = (document.getElementById('inputEmailPerfil')?.value || '').trim();
+  const err   = document.getElementById('erroLembrete');
+  const ok    = document.getElementById('okLembrete');
+  err.style.display = 'none';
+  ok.style.display  = 'none';
+  try {
+    const res  = await fetch('/api/auth/lembretes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ativo: chk.checked, email}),
+    });
+    const data = await res.json();
+    if (data.ok) { ok.style.display = 'block'; }
+    else { err.textContent = data.erro || 'Erro ao salvar.'; err.style.display = 'block'; }
+  } catch(e) {
+    err.textContent = 'Erro de conexão.'; err.style.display = 'block';
+  }
+}
+</script>
 {% endblock %}

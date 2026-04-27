@@ -540,6 +540,81 @@ def login_rapido():
     session['is_guest']  = True
     return redirect(url_for('servicos'))
 
+@app.route('/api/auth/telefone', methods=['POST'])
+def api_auth_telefone():
+    data = request.get_json(force=True) or {}
+    tel  = ''.join(c for c in data.get('telefone', '') if c.isdigit())
+    if len(tel) < 10:
+        return jsonify({'erro': 'Telefone inválido'}), 400
+    tid  = session.get('path_tenant_id')
+    user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    if user:
+        session['user_id']    = user.id
+        session['user_name']  = user.name
+        session['user_email'] = user.email
+        session.pop('is_guest', None)
+        return jsonify({'ok': True, 'nome': user.name})
+    return jsonify({'novo': True})
+
+@app.route('/api/auth/criar-telefone', methods=['POST'])
+def api_auth_criar_telefone():
+    data      = request.get_json(force=True) or {}
+    nome      = data.get('nome', '').strip()
+    tel       = ''.join(c for c in data.get('telefone', '') if c.isdigit())
+    email_opt = data.get('email', '').strip().lower() or None
+    lembretes = bool(data.get('lembretes')) and bool(email_opt)
+    if not nome or len(tel) < 10:
+        return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
+    tid = session.get('path_tenant_id')
+    existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    if existing:
+        session['user_id']    = existing.id
+        session['user_name']  = existing.name
+        session['user_email'] = existing.email
+        session.pop('is_guest', None)
+        return jsonify({'ok': True, 'nome': existing.name})
+    if email_opt and User.query.filter_by(email=email_opt).first():
+        return jsonify({'erro': 'Este e-mail já está em uso'}), 400
+    email = email_opt or f"tel_{tel}_{tid or 0}@ibarber.local"
+    user  = User(
+        name=nome,
+        email=email,
+        password=generate_password_hash(secrets.token_hex(16)),
+        contact=tel,
+        receber_lembretes=lembretes,
+        guest=False,
+        tenant_id=tid,
+    )
+    db.session.add(user)
+    db.session.commit()
+    session['user_id']    = user.id
+    session['user_name']  = nome
+    session['user_email'] = email
+    session.pop('is_guest', None)
+    return jsonify({'ok': True, 'nome': nome})
+
+@app.route('/api/auth/lembretes', methods=['POST'])
+def api_auth_lembretes():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
+    data      = request.get_json(force=True) or {}
+    ativo     = bool(data.get('ativo'))
+    email_opt = data.get('email', '').strip().lower() or None
+    user      = db.session.get(User, session['user_id'])
+    if not user:
+        return jsonify({'erro': 'usuário não encontrado'}), 404
+    if ativo and not email_opt and user.email.endswith('@ibarber.local'):
+        return jsonify({'erro': 'Informe um e-mail para receber lembretes'}), 400
+    if email_opt:
+        conflito = User.query.filter(User.email == email_opt, User.id != user.id).first()
+        if conflito:
+            return jsonify({'erro': 'E-mail já em uso'}), 400
+        user.email = email_opt
+        session['user_email'] = email_opt
+    user.receber_lembretes = ativo
+    db.session.commit()
+    return jsonify({'ok': True})
+
 @app.route('/servicos')
 def servicos():
     if 'user_id' not in session:
