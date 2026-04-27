@@ -36,21 +36,172 @@ body { overflow: hidden; }
   cursor: pointer;
 }
 .btn-cancelamento:hover { background: #c0392b; color: #fff; }
+
+/* ── Histórico sidebar ── */
+.hist-toggle {
+  position: absolute;
+  top: 50%;
+  right: -18px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  background: var(--gold, #C9A96E);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  z-index: 10;
+  transition: transform .2s, box-shadow .2s;
+}
+.hist-toggle:hover { transform: translateY(-50%) scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,.5); }
+.hist-toggle svg { color: #000; }
+
+.hist-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 300;
+}
+.hist-overlay.aberto { display: block; }
+
+.hist-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(320px, 88vw);
+  background: #111;
+  border-left: 1px solid #2a2a2a;
+  z-index: 301;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .28s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.hist-sidebar.aberto { transform: translateX(0); }
+
+.hist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .9rem 1.1rem .75rem;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+.hist-header h3 { font-size: .95rem; font-weight: 600; color: #f0ece4; margin: 0; }
+.hist-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 .2rem;
+}
+.hist-close:hover { color: #f0ece4; }
+
+.hist-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: .6rem .9rem 1rem;
+}
+.hist-vazio {
+  color: #666;
+  font-size: .85rem;
+  text-align: center;
+  padding: 2rem 0;
+}
+.hist-item {
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: .7rem .85rem;
+  margin-bottom: .6rem;
+  background: rgba(255,255,255,.02);
+}
+.hist-item-data {
+  font-size: .72rem;
+  color: #888;
+  margin-bottom: .35rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hist-status {
+  font-size: .62rem;
+  padding: .15rem .45rem;
+  border-radius: 3px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.hist-status.ativo     { background: rgba(76,175,130,.15); color: #4caf82; }
+.hist-status.concluido { background: rgba(201,169,110,.12); color: #C9A96E; }
+.hist-status.cancelado { background: rgba(192,57,43,.15);  color: #c0392b; }
+
+.hist-svcs { margin-bottom: .4rem; }
+.hist-svc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .8rem;
+  color: #ccc;
+  padding: .15rem 0;
+  border-bottom: 1px solid #1e1e1e;
+}
+.hist-svc-row:last-child { border-bottom: none; }
+.hist-svc-preco { color: #C9A96E; font-size: .78rem; }
+
+.hist-barbeiro {
+  font-size: .74rem;
+  color: #888;
+  margin-top: .35rem;
+}
+.hist-total-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #f0ece4;
+  margin-top: .45rem;
+  padding-top: .35rem;
+  border-top: 1px solid #2a2a2a;
+}
 </style>
 <section class="servicos-section">
   {% if agendamento_info %}
   <div style="max-width:480px;width:90%;margin:0 auto;">
-    <div style="border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem;background:rgba(201,169,110,0.06);">
+    <div style="position:relative;border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem;background:rgba(201,169,110,0.06);">
       <p style="color:#C9A96E;font-size:1.15rem;font-weight:600;text-align:center;margin:0;line-height:1.5;">Seu agendamento é {{ agendamento_info.dia }}, às {{ agendamento_info.hora }}</p>
       {% if agendamento_info.forma_pagamento %}
       <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.4rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
       {% endif %}
+      <button class="hist-toggle" onclick="abrirHistorico()" title="Histórico de pedidos">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </button>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:0.5rem;">
       <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.35rem 0.9rem;font-size:0.8rem;cursor:pointer;">Cancelamento</button>
     </div>
   </div>
   {% endif %}
+
+  <!-- Histórico sidebar -->
+  <div class="hist-overlay" id="histOverlay" onclick="fecharHistorico()"></div>
+  <div class="hist-sidebar" id="histSidebar">
+    <div class="hist-header">
+      <h3>Histórico de pedidos</h3>
+      <button class="hist-close" onclick="fecharHistorico()">×</button>
+    </div>
+    <div class="hist-body" id="histBody">
+      <p class="hist-vazio">Carregando…</p>
+    </div>
+  </div>
   <div class="servicos-header">
     <p class="servicos-eyebrow">Olá, {{ session.get('user_name', '').split()[0] }}</p>
     <h1 class="servicos-title" id="servicosTitle">O que deseja?</h1>
@@ -876,6 +1027,59 @@ body { overflow: hidden; }
     }
     setTimeout(() => { foto.style.opacity = '1'; }, 120);
   }
+  // ── Histórico sidebar ────────────────────────────────────
+  const _MESES_HIST = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const _DIAS_HIST  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const _STATUS_LABEL = { ativo: 'Agendado', concluido: 'Concluído', cancelado: 'Cancelado' };
+
+  async function abrirHistorico() {
+    document.getElementById('histOverlay').classList.add('aberto');
+    document.getElementById('histSidebar').classList.add('aberto');
+    document.body.style.overflow = 'hidden';
+    const body = document.getElementById('histBody');
+    body.innerHTML = '<p class="hist-vazio">Carregando…</p>';
+    try {
+      const res  = await fetch('/meu-historico');
+      const data = await res.json();
+      const hist = data.historico || [];
+      if (!hist.length) {
+        body.innerHTML = '<p class="hist-vazio">Nenhum pedido encontrado.</p>';
+        return;
+      }
+      body.innerHTML = hist.map(h => {
+        const dt       = new Date(h.data_hora);
+        const dataFmt  = `${_DIAS_HIST[dt.getDay()]}, ${dt.getDate()} ${_MESES_HIST[dt.getMonth()]} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+        const status   = h.status || 'ativo';
+        const svcsHtml = (h.servicos || []).map(s =>
+          `<div class="hist-svc-row">
+             <span>${s.nome}</span>
+             <span class="hist-svc-preco">R$ ${s.preco.toFixed(2).replace('.',',')}</span>
+           </div>`
+        ).join('');
+        const barb = h.barbeiro ? `<div class="hist-barbeiro">✦ ${h.barbeiro}</div>` : '';
+        const total = `R$ ${(h.total||0).toFixed(2).replace('.',',')}`;
+        return `
+          <div class="hist-item">
+            <div class="hist-item-data">
+              <span>${dataFmt}</span>
+              <span class="hist-status ${status}">${_STATUS_LABEL[status] || status}</span>
+            </div>
+            <div class="hist-svcs">${svcsHtml || '<span style="color:#666;font-size:.78rem;">Sem serviços</span>'}</div>
+            ${barb}
+            <div class="hist-total-row"><span>Total</span><span>${total}</span></div>
+          </div>`;
+      }).join('');
+    } catch(e) {
+      document.getElementById('histBody').innerHTML = '<p class="hist-vazio">Erro ao carregar.</p>';
+    }
+  }
+
+  function fecharHistorico() {
+    document.getElementById('histOverlay').classList.remove('aberto');
+    document.getElementById('histSidebar').classList.remove('aberto');
+    document.body.style.overflow = '';
+  }
+
   document.getElementById('lightbox').addEventListener('click', e => {
     if (e.target === document.getElementById('lightbox')) fecharLightbox();
   });

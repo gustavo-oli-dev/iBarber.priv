@@ -1092,15 +1092,23 @@ def meu_historico():
                      .options(joinedload(Pedido.itens)).all()}
         if pedido_ids else {}
     )
+    _, gestor_nome = _gestor_como_barbeiro()
     resultado = []
     for ag in ags:
         p = pedidos.get(ag.pedido_id)
+        if ag.funcionario_id == 0:
+            barbeiro = gestor_nome or 'Gestor'
+        elif ag.funcionario:
+            barbeiro = ag.funcionario.nome
+        else:
+            barbeiro = None
         resultado.append({
             'id': ag.id,
             'data_hora': ag.data_hora.isoformat(),
             'status': ag.status,
             'total': p.total if p else 0,
-            'servicos': [i.nome for i in p.itens] if p else [],
+            'barbeiro': barbeiro,
+            'servicos': [{'nome': i.nome, 'preco': i.preco} for i in p.itens] if p else [],
         })
     return jsonify({'historico': resultado})
 
