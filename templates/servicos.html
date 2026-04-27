@@ -38,26 +38,6 @@ body { overflow: hidden; }
 .btn-cancelamento:hover { background: #c0392b; color: #fff; }
 
 /* ── Histórico sidebar ── */
-.hist-toggle {
-  position: absolute;
-  top: 50%;
-  right: -18px;
-  transform: translateY(-50%);
-  width: 34px;
-  height: 34px;
-  background: var(--gold, #C9A96E);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,.4);
-  z-index: 10;
-  transition: transform .2s, box-shadow .2s;
-}
-.hist-toggle:hover { transform: translateY(-50%) scale(1.08); box-shadow: 0 4px 14px rgba(0,0,0,.5); }
-.hist-toggle svg { color: #000; }
 
 .hist-overlay {
   display: none;
@@ -174,18 +154,17 @@ body { overflow: hidden; }
 <section class="servicos-section">
   {% if agendamento_info %}
   <div style="max-width:480px;width:90%;margin:0 auto;">
-    <div style="position:relative;border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem;background:rgba(201,169,110,0.06);">
+    <div style="border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem;background:rgba(201,169,110,0.06);">
       <p style="color:#C9A96E;font-size:1.15rem;font-weight:600;text-align:center;margin:0;line-height:1.5;">Seu agendamento é {{ agendamento_info.dia }}, às {{ agendamento_info.hora }}</p>
       {% if agendamento_info.forma_pagamento %}
       <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.4rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
       {% endif %}
-      <button class="hist-toggle" onclick="abrirHistorico()" title="Histórico de pedidos">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-      </button>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:0.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;">
+      <button onclick="abrirHistorico()" style="background:transparent;border:1px solid #C9A96E;color:#C9A96E;border-radius:8px;padding:0.35rem 0.9rem;font-size:0.8rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Histórico
+      </button>
       <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.35rem 0.9rem;font-size:0.8rem;cursor:pointer;">Cancelamento</button>
     </div>
   </div>
