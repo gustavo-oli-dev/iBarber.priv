@@ -5,32 +5,38 @@
 
 <div style="max-width:520px;">
 
-  <!-- PIX -->
+  <!-- Ativar / Desativar -->
   <div class="g-section" style="margin-bottom:1.5rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-      <div class="g-section-title" style="margin:0;">⚡ PIX</div>
+    <div class="g-section-title" style="margin-bottom:.75rem;">Formas de pagamento ativas</div>
+    <label class="toggle-switch-row">
+      <span class="toggle-label">⚡ PIX</span>
       <label class="toggle-switch">
         <input type="checkbox" id="togglePix" onchange="salvarToggle('pix_ativo',this.checked)" {% if pix_ativo %}checked{% endif %} />
         <span class="toggle-track"></span>
       </label>
-    </div>
-    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1rem;">Chave PIX para receber pagamentos diretos. Obrigatório ter o Access Token do Mercado Pago configurado abaixo.</p>
-    <div class="g-form-group">
-      <label class="g-label">Chave PIX</label>
-      <input id="fPixChave" class="g-input" placeholder="CPF, e-mail, telefone ou chave aleatória" value="{{ pix_chave }}" />
-    </div>
-  </div>
-
-  <!-- Mercado Pago -->
-  <div class="g-section" style="margin-bottom:1.5rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-      <div class="g-section-title" style="margin:0;">💳 Cartão (Mercado Pago)</div>
+    </label>
+    <label class="toggle-switch-row" style="margin-top:.6rem;">
+      <span class="toggle-label">💳 Cartão (Mercado Pago)</span>
       <label class="toggle-switch">
         <input type="checkbox" id="toggleCartao" onchange="salvarToggle('cartao_ativo',this.checked)" {% if cartao_ativo %}checked{% endif %} />
         <span class="toggle-track"></span>
       </label>
+    </label>
+  </div>
+
+  <!-- Credenciais PIX -->
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div class="g-section-title" style="margin-bottom:.5rem;">⚡ Chave PIX</div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Chave PIX para receber pagamentos diretos. Obrigatório ter o Access Token do Mercado Pago configurado abaixo.</p>
+    <div class="g-form-group">
+      <input id="fPixChave" class="g-input" placeholder="CPF, e-mail, telefone ou chave aleatória" value="{{ pix_chave }}" />
     </div>
-    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1rem;">Access Token e Public Key do Mercado Pago para pagamento com cartão e geração de QR PIX.</p>
+  </div>
+
+  <!-- Credenciais Mercado Pago -->
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div class="g-section-title" style="margin-bottom:.5rem;">💳 Mercado Pago</div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Access Token e Public Key para pagamento com cartão e geração de QR PIX.</p>
     <div class="g-form-group" style="margin-bottom:.75rem;">
       <label class="g-label">Access Token</label>
       <div style="position:relative;">
@@ -91,6 +97,12 @@
 }
 .toggle-switch input:checked + .toggle-track { background:var(--gold); }
 .toggle-switch input:checked + .toggle-track::after { transform:translateX(20px); }
+.toggle-switch-row {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:.75rem 1rem; cursor:pointer;
+}
+.toggle-label { font-size:.88rem; font-weight:500; color:var(--text); }
 </style>
 
 <script>
