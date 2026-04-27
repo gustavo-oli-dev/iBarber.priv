@@ -1426,7 +1426,7 @@ def api_horarios_disponiveis():
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
     # horário especial para esta data sobrepõe o semanal
-    he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
+    he = HorarioEspecial.query.filter_by(data=data_str).first()
     if he:
         todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
     else:
