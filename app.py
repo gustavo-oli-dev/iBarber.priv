@@ -1867,7 +1867,8 @@ def api_usuarios():
         db.session.add(user)
         db.session.commit()
         return jsonify({'ok': True, 'usuario': user_dict(user)})
-    usuarios = User.query.order_by(User.criado_em.desc()).all()
+    tid = _api_tid()
+    usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).all()
     return jsonify([user_dict(u) for u in usuarios])
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
@@ -1883,7 +1884,8 @@ def api_usuario(uid):
 @app.route('/api/pedidos', methods=['GET'])
 def api_pedidos():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.order_by(Pedido.criado_em.desc()).all()
+    tid = _api_tid()
+    pedidos = Pedido.query.filter_by(tenant_id=tid).order_by(Pedido.criado_em.desc()).all()
     return jsonify([pedido_dict(p) for p in pedidos])
 
 @app.route('/api/pedidos/<int:pid>', methods=['GET'])
@@ -2019,7 +2021,7 @@ def api_stats_receita_forma():
 def api_stats_pedidos_status():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.all()
+    pedidos = Pedido.query.filter_by(tenant_id=tid).all()
     contagem = {}
     for p in pedidos:
         s = p.status or 'pendente'
