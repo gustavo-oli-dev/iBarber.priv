@@ -31,6 +31,9 @@ h1,h2{font-family:'Playfair Display',serif}
 .btn-painel:hover{opacity:0.88;transform:translateY(-1px)}
 .sucesso-dica{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin-top:1.4rem;font-size:0.84rem;color:var(--muted);line-height:1.65;text-align:left}
 .sucesso-dica strong{color:var(--text)}
+.btn-apk{display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;background:var(--surface);border:1.5px solid var(--gold);border-radius:var(--radius);padding:.85rem 1.2rem;margin-top:.6rem;color:var(--gold);font-weight:600;font-size:.9rem;text-decoration:none;transition:background .2s}
+.btn-apk:hover{background:#c9a96e18}
+.apk-hint{font-size:.72rem;color:var(--muted);margin-top:.45rem;line-height:1.5;text-align:center}
 </style>
 </head>
 <body>
@@ -53,9 +56,11 @@ h1,h2{font-family:'Playfair Display',serif}
 
     <a class="btn-painel" id="btn-painel" href="#">Acessar meu painel</a>
 
-    <div class="sucesso-dica">
-      📱 <strong>App admin:</strong> faça login com seu e-mail no app iBarber para gerenciar agendamentos, funcionários e preços pelo celular.
-    </div>
+    <a class="btn-apk" id="btn-apk" href="/static/ibarber.apk" download>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Baixar app iBarber (Android)
+    </a>
+    <p class="apk-hint">⚙️ Ao instalar: <em>Configurações → Segurança → Permitir fontes desconhecidas</em></p>
   </div>
 </div>
 <script>
