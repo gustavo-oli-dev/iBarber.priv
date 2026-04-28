@@ -444,6 +444,13 @@
         </a>
       </div>
 
+      {% if trial_ativo %}
+      <div style="margin:.5rem .75rem;padding:.6rem .85rem;background:rgba(201,169,110,0.1);border:1px solid rgba(201,169,110,0.3);border-radius:6px;font-size:.72rem;line-height:1.4;">
+        <div style="color:#C9A96E;font-weight:600;margin-bottom:.2rem;">⏱ Teste grátis</div>
+        <div style="color:#aaa;">{{ trial_dias }} dia{{ 's' if trial_dias != 1 else '' }} restante{{ 's' if trial_dias != 1 else '' }}</div>
+        <a href="{{ url_for('gestao_planos') }}" style="color:#C9A96E;font-size:.7rem;display:block;margin-top:.35rem;">Assinar agora →</a>
+      </div>
+      {% endif %}
       <div style="padding:.75rem 1rem 1.25rem;margin-top:auto;font-size:.68rem;color:var(--text-muted);border-top:1px solid var(--border);">
         iBarber v{{ APP_VERSION }}
       </div>

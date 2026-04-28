@@ -24,6 +24,19 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 app.jinja_env.cache = {}
 app.jinja_env.globals['APP_VERSION'] = APP_VERSION
+
+@app.context_processor
+def _gestao_trial_ctx():
+    tid = session.get('gestao_tenant_id')
+    if not tid:
+        return {}
+    tenant = db.session.get(Tenant, tid)
+    if not tenant:
+        return {}
+    return {
+        'trial_ativo': tenant.em_trial(),
+        'trial_dias': tenant.trial_dias_restantes(),
+    }
 origens = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://localhost:8888,http://localhost:9999,http://localhost:7777').split(',')
 CORS(app, origins=origens, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
@@ -81,11 +94,20 @@ class Tenant(db.Model):
     tema_editacoes   = db.Column(db.Integer, default=0)
     tema_pendente    = db.Column(db.Text,    nullable=True)
     assinatura_ativa = db.Column(db.Boolean, default=False)
+    trial_expira     = db.Column(db.DateTime, nullable=True)
     whatsapp         = db.Column(db.String(20),  nullable=True)
     maps_url         = db.Column(db.String(500), nullable=True)
     fab_wpp          = db.Column(db.Text, nullable=True)   # JSON
     fab_maps         = db.Column(db.Text, nullable=True)   # JSON
     assinaturas      = db.relationship('Assinatura', backref='tenant', lazy=True, order_by='Assinatura.id.desc()')
+
+    def em_trial(self):
+        return self.trial_expira is not None and self.trial_expira > datetime.utcnow()
+
+    def trial_dias_restantes(self):
+        if not self.em_trial():
+            return 0
+        return max(0, (self.trial_expira - datetime.utcnow()).days)
 
 class Assinatura(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
@@ -299,6 +321,7 @@ with app.app_context():
         ('maps_url',       'VARCHAR(500)'),
         ('tema_editacoes', 'INTEGER DEFAULT 0'),
         ('tema_pendente',  'TEXT'),
+        ('trial_expira',   'DATETIME'),
     ]:
         if _col not in _tenant_cols:
             with db.engine.connect() as _conn:
@@ -2552,10 +2575,25 @@ def limpar_guests():
                 db.session.delete(g)
         db.session.commit()
 
+def limpar_trials_expirados():
+    with app.app_context():
+        agora = datetime.utcnow()
+        expirados = Tenant.query.filter(
+            Tenant.trial_expira != None,
+            Tenant.trial_expira < agora,
+            Tenant.assinatura_ativa == False,
+        ).all()
+        for t in expirados:
+            db.session.delete(t)
+        if expirados:
+            db.session.commit()
+            print(f'[TRIAL] {len(expirados)} tenant(s) expirado(s) excluídos.')
+
 scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(verificar_lembretes, 'interval', minutes=30)
 scheduler.add_job(verificar_assinaturas, 'interval', hours=12)
 scheduler.add_job(limpar_guests, 'interval', hours=24)
+scheduler.add_job(limpar_trials_expirados, 'interval', hours=24)
 scheduler.start()
 
 @app.route('/admin/banco')
@@ -3380,6 +3418,7 @@ def api_cadastro():
         mail_password=(d.get('mail_password') or '').strip() or None,
         ativo=True,
         assinatura_ativa=True,
+        trial_expira=datetime.utcnow() + timedelta(days=7),
     )
     db.session.add(tenant)
     db.session.commit()
