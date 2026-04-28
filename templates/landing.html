@@ -9,12 +9,12 @@
 <meta property="og:title" content="iBarber — Gestão completa para barbearias"/>
 <meta property="og:description" content="Site de agendamento, app de gestão e controle financeiro para barbearias. Configure em 3 minutos."/>
 <meta property="og:type" content="website"/>
-<meta property="og:url" content="https://ibarber.shop"/>
-<meta property="og:image" content="https://ibarber.shop/static/images/icon-192.png"/>
+<meta property="og:url" content="https://ibarber.app.br"/>
+<meta property="og:image" content="https://ibarber.app.br/static/images/icon-192.png"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="iBarber — Gestão completa para barbearias"/>
 <meta name="twitter:description" content="Site de agendamento, app de gestão e controle financeiro para barbearias."/>
-<link rel="canonical" href="https://ibarber.shop"/>
+<link rel="canonical" href="https://ibarber.app.br"/>
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
@@ -255,6 +255,7 @@ section{padding:clamp(4rem,8vw,7rem) clamp(1.5rem,5vw,5rem)}
   padding:2.5rem 1.8rem;
   transition:background .2s;
   position:relative;
+  display:flex;flex-direction:column;
 }
 .plan:hover{background:rgba(255,255,255,0.03)}
 .plan.popular{background:rgba(201,169,110,0.06)}
@@ -276,6 +277,7 @@ section{padding:clamp(4rem,8vw,7rem) clamp(1.5rem,5vw,5rem)}
   font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.02em;
   border:1.5px solid rgba(255,255,255,.15);background:transparent;color:var(--text);
   transition:background .2s,border-color .2s,transform .15s,box-shadow .2s;
+  margin-top:auto;
 }
 .btn-plan:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.3);transform:translateY(-1px)}
 .plan.popular .btn-plan{
@@ -471,8 +473,8 @@ footer{
       <div class="step reveal reveal-delay-2">
         <div class="step-num">2</div>
         <div class="step-body">
-          <h3>Escolha seu plano</h3>
-          <p>Selecione o plano que faz mais sentido para o tamanho da sua barbearia. Cancele quando quiser.</p>
+          <h3>Comece grátis, escolha seu plano</h3>
+          <p>7 dias de teste sem cartão. Depois, selecione o plano que faz mais sentido. Cancele quando quiser.</p>
         </div>
       </div>
       <div class="step reveal reveal-delay-4">
@@ -494,12 +496,26 @@ footer{
       <div class="section-title">Simples e transparente</div>
       <p class="section-sub">Um único plano com tudo incluso. Pague menos quanto mais tempo assinar.</p>
     </div>
+    <!-- Trial card -->
+    <div style="border:2px solid rgba(76,175,130,.45);border-radius:var(--radius);padding:1.5rem 2rem;background:rgba(76,175,130,.05);display:flex;align-items:center;justify-content:space-between;gap:1.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <div style="width:44px;height:44px;border-radius:50%;background:rgba(76,175,130,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4caf82" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;color:#f5f5f5;margin-bottom:.2rem;">7 dias grátis <span style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;background:#4caf82;color:#000;padding:2px 9px;border-radius:50px;vertical-align:middle;">Grátis</span></div>
+          <div style="font-size:.82rem;color:#888;">Acesso completo. Sem cartão de crédito. Cancele quando quiser.</div>
+        </div>
+      </div>
+      <a href="/personalizar" style="background:#4caf82;color:#000;padding:.7rem 1.75rem;border-radius:50px;font-size:.9rem;font-weight:700;white-space:nowrap;transition:opacity .15s;display:inline-block;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">Começar grátis</a>
+    </div>
+
     <div class="plans-grid">
       <div class="plan">
         <div class="plan-name">Mensal</div>
         <div class="plan-price"><sup>R$</sup>49<sub>/mês</sub></div>
         <div class="plan-period">Cobrado mensalmente</div>
-        <div class="plan-economy"></div>
+        <div class="plan-economy" style="min-height:1.3em"></div>
         <button class="btn-plan" onclick="escolherPlano('mensal')">Começar agora</button>
       </div>
       <div class="plan popular">
