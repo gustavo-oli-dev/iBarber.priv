@@ -311,7 +311,10 @@ body { overflow: hidden; }
   <span class="logo-mark" style="font-size:1.4rem;">✦</span>
   <h3 class="auth-title" style="margin:0.5rem 0 0.8rem;">Cancelar agendamento</h3>
   <p style="color:#aaa;text-align:center;margin-bottom:1.5rem;">Deseja realmente cancelar o serviço?</p>
-  <button class="btn btn-danger btn-full" onclick="confirmarCancelamento()">Confirmar cancelamento</button>
+  <div style="display:flex;gap:0.75rem;width:100%;">
+    <button class="btn btn-outline btn-full" onclick="fecharConfirmacaoCancelamento()">Voltar</button>
+    <button class="btn btn-danger btn-full" onclick="confirmarCancelamento()">Cancelar agendamento</button>
+  </div>
 </div>
 <div class="qr-overlay" id="agOverlay" onclick="fecharMeuAgendamento()"></div>
 <div class="qr-modal" id="agModal">

@@ -52,6 +52,7 @@
       border-radius: var(--radius); color: var(--text);
       padding: 0.6rem 0.85rem; font-family: var(--font-sans); font-size: 0.9rem;
       width: 100%; transition: border-color 0.15s;
+      min-height: 44px; -webkit-appearance: none;
     }
     .g-input:focus { outline: none; border-color: var(--gold); }
     .form-group { margin-bottom: 1.1rem; }
@@ -60,6 +61,7 @@
       background: var(--gold); color: #000; font-family: var(--font-sans);
       font-size: 0.9rem; font-weight: 600; cursor: pointer;
       transition: opacity 0.15s; margin-top: 0.5rem;
+      min-height: 44px; touch-action: manipulation;
     }
     .btn-login:hover { opacity: 0.85; }
     .flash {

@@ -3617,6 +3617,18 @@ def api_admin_vencimento(tid):
     db.session.commit()
     return jsonify({'ok': True})
 
+@app.route('/admin/entrar-gestao/<int:tid>')
+def admin_entrar_gestao(tid):
+    key = request.args.get('key', '')
+    if key != API_TOKEN:
+        return 'Não autorizado', 401
+    t = db.session.get(Tenant, tid)
+    if not t:
+        return 'Tenant não encontrado', 404
+    session['gestao_tenant_id'] = t.id
+    session['gestao_nome'] = t.nome
+    return redirect(url_for('gestao_dashboard'))
+
 @app.route('/api/pagamento/criar', methods=['POST'])
 def api_pagamento_criar_v2():
     d = request.get_json(force=True) or {}

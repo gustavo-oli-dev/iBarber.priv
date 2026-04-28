@@ -14,6 +14,7 @@
 :root{
   --bg:#000;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);
   --gold:#C9A96E;--gold2:#e0be88;--text:#f5f5f5;--muted:#888;--muted2:#3a3a3a;
+  --success:#4caf82;
 }
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow-x:hidden;max-width:100vw}
 body{display:flex;flex-direction:column}
@@ -42,52 +43,78 @@ body{display:flex;flex-direction:column}
 .btn-back:hover{background:var(--surface);color:var(--text)}
 
 /* PAGE */
-.page{flex:1;display:flex;flex-direction:column;align-items:center;padding:3rem 1.5rem 4rem}
-.page-hd{text-align:center;margin-bottom:3rem}
-.page-hd h1{font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;line-height:1.15;margin-bottom:.75rem}
+.page{flex:1;display:flex;flex-direction:column;align-items:center;padding:2.5rem 1.5rem 4rem}
+.page-hd{text-align:center;margin-bottom:1.25rem}
+.page-hd h1{font-family:'Playfair Display',serif;font-size:2.2rem;font-weight:700;line-height:1.15;margin-bottom:.6rem}
 .page-hd h1 span{color:var(--gold)}
 .page-hd p{color:var(--muted);font-size:1rem;max-width:480px;margin:0 auto}
 
+/* TRIAL BANNER */
+.trial-banner{
+  display:flex;align-items:center;gap:.6rem;
+  background:rgba(76,175,130,.1);border:1px solid rgba(76,175,130,.3);
+  border-radius:50px;padding:.45rem 1.1rem;
+  font-size:.82rem;font-weight:600;color:var(--success);
+  margin-bottom:2.25rem;
+  text-align:center;
+}
+.trial-banner svg{flex-shrink:0}
+
 /* PLANO CARDS */
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1.1rem;width:100%;max-width:920px}
-@media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:480px){.cards{grid-template-columns:1fr}}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;width:100%;max-width:940px}
+@media(max-width:820px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.cards{grid-template-columns:1fr;max-width:360px}}
+
 .card{
-  border:1.5px solid var(--border);border-radius:16px;padding:1.75rem 1.5rem;
+  border:1.5px solid var(--border);border-radius:16px;padding:1.6rem 1.35rem 1.35rem;
   cursor:pointer;transition:border-color .25s,transform .2s,background .2s;
   background:var(--surface);position:relative;
+  display:flex;flex-direction:column;
 }
 .card:hover{border-color:rgba(201,169,110,.4);transform:translateY(-2px)}
-.card.sel{border-color:#22c55e;background:rgba(34,197,94,.06)}
-.card.popular{border-color:rgba(201,169,110,.5)}
+.card.sel{border-color:var(--success);background:rgba(34,197,94,.05)}
+.card.popular{border-color:rgba(201,169,110,.5);background:rgba(201,169,110,.04)}
+
 .badge{
   position:absolute;top:-11px;left:50%;transform:translateX(-50%);
-  background:var(--gold);color:#000;font-size:.65rem;font-weight:800;
+  background:var(--gold);color:#000;font-size:.62rem;font-weight:800;
   padding:3px 12px;border-radius:50px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;
 }
-.card-name{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:1rem}
-.card-price{margin-bottom:.35rem}
-.price-val{font-size:2rem;font-weight:800;line-height:1;color:var(--text)}
-.price-per{font-size:.8rem;color:var(--muted);margin-left:2px}
-.price-total{font-size:.78rem;color:var(--muted);margin-bottom:1.25rem}
-.price-total b{color:var(--gold)}
-.card-feats{list-style:none;display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.5rem}
-.card-feats li{font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:.5rem}
-.card-feats li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0}
-.card-eco{font-size:.72rem;font-weight:600;color:var(--gold);background:rgba(201,169,110,.12);border-radius:6px;padding:4px 8px;display:inline-block}
-
-/* CTA */
-.cta-wrap{margin-top:2.5rem;width:100%;max-width:920px;display:flex;justify-content:space-between;align-items:center}
-.btn-continuar{
-  background:var(--gold);color:#000;padding:13px 32px;border-radius:10px;
-  font-size:.95rem;font-weight:800;border:none;cursor:pointer;
-  transition:background .2s,transform .15s;letter-spacing:.02em;
+.badge-green{
+  position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+  background:var(--success);color:#000;font-size:.62rem;font-weight:800;
+  padding:3px 12px;border-radius:50px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;
 }
-.btn-continuar:hover{background:var(--gold2);transform:translateY(-1px)}
-.btn-continuar:disabled{opacity:.4;cursor:default;transform:none}
+
+.card-name{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.85rem}
+.card-price{margin-bottom:.3rem}
+.price-rs{font-size:.85rem;font-weight:600;vertical-align:top;line-height:2.4;color:var(--muted)}
+.price-val{font-size:2.4rem;font-weight:800;line-height:1;color:var(--text)}
+.price-per{font-size:.78rem;color:var(--muted);margin-left:1px}
+.price-total{font-size:.76rem;color:var(--muted);margin-bottom:.65rem}
+.price-eco{font-size:.72rem;font-weight:600;color:var(--success);margin-bottom:1rem}
+
+.card-feats{list-style:none;display:flex;flex-direction:column;gap:.45rem;margin-bottom:1.25rem;flex:1}
+.card-feats li{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:.45rem}
+.card-feats li::before{content:'✓';color:var(--gold);font-weight:700;flex-shrink:0;font-size:.8rem}
+
+.btn-comecar{
+  width:100%;padding:.7rem;border-radius:10px;
+  font-size:.875rem;font-weight:700;border:none;cursor:pointer;
+  font-family:'Inter',sans-serif;transition:opacity .15s,background .2s;
+  touch-action:manipulation;margin-top:auto;
+  background:transparent;border:1.5px solid var(--border);color:var(--text);
+}
+.btn-comecar:hover{border-color:var(--gold);color:var(--gold)}
+.card.popular .btn-comecar{background:var(--gold);color:#000;border-color:var(--gold)}
+.card.popular .btn-comecar:hover{opacity:.88}
+.card.sel .btn-comecar{background:var(--success);color:#000;border-color:var(--success)}
+
+/* FOOTER NOTE */
+.note{margin-top:1.75rem;font-size:.78rem;color:var(--muted);text-align:center}
 
 /* GLOW */
-.glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.08) 0%,transparent 70%);pointer-events:none;z-index:0}
+.glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
 @media(max-width:767px){.steps,.tb-sep{display:none!important}}
 </style>
 </head>
@@ -108,13 +135,19 @@ body{display:flex;flex-direction:column}
     <div class="step-conn"></div>
     <div class="step-item"><div class="step-num">4</div> Pagamento</div>
   </div>
+  <button class="btn-back" onclick="history.back()">Voltar</button>
 </header>
 
 <!-- PAGE -->
 <main class="page">
   <div class="page-hd">
     <h1>Escolha seu <span>plano</span></h1>
-    <p>Sem contratos. Cancele quando quiser. Acesso completo em todos os planos.</p>
+    <p>Sem contratos. Cancele quando quiser.</p>
+  </div>
+
+  <div class="trial-banner">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    7 dias grátis — sem cartão de crédito
   </div>
 
   <div class="cards">
@@ -123,31 +156,33 @@ body{display:flex;flex-direction:column}
     <div class="card" id="card-mensal" onclick="selPlano('mensal')">
       <div class="card-name">Mensal</div>
       <div class="card-price">
-        <span class="price-val">R$49</span><span class="price-per">/mês</span>
+        <span class="price-rs">R$</span><span class="price-val">49</span><span class="price-per">/mês</span>
       </div>
-      <div class="price-total">Total: <b>R$49</b></div>
+      <div class="price-total">Cobrado mensalmente</div>
       <ul class="card-feats">
         <li>Site de agendamento</li>
         <li>App de gestão</li>
         <li>Domínio incluído</li>
         <li>Suporte por e-mail</li>
       </ul>
+      <button class="btn-comecar" onclick="selEContinuar('mensal')">Começar agora</button>
     </div>
 
     <!-- TRIMESTRAL -->
     <div class="card" id="card-trimestral" onclick="selPlano('trimestral')">
       <div class="card-name">Trimestral</div>
       <div class="card-price">
-        <span class="price-val">R$44</span><span class="price-per">/mês</span>
+        <span class="price-rs">R$</span><span class="price-val">44</span><span class="price-per">/mês</span>
       </div>
-      <div class="price-total">Total: <b>R$132</b> em 3x</div>
+      <div class="price-total">Cobrado R$132 a cada 3 meses</div>
+      <div class="price-eco">Economize R$15</div>
       <ul class="card-feats">
         <li>Site de agendamento</li>
         <li>App de gestão</li>
         <li>Domínio incluído</li>
         <li>Suporte por e-mail</li>
       </ul>
-      <span class="card-eco">Economize 10%</span>
+      <button class="btn-comecar" onclick="selEContinuar('trimestral')">Começar agora</button>
     </div>
 
     <!-- SEMESTRAL -->
@@ -155,62 +190,62 @@ body{display:flex;flex-direction:column}
       <div class="badge">Mais popular</div>
       <div class="card-name">Semestral</div>
       <div class="card-price">
-        <span class="price-val">R$39</span><span class="price-per">/mês</span>
+        <span class="price-rs">R$</span><span class="price-val">39</span><span class="price-per">/mês</span>
       </div>
-      <div class="price-total">Total: <b>R$234</b> em 6x</div>
+      <div class="price-total">Cobrado R$234 a cada 6 meses</div>
+      <div class="price-eco">Economize R$60</div>
       <ul class="card-feats">
         <li>Site de agendamento</li>
         <li>App de gestão</li>
         <li>Domínio incluído</li>
         <li>Suporte prioritário</li>
       </ul>
-      <span class="card-eco">Economize 20%</span>
+      <button class="btn-comecar" onclick="selEContinuar('semestral')">Começar agora</button>
     </div>
 
     <!-- ANUAL -->
     <div class="card" id="card-anual" onclick="selPlano('anual')">
+      <div class="badge-green">Melhor custo</div>
       <div class="card-name">Anual</div>
       <div class="card-price">
-        <span class="price-val">R$34</span><span class="price-per">/mês</span>
+        <span class="price-rs">R$</span><span class="price-val">34</span><span class="price-per">/mês</span>
       </div>
-      <div class="price-total">Total: <b>R$408</b> em 12x</div>
+      <div class="price-total">Cobrado R$408 por ano</div>
+      <div class="price-eco">Economize R$180</div>
       <ul class="card-feats">
         <li>Site de agendamento</li>
         <li>App de gestão</li>
         <li>Domínio incluído</li>
         <li>Suporte prioritário</li>
       </ul>
-      <span class="card-eco">Economize 31%</span>
+      <button class="btn-comecar" onclick="selEContinuar('anual')">Começar agora</button>
     </div>
 
   </div>
 
-  <div class="cta-wrap">
-    <button class="btn-back" onclick="history.back()">Voltar</button>
-    <button class="btn-continuar" id="btn-continuar" onclick="continuar()" disabled>Continuar</button>
-  </div>
+  <p class="note">Todos os planos incluem 7 dias de teste grátis. Cancele antes do fim do período e não será cobrado.</p>
 </main>
 
 <script>
 let planoSel = null;
 
-// Restore from localStorage if returning
 const savedPlano = localStorage.getItem('onb_plano');
-if(savedPlano) selPlano(savedPlano);
+if (savedPlano) selPlano(savedPlano);
 
 function selPlano(p) {
   planoSel = p;
   ['mensal','trimestral','semestral','anual'].forEach(x => {
-    document.getElementById('card-'+x).classList.toggle('sel', x===p);
+    document.getElementById('card-'+x).classList.toggle('sel', x === p);
   });
-  document.getElementById('btn-continuar').disabled = false;
 }
 
-function continuar() {
-  if(!planoSel) return;
-  localStorage.setItem('onb_plano', planoSel);
+function selEContinuar(p) {
+  event.stopPropagation();
+  planoSel = p;
+  localStorage.setItem('onb_plano', p);
   location.replace('/cadastro');
 }
+
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 </script>

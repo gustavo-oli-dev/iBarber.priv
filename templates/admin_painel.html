@@ -88,18 +88,29 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <main class="main">
 
   <!-- STATS -->
-  <div class="grid2" style="margin-bottom:1.5rem">
-    {% set ativos   = tenants | selectattr('assinatura_ativa') | list %}
-    {% set inativos = tenants | rejectattr('assinatura_ativa') | list %}
+  {% set ativos   = tenants | selectattr('assinatura_ativa') | list %}
+  {% set inativos = tenants | rejectattr('assinatura_ativa') | list %}
+  {% set em_trial = tenants | selectattr('trial_expira') | list %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem;">
     <div class="card">
       <div class="card-title">Assinantes ativos</div>
       <div class="stat">{{ ativos | length }}</div>
-      <div class="stat-lbl">tenants com assinatura ativa</div>
+      <div class="stat-lbl">com assinatura ativa</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Em teste grátis</div>
+      <div class="stat" style="color:var(--gold)">{{ em_trial | length }}</div>
+      <div class="stat-lbl">trials em andamento</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Inativos</div>
+      <div class="stat" style="color:var(--muted)">{{ inativos | length }}</div>
+      <div class="stat-lbl">sem assinatura ativa</div>
     </div>
     <div class="card">
       <div class="card-title">Total cadastrado</div>
       <div class="stat">{{ tenants | length }}</div>
-      <div class="stat-lbl">{{ inativos | length }} sem assinatura ativa</div>
+      <div class="stat-lbl">tenants no sistema</div>
     </div>
   </div>
 
@@ -204,9 +215,10 @@ tr:hover td{background:rgba(255,255,255,.02)}
           </td>
           <td>
             <div class="td-actions">
-              <a href="/{{ t.slug }}" target="_blank" class="btn btn-outline btn-sm">Ver</a>
+              <a href="/{{ t.slug }}" target="_blank" class="btn btn-outline btn-sm">Site</a>
+              <a href="/admin/entrar-gestao/{{ t.id }}?key={{ key }}" target="_blank" class="btn btn-warn btn-sm">Gestão</a>
               {% if t.assinatura_ativa %}
-                <button class="btn btn-warn btn-sm" onclick="abrirVencimento({{ t.id }}, '{{ asn.vencimento.strftime('%Y-%m-%d') if asn and asn.vencimento else '' }}')">Data</button>
+                <button class="btn btn-outline btn-sm" onclick="abrirVencimento({{ t.id }}, '{{ asn.vencimento.strftime('%Y-%m-%d') if asn and asn.vencimento else '' }}')">Venc.</button>
                 <button class="btn btn-danger btn-sm" onclick="desativar({{ t.id }})">Desativar</button>
               {% else %}
                 <button class="btn btn-green btn-sm" onclick="ativarManual({{ t.id }})">Ativar</button>
