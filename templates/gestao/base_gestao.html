@@ -222,8 +222,8 @@
     .g-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.1rem;
+      border-radius: 10px;
+      padding: 1.25rem;
     }
     .g-card-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; }
     .g-card-value { font-size: 1.6rem; font-weight: 600; color: var(--text); }
@@ -254,43 +254,48 @@
     .g-btn {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 0.4rem;
-      padding: 0.55rem 1.1rem;
+      padding: 0.6rem 1.4rem;
       border-radius: var(--radius);
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       font-weight: 500;
       font-family: var(--font-sans);
       cursor: pointer;
-      border: none;
-      transition: opacity 0.15s;
+      border: 1px solid transparent;
+      transition: opacity 0.15s, border-color 0.15s;
       text-decoration: none;
-      min-height: 40px;
+      min-height: 44px;
       touch-action: manipulation;
+      letter-spacing: 0.04em;
     }
     .g-btn:active { opacity: 0.7; }
-    .g-btn-primary { background: var(--gold); color: #000; }
+    .g-btn-primary { background: var(--gold); color: #000; border-color: var(--gold); }
+    .g-btn-primary:hover { opacity: 0.88; }
     .g-btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+    .g-btn-outline:hover { border-color: var(--gold); color: var(--gold); }
     .g-btn-danger { background: var(--error); color: #fff; }
+    .g-btn-sm { min-height: 36px; padding: 0.4rem 0.9rem; font-size: 0.8rem; }
 
     /* ── Form ─────────────────────────────────── */
-    .g-form-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
-    .g-form-group { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; min-width: 160px; }
-    .g-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+    .g-form-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .g-form-group { display: flex; flex-direction: column; gap: 0.4rem; flex: 1; min-width: 160px; }
+    .g-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.04em; }
     .g-input {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       color: var(--text);
-      padding: 0.6rem 0.85rem;
+      padding: 0.72rem 0.9rem;
       font-family: var(--font-sans);
       font-size: 0.9rem;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
       width: 100%;
       min-height: 44px;
       -webkit-appearance: none;
     }
-    .g-input:focus { outline: none; border-color: var(--gold-dim); }
-    .g-input::placeholder { color: var(--text-muted); }
+    .g-input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200,200,200,0.06); }
+    .g-input::placeholder { color: var(--text-muted); opacity: 0.6; }
     @media (max-width: 768px) {
       .g-form-row { flex-direction: column; }
       .g-form-group { min-width: 0; }
@@ -322,7 +327,7 @@
     .g-page-header .g-page-title { margin:0; min-width:0; }
     .g-page-header-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
     @media (max-width: 400px) {
-      .g-btn { font-size:.78rem; padding:.45rem .75rem; }
+      .g-btn { font-size:.82rem; padding:.55rem .9rem; min-height:44px; }
     }
 
     /* ── Toggle Switch ───────────────────────── */

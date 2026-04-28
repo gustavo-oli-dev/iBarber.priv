@@ -200,6 +200,7 @@ main { flex: 1; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 44px;
   padding: 0.6rem 1.4rem;
   border-radius: var(--radius);
   font-family: var(--font-sans);
@@ -213,8 +214,9 @@ main { flex: 1; }
   text-decoration: none;
 }
 .btn-lg {
-  padding: 0.8rem 2rem;
+  padding: 0.85rem 2rem;
   font-size: 0.95rem;
+  min-height: 48px;
 }
 .btn-full { width: 100%; }
 .btn-gold {
@@ -1001,7 +1003,7 @@ main { flex: 1; }
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1rem;
 }
 .field {
   display: flex;
@@ -1009,7 +1011,7 @@ main { flex: 1; }
   gap: 0.4rem;
 }
 .field-label {
-  font-size: 0.825rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.04em;
@@ -1055,6 +1057,7 @@ main { flex: 1; }
   font-family: var(--font-sans);
   font-size: 0.9rem;
   padding: 0.72rem 0.9rem;
+  min-height: 44px;
   transition: border-color var(--transition), box-shadow var(--transition);
   outline: none;
 }
