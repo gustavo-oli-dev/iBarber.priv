@@ -17,8 +17,8 @@
     <div class="g-section-title" style="margin-bottom:1rem;" id="titCat">Nova Categoria</div>
     <input type="hidden" id="catId">
     <div class="g-form-group" style="margin-bottom:.75rem;">
-      <label class="g-label">Nome</label>
-      <input id="catNome" class="g-input" placeholder="Ex: Cortes" />
+      <label class="g-label">Nome *</label>
+      <input id="catNome" class="g-input" placeholder="Ex: Cortes" required data-validate="nome" />
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button class="g-btn g-btn-outline" onclick="fecharModalCat()">Cancelar</button>
@@ -35,8 +35,8 @@
     <input type="hidden" id="servicoId">
     <div class="g-form-row">
       <div class="g-form-group">
-        <label class="g-label">Nome</label>
-        <input id="sNome" class="g-input" placeholder="Ex: Corte degradê" />
+        <label class="g-label">Nome *</label>
+        <input id="sNome" class="g-input" placeholder="Ex: Corte degradê" required data-validate="nome" />
       </div>
       <div class="g-form-group">
         <label class="g-label">Categoria</label>
@@ -45,7 +45,7 @@
     </div>
     <div class="g-form-group" style="margin-top:.75rem;">
       <label class="g-label">Preço (R$)</label>
-      <input id="sPreco" class="g-input" type="number" step="0.01" min="0" placeholder="0.00" />
+      <input id="sPreco" class="g-input" type="text" inputmode="decimal" placeholder="0,00" data-mask="moeda" data-validate="moeda" min="0" />
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button class="g-btn g-btn-outline" onclick="fecharModalServico()">Cancelar</button>
@@ -127,7 +127,8 @@ function editarCategoria(id) {
 async function salvarCategoria() {
   const id = document.getElementById('catId').value;
   const nome = document.getElementById('catNome').value.trim();
-  if (!nome) { alert('Informe o nome'); return; }
+  const modalCatEl = document.getElementById('modalCat').querySelector('div');
+  if (!ibForms.validarForm(modalCatEl)) return;
   const url = id ? `/api/categorias/${id}` : '/api/categorias';
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify({nome})});
@@ -172,9 +173,11 @@ function editarServico(id) {
 async function salvarServico() {
   const id = document.getElementById('servicoId').value;
   const nome = document.getElementById('sNome').value.trim();
-  const preco = parseFloat(document.getElementById('sPreco').value||0);
+  const precoRaw = document.getElementById('sPreco').value.replace(',','.');
+  const preco = parseFloat(precoRaw) || 0;
   const catId = document.getElementById('sCat').value;
-  if (!nome) { alert('Informe o nome'); return; }
+  const modalEl = document.getElementById('modalServico').querySelector('div');
+  if (!ibForms.validarForm(modalEl)) return;
   const body = {nome, preco, categoria_id: catId ? parseInt(catId) : null};
   const url = id ? `/api/servicos/${id}` : '/api/servicos';
   const method = id ? 'PUT' : 'POST';

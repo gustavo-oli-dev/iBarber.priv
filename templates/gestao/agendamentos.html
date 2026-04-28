@@ -199,11 +199,11 @@
     <div class="modal-titulo">Novo Cliente</div>
     <div class="g-form-group" style="margin-bottom:0.85rem;">
       <label class="g-label">Nome *</label>
-      <input class="g-input" id="novoNome" placeholder="Nome completo" />
+      <input class="g-input" id="novoNome" placeholder="Nome completo" required data-validate="nome" />
     </div>
     <div class="g-form-group" style="margin-bottom:0.85rem;">
       <label class="g-label">Contato *</label>
-      <input class="g-input" id="novoContato" type="tel" placeholder="(00) 00000-0000" />
+      <input class="g-input" id="novoContato" type="tel" placeholder="(00) 00000-0000" required data-mask="tel" data-validate="tel" />
     </div>
     <div class="g-form-group" style="margin-bottom:1.1rem;">
       <label class="g-label">Observação</label>
@@ -453,7 +453,8 @@ async function salvarNovoCliente() {
   const nome    = document.getElementById('novoNome').value.trim();
   const contato = document.getElementById('novoContato').value.trim();
   const obs     = document.getElementById('novoObs').value.trim();
-  if (!nome || !contato) { alert('Nome e contato são obrigatórios.'); return; }
+  const boxModal = document.getElementById('modalCliente').querySelector('.modal-box');
+  if (!ibForms.validarForm(boxModal)) return;
   const email = 'guest_' + Math.random().toString(36).slice(2,10) + '@gestao.local';
   const res = await fetch('/api/usuarios', {
     method: 'POST',

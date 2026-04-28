@@ -342,6 +342,11 @@
     .perm-chips { display:flex;flex-wrap:wrap;gap:.5rem; }
     .perm-chip { display:inline-flex;align-items:center;padding:.3rem .85rem;border-radius:999px;border:1.5px solid var(--border);font-size:.78rem;cursor:pointer;transition:background .15s,border-color .15s,color .15s;background:transparent;color:var(--text-muted);user-select:none;font-family:inherit; }
     .perm-chip.active { background:var(--gold);border-color:var(--gold);color:#000;font-weight:600; }
+
+    /* ── Validação inline ───────────────────── */
+    .ib-erro { color: var(--error); font-size: .72rem; margin-top: .2rem; display: block; }
+    .ib-invalido { border-color: var(--error) !important; }
+    .ib-invalido:focus { box-shadow: 0 0 0 3px rgba(224,85,85,.1) !important; }
   </style>
   {% if tema_css %}{{ tema_css|safe }}{% endif %}
   {% if gt_tema_override %}{{ gt_tema_override|safe }}<style>body{pointer-events:none;overflow-x:hidden}</style>{% endif %}
@@ -516,6 +521,7 @@
       });
     });
   </script>
+  <script src="/static/js/ibarber-forms.js"></script>
   {% block scripts %}{% endblock %}
 <script>document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});</script>
 </body>

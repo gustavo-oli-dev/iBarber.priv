@@ -48,23 +48,23 @@
     <input type="hidden" id="editId" value="">
     <div class="g-form-row">
       <div class="g-form-group">
-        <label class="g-label">Nome</label>
-        <input id="fNome" class="g-input" placeholder="Nome completo" />
+        <label class="g-label">Nome *</label>
+        <input id="fNome" class="g-input" placeholder="Nome completo" required data-validate="nome" />
       </div>
       <div class="g-form-group">
         <label class="g-label">E-mail</label>
-        <input id="fEmail" class="g-input" type="email" placeholder="email@exemplo.com" />
+        <input id="fEmail" class="g-input" type="email" placeholder="email@exemplo.com" data-validate="email" />
       </div>
     </div>
     <div class="g-form-row">
       <div class="g-form-group">
         <label class="g-label">Telefone</label>
-        <input id="fTelefone" class="g-input" placeholder="(00) 00000-0000" />
+        <input id="fTelefone" class="g-input" placeholder="(00) 00000-0000" data-mask="tel" data-validate="tel" />
       </div>
       <div class="g-form-group">
         <label class="g-label" id="senhaLabel">Senha inicial</label>
         <div style="position:relative;">
-          <input id="fSenha" class="g-input" type="password" placeholder="Mínimo 6 caracteres" style="padding-right:2.5rem;" />
+          <input id="fSenha" class="g-input" type="password" placeholder="Mínimo 6 caracteres" style="padding-right:2.5rem;" data-validate="senha" />
           <button type="button" onclick="toggleSenhaFunc()" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
         </div>
       </div>
@@ -239,7 +239,8 @@ async function salvarFuncionario() {
   const senha = document.getElementById('fSenha').value;
   const permissoes = {};
   PERMS_LISTA.forEach(p => { permissoes[p.key] = document.getElementById('perm_'+p.key).classList.contains('active'); });
-  if (!nome) { alert('Informe o nome'); return; }
+  const modalEl = document.getElementById('modal').querySelector('div');
+  if (!ibForms.validarForm(modalEl)) return;
   const body = {nome, telefone, permissoes};
   if (!id) { body.email = email; body.senha = senha; }
   else { if (senha) body.nova_senha = senha; }

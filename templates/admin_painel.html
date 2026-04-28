@@ -69,6 +69,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .alert-err{background:rgba(224,85,85,.1);border:1px solid var(--error);color:var(--error)}
 
 .td-actions{display:flex;gap:.35rem;align-items:center;flex-wrap:wrap}
+.ib-erro{color:var(--error);font-size:.72rem;margin-top:.2rem;display:block}
+.ib-invalido{border-color:var(--error)!important}
 
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:1rem}
@@ -133,12 +135,12 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
       <div class="field">
         <label class="lbl">MP Access Token</label>
-        <input class="inp" id="mp_token" type="password" placeholder="APP_USR-..." autocomplete="off">
+        <input class="inp" id="mp_token" type="password" placeholder="APP_USR-..." autocomplete="off" data-validate="senha">
         <div class="inp-hint">Conta Mercado Pago → Suas integrações → Credenciais de produção</div>
       </div>
       <div class="field">
         <label class="lbl">MP Public Key</label>
-        <input class="inp" id="mp_pub" type="text" placeholder="APP_USR-..." value="{{ mp_public_key }}">
+        <input class="inp" id="mp_pub" type="text" placeholder="APP_USR-..." value="{{ mp_public_key }}" data-validate="nome">
         <div class="inp-hint">Usada no checkout do cartão (frontend)</div>
       </div>
       <button class="btn btn-gold" onclick="salvarCreds()">Salvar credenciais</button>
@@ -360,6 +362,9 @@ function mostrarAlert(tipo, msg) {
   setTimeout(() => el.style.display = 'none', 3500);
 }
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+</script>
+<script src="/static/js/ibarber-forms.js"></script>
+<script>
 </script>
 </body>
 </html>
