@@ -634,7 +634,9 @@ def servicos():
         }
     sd = _get_setting('dias_agenda', _api_tid())
     dias_agenda = int(sd.value) if sd and sd.value else 20
-    return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda)
+    tenant = get_tenant_atual()
+    tenant_slug = tenant.slug if tenant else None
+    return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda, tenant_slug=tenant_slug)
 
 @app.route('/perfil')
 def perfil():
