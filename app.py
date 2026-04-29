@@ -1334,7 +1334,8 @@ def atualizar_forma_pagamento():
                 descricao=f'{servicos} — {nome_cliente}',
                 valor=pedido.total,
                 forma=_forma_map.get(forma, 'dinheiro'),
-                pedido_id=ag.pedido_id
+                pedido_id=ag.pedido_id,
+                tenant_id=ag.tenant_id,
             )
             db.session.add(entrada)
     db.session.commit()
@@ -1611,7 +1612,7 @@ def api_categoria_detalhe(cid):
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     cat = db.session.get(Categoria, cid)
-    if not cat: return jsonify({'erro': 'não encontrado'}), 404
+    if not cat or cat.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
         cat.ativo = False; db.session.commit(); return jsonify({'ok': True})
     d = request.get_json() or {}
@@ -1659,7 +1660,8 @@ def api_servicos_criar():
         categoria='',
         categoria_id=cat_id,
         preco=_sf(d.get('preco', 0)),
-        ordem=Servico.query.filter_by(categoria_id=cat_id, ativo=True).count()
+        ordem=Servico.query.filter_by(categoria_id=cat_id, ativo=True, tenant_id=tid).count(),
+    tenant_id=tid,
     )
     db.session.add(sv); db.session.commit()
     return jsonify({'ok': True, 'id': sv.id})
@@ -1669,7 +1671,7 @@ def api_servico_detalhe(sid):
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     sv = db.session.get(Servico, sid)
-    if not sv: return jsonify({'erro': 'não encontrado'}), 404
+    if not sv or sv.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
         sv.ativo = False; db.session.commit(); return jsonify({'ok': True})
     d = request.get_json() or {}
@@ -1932,16 +1934,17 @@ def api_horario_especial_del(hid):
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     h = db.session.get(HorarioEspecial, hid)
-    if not h: return jsonify({'erro': 'não encontrado'}), 404
+    if not h or h.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     db.session.delete(h)
     db.session.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/agendamentos/<int:ag_id>/status', methods=['POST'])
 def api_agendamento_status(ag_id):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     ag = db.session.get(Agendamento, ag_id)
-    if not ag:
+    if not ag or ag.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     status = (request.get_json(silent=True) or {}).get('status', '').strip()
     if status not in ('ativo', 'cancelado', 'concluido', 'nao_compareceu'):
@@ -2433,7 +2436,7 @@ def api_agendamentos():
         if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
             return jsonify({'erro': 'Este dia não está disponível.'}), 400
         slot_ocupado = (Agendamento.query
-                        .filter_by(status='ativo')
+                        .filter_by(status='ativo', tenant_id=_api_tid())
                         .filter(Agendamento.data_hora == data_hora)
                         .first())
         if slot_ocupado:
@@ -2563,9 +2566,10 @@ def api_entrada_criar():
 
 @app.route('/api/entradas/<int:eid>', methods=['DELETE'])
 def api_entrada_deletar(eid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     e = db.session.get(EntradaMonetaria, eid)
-    if not e:
+    if not e or e.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     db.session.delete(e)
     db.session.commit()
@@ -2909,9 +2913,10 @@ def api_funcionarios_criar():
 
 @app.route('/api/funcionarios/<int:fid>', methods=['PUT', 'DELETE'])
 def api_funcionario_detalhe(fid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     f = db.session.get(Funcionario, fid)
-    if not f:
+    if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
         f.ativo = False
@@ -2942,9 +2947,10 @@ def api_funcionario_detalhe(fid):
 
 @app.route('/api/funcionarios/<int:fid>/foto', methods=['POST', 'DELETE'])
 def api_funcionario_foto(fid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     f = db.session.get(Funcionario, fid)
-    if not f:
+    if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
         if f.foto:
@@ -3148,7 +3154,7 @@ def gestao_agendamento_status(ag_id):
     redir = _gestao_login_required()
     if redir: return redir
     ag = db.session.get(Agendamento, ag_id)
-    if ag:
+    if ag and ag.tenant_id == _gestao_tid():
         ag.status = request.form.get('status', 'ativo')
         db.session.commit()
     return redirect(url_for('gestao_agendamentos'))
@@ -3261,7 +3267,7 @@ def gestao_precos():
     if redir: return redir
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
-    servicos = Servico.query.filter_by(ativo=True).order_by(Servico.nome).all()
+    servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).all()
     if request.method == 'POST':
         for s in servicos:
             val = request.form.get(f'preco_{s.id}', '').strip()
