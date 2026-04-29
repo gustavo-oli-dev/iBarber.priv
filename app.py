@@ -324,6 +324,17 @@ class FuncionarioAusencia(db.Model):
     data           = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
     __table_args__ = (db.UniqueConstraint('funcionario_id', 'data'),)
 
+class ListaEspera(db.Model):
+    """Clientes que querem ser notificados quando abre vaga num dia cheio."""
+    __tablename__ = 'lista_espera'
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
+    user_id       = db.Column(db.Integer, db.ForeignKey('user.id'),   nullable=False)
+    data          = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
+    notificado_em = db.Column(db.DateTime, nullable=True)
+    criado_em     = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('tenant_id', 'user_id', 'data'),)
+
 
 with app.app_context():
     from sqlalchemy import inspect as _inspect
@@ -689,6 +700,7 @@ def servicos():
         else:
             _barb_nome = None
         agendamento_info = {
+            'id': ag.id,
             'dia': f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}",
             'hora': ag.data_hora.strftime('%H:%M'),
             'forma_pagamento': _forma_label.get(ag.forma_pagamento or '', ''),
@@ -1316,7 +1328,160 @@ def cancelar_agendamento(ag_id):
         </div>
         """
         _enviar_email(user.email, 'Agendamento cancelado — Barbearia', html_cancel)
+    # Notificar lista de espera para esse dia
+    _notificar_lista_espera(ag.tenant_id, ag.data_hora.strftime('%Y-%m-%d'))
     return jsonify({'ok': True})
+
+@app.route('/reagendar-agendamento', methods=['POST'])
+def reagendar_agendamento():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
+    data = request.get_json(silent=True) or {}
+    ag_id        = data.get('ag_id')
+    nova_dh_str  = data.get('data_hora')
+    barbeiro_id  = data.get('barbeiro_id')
+    if not ag_id or not nova_dh_str:
+        return jsonify({'erro': 'dados inválidos'}), 400
+    ag = db.session.get(Agendamento, ag_id)
+    if not ag or ag.user_id != session['user_id']:
+        return jsonify({'erro': 'não encontrado'}), 404
+    if ag.status != 'ativo':
+        return jsonify({'erro': 'agendamento não está ativo'}), 400
+    if (ag.data_hora - datetime.utcnow()).total_seconds() < 3600:
+        return jsonify({'erro': 'Reagendamento não permitido com menos de 1h de antecedência.'}), 400
+    try:
+        nova_dt = datetime.fromisoformat(nova_dh_str)
+    except Exception:
+        return jsonify({'erro': 'data inválida'}), 400
+    # Verifica disponibilidade no novo horário
+    ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
+    capacidade = max(1, len(ativos))
+    from collections import Counter
+    ags_slot = Agendamento.query.filter_by(
+        data_hora=nova_dt, status='ativo', tenant_id=ag.tenant_id).all()
+    if len(ags_slot) >= capacidade:
+        return jsonify({'erro': 'Horário não disponível'}), 409
+    ag.data_hora = nova_dt
+    if barbeiro_id is not None:
+        ag.funcionario_id = barbeiro_id
+    db.session.commit()
+    return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
+
+@app.route('/api/gestao/reagendar', methods=['POST'])
+def api_gestao_reagendar():
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    data = request.get_json(silent=True) or {}
+    ag_id       = data.get('ag_id')
+    nova_dh_str = data.get('data_hora')
+    barbeiro_id = data.get('barbeiro_id')
+    if not ag_id or not nova_dh_str:
+        return jsonify({'erro': 'dados inválidos'}), 400
+    ag = db.session.get(Agendamento, ag_id)
+    if not ag or ag.tenant_id != tid:
+        return jsonify({'erro': 'não encontrado'}), 404
+    if ag.status not in ('ativo',):
+        return jsonify({'erro': 'agendamento não está ativo'}), 400
+    try:
+        nova_dt = datetime.fromisoformat(nova_dh_str)
+    except Exception:
+        return jsonify({'erro': 'data inválida'}), 400
+    ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), tid)
+    capacidade = max(1, len(ativos))
+    ags_slot = Agendamento.query.filter(
+        Agendamento.data_hora == nova_dt,
+        Agendamento.status == 'ativo',
+        Agendamento.tenant_id == tid,
+        Agendamento.id != ag.id,
+    ).count()
+    if ags_slot >= capacidade:
+        return jsonify({'erro': 'Horário não disponível'}), 409
+    ag.data_hora = nova_dt
+    if barbeiro_id is not None:
+        ag.funcionario_id = barbeiro_id
+    db.session.commit()
+    return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
+
+@app.route('/api/lista-espera', methods=['POST'])
+def api_lista_espera_entrar():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
+    data    = request.get_json(silent=True) or {}
+    data_dh = data.get('data')
+    if not data_dh:
+        return jsonify({'erro': 'data obrigatória'}), 400
+    tid = _api_tid()
+    if not tid:
+        return jsonify({'erro': 'tenant inválido'}), 400
+    existente = ListaEspera.query.filter_by(
+        tenant_id=tid, user_id=session['user_id'], data=data_dh).first()
+    if existente:
+        return jsonify({'ok': True, 'ja_inscrito': True})
+    db.session.add(ListaEspera(tenant_id=tid, user_id=session['user_id'], data=data_dh))
+    db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/lista-espera', methods=['DELETE'])
+def api_lista_espera_sair():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
+    data_dh = request.args.get('data')
+    tid = _api_tid()
+    le = ListaEspera.query.filter_by(
+        tenant_id=tid, user_id=session['user_id'], data=data_dh).first()
+    if le:
+        db.session.delete(le)
+        db.session.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/lista-espera', methods=['GET'])
+def api_lista_espera_status():
+    if 'user_id' not in session:
+        return jsonify({'inscrito': False})
+    data_dh = request.args.get('data')
+    tid = _api_tid()
+    inscrito = ListaEspera.query.filter_by(
+        tenant_id=tid, user_id=session['user_id'], data=data_dh).first() is not None
+    return jsonify({'inscrito': inscrito})
+
+def _notificar_lista_espera(tenant_id, data_str):
+    """Envia email para quem está na lista de espera quando abre uma vaga."""
+    pendentes = ListaEspera.query.filter_by(
+        tenant_id=tenant_id, data=data_str, notificado_em=None).all()
+    if not pendentes:
+        return
+    tenant = db.session.get(Tenant, tenant_id)
+    nome_barbearia = tenant.nome if tenant else 'Barbearia'
+    slug = tenant.slug if tenant else ''
+    for le in pendentes:
+        user = db.session.get(User, le.user_id)
+        if not user or not user.email or user.email.endswith('@ibarber.local'):
+            continue
+        try:
+            data_obj = datetime.strptime(data_str, '%Y-%m-%d')
+            data_fmt = f"{DIAS_PT[data_obj.weekday()]}, {data_obj.day} de {MESES_PT[data_obj.month-1]}"
+        except Exception:
+            data_fmt = data_str
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                    background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+          <h2 style="color:#C9A96E;margin-top:0;">Abriu uma vaga!</h2>
+          <p>Olá, <strong>{user.name}</strong>!</p>
+          <p>Uma vaga abriu em <strong>{nome_barbearia}</strong> para <strong>{data_fmt}</strong>.</p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="https://ibarber.app.br/{slug}"
+               style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
+                      text-decoration:none;font-weight:bold;font-size:15px;">
+              Agendar agora
+            </a>
+          </div>
+          <p style="color:#888;font-size:12px;">Corra, as vagas são limitadas!</p>
+        </div>
+        """
+        ok = _enviar_email(user.email, f'Vaga disponível — {nome_barbearia}', html)
+        if ok:
+            le.notificado_em = datetime.utcnow()
+    db.session.commit()
 
 @app.route('/meu-agendamento')
 def meu_agendamento():
@@ -1377,12 +1542,17 @@ def atualizar_forma_pagamento():
     db.session.commit()
     return jsonify({'ok': True})
 
+def _to_brt(dt):
+    """Converte datetime UTC para BRT (UTC-3) para exibição."""
+    return dt - timedelta(hours=3) if dt else dt
+
 @app.route('/meu-historico')
 def meu_historico():
     if 'user_id' not in session:
         return jsonify({'historico': []})
     ags = (Agendamento.query
            .filter_by(user_id=session['user_id'])
+           .options(joinedload(Agendamento.funcionario))
            .order_by(Agendamento.data_hora.desc())
            .limit(20).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
@@ -2178,7 +2348,8 @@ def api_precos():
 
 @app.route('/api/usuarios', methods=['GET', 'POST'])
 def api_usuarios():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         data  = request.get_json(silent=True) or {}
         name  = (data.get('name') or '').strip()
@@ -2197,17 +2368,17 @@ def api_usuarios():
             email = f"{base}@admin.local"
             if User.query.filter_by(email=email).first():
                 import time; email = f"{base}.{int(time.time())}@admin.local"
-        elif User.query.filter_by(email=email).first():
+        elif User.query.filter_by(email=email, tenant_id=tid).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
         senha_temp = generate_password_hash('barber@' + name.split()[0].lower())
         receber_lembretes = data.get('receber_lembretes', True)
         user = User(name=name, email=email, password=senha_temp,
                     contact=contact, observation=observation,
+                    tenant_id=tid,
                     receber_lembretes=bool(receber_lembretes))
         db.session.add(user)
         db.session.commit()
-        return jsonify({'ok': True, 'usuario': user_dict(user)})
-    tid = _api_tid()
+        return jsonify({'ok': True, 'id': user.id, 'usuario': user_dict(user)})
     usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).all()
     return jsonify([user_dict(u) for u in usuarios])
 
@@ -2219,7 +2390,37 @@ def api_usuario(uid):
     if not u or u.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     data = user_dict(u)
+    data['contact'] = u.contact or ''
+    data['name']    = u.name
     data['pedidos'] = [pedido_dict(p) for p in u.pedidos]
+
+    _, gestor_nome = _gestor_como_barbeiro(tid)
+    ags = (Agendamento.query
+           .filter_by(user_id=uid, tenant_id=tid)
+           .options(joinedload(Agendamento.funcionario), joinedload(Agendamento.pedido))
+           .order_by(Agendamento.data_hora.desc()).all())
+    agendamentos = []
+    for ag in ags:
+        if ag.funcionario_id == 0:
+            barbeiro = gestor_nome or 'Proprietário'
+        elif ag.funcionario:
+            barbeiro = ag.funcionario.nome
+        else:
+            barbeiro = '—'
+        servicos = []
+        total = None
+        if ag.pedido:
+            servicos = [i.nome for i in ag.pedido.itens]
+            total = ag.pedido.total
+        agendamentos.append({
+            'id':        ag.id,
+            'data_hora': _to_brt(ag.data_hora).isoformat() if ag.data_hora else None,
+            'status':    ag.status,
+            'barbeiro':  barbeiro,
+            'servicos':  servicos,
+            'total':     total,
+        })
+    data['agendamentos'] = agendamentos
     return jsonify(data)
 
 @app.route('/api/pedidos', methods=['GET'])
@@ -2277,12 +2478,13 @@ def api_stats_servicos():
 def api_stats_barbeiros():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    contagem = {}
-    ags = (Agendamento.query
-           .filter(Agendamento.tenant_id == tid, Agendamento.status == 'ativo')
-           .options(joinedload(Agendamento.funcionario))
-           .all())
+    contagem  = {}
+    receita   = {}
     _, gestor_nome = _gestor_como_barbeiro()
+    ags = (Agendamento.query
+           .filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado')
+           .options(joinedload(Agendamento.funcionario), joinedload(Agendamento.pedido))
+           .all())
     for ag in ags:
         if ag.funcionario_id == 0:
             nome = gestor_nome or 'Gestor'
@@ -2291,8 +2493,12 @@ def api_stats_barbeiros():
         else:
             continue
         contagem[nome] = contagem.get(nome, 0) + 1
-    resultado = sorted([{'nome': k, 'total': v} for k, v in contagem.items()],
-                       key=lambda x: x['total'], reverse=True)
+        if ag.pedido and ag.pedido.total:
+            receita[nome] = receita.get(nome, 0.0) + float(ag.pedido.total)
+    resultado = sorted([
+        {'nome': k, 'total': contagem[k], 'receita': round(receita.get(k, 0.0), 2)}
+        for k in contagem
+    ], key=lambda x: x['receita'], reverse=True)
     return jsonify(resultado)
 
 @app.route('/api/stats/agendamentos_por_mes', methods=['GET'])
@@ -2835,11 +3041,70 @@ def limpar_trials_expirados():
             db.session.commit()
             print(f'[TRIAL] {len(expirados)} tenant(s) expirado(s) excluídos.')
 
+def enviar_retorno_automatico():
+    """Envia email 28 dias após um corte sugerindo reagendar."""
+    with app.app_context():
+        agora = datetime.utcnow()
+        alvo_inicio = agora - timedelta(days=30)
+        alvo_fim    = agora - timedelta(days=27)
+        ags = (Agendamento.query
+               .filter(Agendamento.status == 'concluido',
+                       Agendamento.data_hora >= alvo_inicio,
+                       Agendamento.data_hora < alvo_fim)
+               .options(joinedload(Agendamento.usuario))
+               .all())
+        ag_ids = [ag.id for ag in ags]
+        if not ag_ids:
+            return
+        ja_enviados = {
+            l.agendamento_id
+            for l in LembreteEnviado.query.filter(
+                LembreteEnviado.agendamento_id.in_(ag_ids),
+                LembreteEnviado.tipo == 'retorno'
+            ).all()
+        }
+        for ag in ags:
+            if ag.id in ja_enviados:
+                continue
+            user = ag.usuario
+            if not user or not user.receber_lembretes:
+                continue
+            if not user.email or user.email.endswith('@ibarber.local'):
+                continue
+            tenant = db.session.get(Tenant, ag.tenant_id)
+            nome_b = tenant.nome if tenant else 'Barbearia'
+            slug   = tenant.slug if tenant else ''
+            html = f"""
+            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                        background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+              <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
+              <p>Olá, <strong>{user.name}</strong>!</p>
+              <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
+              <p>Que tal agendar seu próximo horário?</p>
+              <div style="text-align:center;margin:24px 0;">
+                <a href="https://ibarber.app.br/{slug}"
+                   style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
+                          text-decoration:none;font-weight:bold;font-size:15px;">
+                  Agendar agora
+                </a>
+              </div>
+              <p style="color:#888;font-size:12px;">
+                Para cancelar esses lembretes, acesse seu perfil no site.
+              </p>
+            </div>
+            """
+            ok = _enviar_email(user.email, f'Hora de renovar — {nome_b}', html)
+            if ok:
+                db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo='retorno'))
+                db.session.commit()
+                print(f'[RETORNO] Enviado para {user.email}')
+
 scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(verificar_lembretes, 'interval', minutes=30)
-scheduler.add_job(verificar_assinaturas, 'interval', hours=12)
-scheduler.add_job(limpar_guests, 'interval', hours=24)
-scheduler.add_job(limpar_trials_expirados, 'interval', hours=24)
+scheduler.add_job(verificar_lembretes,      'interval', minutes=30)
+scheduler.add_job(verificar_assinaturas,    'interval', hours=12)
+scheduler.add_job(limpar_guests,            'interval', hours=24)
+scheduler.add_job(limpar_trials_expirados,  'interval', hours=24)
+scheduler.add_job(enviar_retorno_automatico,'interval', hours=12)
 scheduler.start()
 
 @app.route('/admin/banco')

@@ -145,6 +145,8 @@ body { overflow: hidden; }
   background: rgba(201,169,110,0.15) !important;
   color: #f0ece4 !important;
 }
+#btnReag2:disabled { opacity: .35; cursor: default; }
+#btnReag2:not(:disabled) { opacity: 1; }
 .hist-total-row {
   display: flex;
   justify-content: space-between;
@@ -172,7 +174,10 @@ body { overflow: hidden; }
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Ver histórico
         </button>
-        <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Cancelar</button>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <button onclick="abrirReagendar({{ agendamento_info.id }})" style="background:transparent;border:1px solid #C9A96E;color:#C9A96E;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Reagendar</button>
+          <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Cancelar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -653,8 +658,21 @@ body { overflow: hidden; }
       const res  = await fetch(`/api/horarios-disponiveis?data=${dataStr}`);
       const data = await res.json();
       grid.innerHTML = '';
-      if (data.fechado || (data.disponiveis.length === 0 && data.tomados.length === 0)) {
+      if (data.fechado || (data.disponiveis.length === 0 && (data.tomados||[]).length === 0)) {
         grid.innerHTML = '<p class="auth-sub" style="text-align:center;padding:1rem;">Dia fechado.</p>';
+        return;
+      }
+      if (data.disponiveis.length === 0 && (data.tomados||[]).length > 0) {
+        grid.innerHTML = `
+          <p class="auth-sub" style="text-align:center;padding:.5rem 0;">Dia lotado.</p>
+          <button onclick="_acaoListaEspera('${dataStr}')" id="btnListaEspera"
+            style="display:block;width:100%;margin-top:.5rem;padding:.65rem;border-radius:8px;
+                   border:1px solid #C9A96E;background:rgba(201,169,110,.08);color:#C9A96E;
+                   font-size:.875rem;font-weight:600;cursor:pointer;">
+            Entrar na lista de espera
+          </button>
+          <p id="listaEsperaMsgCal" style="text-align:center;font-size:.78rem;color:#888;margin-top:.4rem;min-height:.9rem;"></p>`;
+        _verificarListaEspera(dataStr);
         return;
       }
       const todos = [...data.disponiveis, ...data.tomados].sort();
@@ -1122,5 +1140,237 @@ body { overflow: hidden; }
     const dx = e.changedTouches[0].clientX - swipeX;
     if (Math.abs(dx) > 50) navegarLightbox(dx < 0 ? 1 : -1);
   });
+
+  // ── Lista de espera ─────────────────────────────────────
+  async function _verificarListaEspera(dataStr) {
+    try {
+      const r = await fetch(`/api/lista-espera?data=${dataStr}`);
+      const body = await r.json();
+      const btn = document.getElementById('btnListaEspera');
+      const msg = document.getElementById('listaEsperaMsgCal');
+      if (!btn) return;
+      if (body.inscrito) {
+        btn.textContent = 'Na lista de espera ✓';
+        btn.disabled = true;
+        btn.style.opacity = '.6';
+        if (msg) msg.textContent = 'Você será notificado se um horário abrir.';
+      }
+    } catch(_) {}
+  }
+
+  async function _acaoListaEspera(dataStr) {
+    const btn = document.getElementById('btnListaEspera');
+    const msg = document.getElementById('listaEsperaMsgCal');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    try {
+      const r    = await fetch('/api/lista-espera', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data:dataStr}) });
+      const body = await r.json();
+      if (body.ok) {
+        btn.textContent = 'Na lista de espera ✓';
+        btn.style.opacity = '.6';
+        if (msg) msg.textContent = 'Você será notificado se um horário abrir.';
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Entrar na lista de espera';
+        if (msg) { msg.style.color = '#c0392b'; msg.textContent = body.erro || 'Erro.'; }
+      }
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Entrar na lista de espera';
+    }
+  }
+
+  // ── Reagendar (cliente) ─────────────────────────────────
+  let _reag = { agId: null, data: null, slot: null, barbeiro: null };
+  const _DIAS_R2  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const _MESES_R2 = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  function abrirReagendar(agId) {
+    _reag = { agId, data: null, slot: null, barbeiro: null };
+    document.getElementById('reagSlotsArea2').innerHTML = '<p style="color:#888;font-size:.85rem;">Selecione uma data</p>';
+    document.getElementById('reagMsg2').textContent = '';
+    document.getElementById('btnReag2').disabled = true;
+    _buildReagStrip2();
+    document.getElementById('reagOverlay2').style.display = 'block';
+    document.getElementById('reagModal2').style.display   = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function fecharReagendar2() {
+    document.getElementById('reagOverlay2').style.display = 'none';
+    document.getElementById('reagModal2').style.display   = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function _toISOReag2(d) {
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function _buildReagStrip2() {
+    const strip = document.getElementById('reagStrip2');
+    const hoje = new Date();
+    const dias = [];
+    let cur = new Date(hoje);
+    while (dias.length < 30) {
+      if (cur.getDay() !== 0) dias.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    strip.innerHTML = dias.map(d => {
+      const iso   = _toISOReag2(d);
+      const label = d.toDateString() === hoje.toDateString() ? 'Hoje' : _DIAS_R2[d.getDay()];
+      return `<button class="r2-data-btn" data-date="${iso}" onclick="_selReagData2('${iso}',this)"
+        style="display:flex;flex-direction:column;align-items:center;min-width:50px;padding:7px 5px;
+               border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);
+               cursor:pointer;font-family:inherit;transition:.15s;">
+        <span style="font-size:8px;font-weight:600;color:var(--text-muted);letter-spacing:.04em;">${label}</span>
+        <span style="font-size:17px;font-weight:700;color:var(--text);line-height:1.1;">${d.getDate()}</span>
+        <span style="font-size:8px;color:var(--text-muted);">${_MESES_R2[d.getMonth()]}</span>
+      </button>`;
+    }).join('');
+  }
+
+  async function _selReagData2(iso, el) {
+    _reag.data  = iso;
+    _reag.slot  = null;
+    _reag.barbeiro = null;
+    document.getElementById('btnReag2').disabled = true;
+    document.querySelectorAll('.r2-data-btn').forEach(b => {
+      b.style.background = 'rgba(255,255,255,.03)';
+      b.style.borderColor = 'var(--border)';
+      b.querySelectorAll('span').forEach(s => s.style.color = '');
+    });
+    el.style.background  = '#C9A96E';
+    el.style.borderColor = '#C9A96E';
+    el.querySelectorAll('span').forEach(s => s.style.color = '#000');
+
+    const area = document.getElementById('reagSlotsArea2');
+    area.innerHTML = '<p style="color:#888;font-size:.85rem;">Carregando...</p>';
+    try {
+      const res  = await fetch(`/api/horarios-disponiveis?data=${iso}`);
+      const body = await res.json();
+      if (body.fechado || !(body.disponiveis||[]).length) {
+        area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Sem horários disponíveis.</p>';
+        return;
+      }
+      area.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem;">
+        ${(body.disponiveis||[]).map(s =>
+          `<button class="r2-slot-btn" onclick="_selReagSlot2('${s}',this)"
+            style="padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;
+                   background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;
+                   font-family:inherit;cursor:pointer;transition:.12s;">${s}</button>`
+        ).join('')}
+      </div>`;
+    } catch {
+      area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Erro ao carregar.</p>';
+    }
+  }
+
+  async function _selReagSlot2(slot, el) {
+    _reag.slot = slot;
+    document.querySelectorAll('.r2-slot-btn').forEach(b => {
+      b.style.background  = 'rgba(255,255,255,.03)';
+      b.style.borderColor = 'var(--border)';
+      b.style.color = 'var(--text)';
+    });
+    el.style.background  = '#C9A96E';
+    el.style.borderColor = '#C9A96E';
+    el.style.color = '#000';
+
+    // Buscar barbeiros disponíveis
+    const d = _reag.data + 'T' + slot;
+    try {
+      const res  = await fetch(`/api/barbeiros-disponiveis?data_hora=${encodeURIComponent(d)}`);
+      const body = await res.json();
+      const funcs = body.funcionarios || [];
+      if (funcs.length <= 1) {
+        _reag.barbeiro = funcs.length === 1 ? funcs[0].id : null;
+        document.getElementById('btnReag2').disabled = false;
+      } else {
+        const sel = document.getElementById('reagBarbeiroSel2');
+        sel.innerHTML = funcs.map(f =>
+          `<button class="r2-barb-btn" onclick="_selReagBarb2(${f.id},this)"
+            style="padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;
+                   background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;
+                   font-family:inherit;cursor:pointer;transition:.12s;">${f.nome}</button>`
+        ).join('');
+        sel.style.display = 'flex';
+        document.getElementById('reagBarbeiroLabel2').style.display = '';
+      }
+    } catch {
+      document.getElementById('btnReag2').disabled = false;
+    }
+  }
+
+  function _selReagBarb2(id, el) {
+    _reag.barbeiro = id;
+    document.querySelectorAll('.r2-barb-btn').forEach(b => {
+      b.style.background = 'rgba(255,255,255,.03)';
+      b.style.borderColor = 'var(--border)';
+      b.style.color = 'var(--text)';
+    });
+    el.style.background  = '#C9A96E';
+    el.style.borderColor = '#C9A96E';
+    el.style.color = '#000';
+    document.getElementById('btnReag2').disabled = false;
+  }
+
+  async function confirmarReagendar2() {
+    if (!_reag.agId || !_reag.data || !_reag.slot) return;
+    const btn = document.getElementById('btnReag2');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    const msg = document.getElementById('reagMsg2');
+    msg.textContent = '';
+    const payload = { ag_id: _reag.agId, data_hora: _reag.data + 'T' + _reag.slot + ':00' };
+    if (_reag.barbeiro !== null) payload.barbeiro_id = _reag.barbeiro;
+    try {
+      const r    = await fetch('/reagendar-agendamento', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const body = await r.json();
+      if (body.ok) {
+        fecharReagendar2();
+        location.reload();
+      } else {
+        msg.style.color = '#c0392b';
+        msg.textContent = body.erro || 'Erro ao reagendar.';
+        btn.disabled = false;
+      }
+    } catch {
+      msg.style.color = '#c0392b';
+      msg.textContent = 'Erro de conexão.';
+      btn.disabled = false;
+    }
+    btn.textContent = 'Confirmar';
+  }
 </script>
+
+<!-- Modal Reagendar (cliente) -->
+<div id="reagOverlay2" onclick="fecharReagendar2()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;"></div>
+<div id="reagModal2" style="display:none;position:fixed;inset:0;z-index:401;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;
+              padding:1.5rem;width:100%;max-width:420px;position:relative;max-height:90dvh;overflow-y:auto;">
+    <button onclick="fecharReagendar2()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:#888;font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+    <span style="display:block;text-align:center;font-size:1.2rem;margin-bottom:.3rem;">✦</span>
+    <h3 style="text-align:center;font-size:1rem;font-weight:600;color:#f0ece4;margin:0 0 1rem;">Reagendar horário</h3>
+
+    <p style="font-size:.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem;">Nova data</p>
+    <div id="reagStrip2" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:1rem;scrollbar-width:none;"></div>
+
+    <p style="font-size:.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.4rem;">Horário</p>
+    <div id="reagSlotsArea2" style="min-height:36px;"></div>
+
+    <p id="reagBarbeiroLabel2" style="display:none;font-size:.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin:.75rem 0 .4rem;">Barbeiro</p>
+    <div id="reagBarbeiroSel2" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:.5rem;"></div>
+
+    <div id="reagMsg2" style="font-size:.8rem;color:#c0392b;margin-top:.5rem;min-height:.9rem;"></div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button onclick="fecharReagendar2()" style="flex:1;padding:.6rem;border-radius:8px;border:1px solid #2a2a2a;background:none;color:#aaa;font-size:.9rem;cursor:pointer;">Cancelar</button>
+      <button id="btnReag2" disabled onclick="confirmarReagendar2()"
+        style="flex:1;padding:.6rem;border-radius:8px;border:none;background:#C9A96E;color:#000;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .15s;">
+        Confirmar
+      </button>
+    </div>
+  </div>
+</div>
 {% endblock %}

@@ -95,9 +95,13 @@ function fmtData(iso) {
 
 function renderClientes() {
   const q = document.getElementById('busca').value.toLowerCase();
+  const qDigits = q.replace(/\D/g, '');
   const filtered = CLIENTES.filter(c => {
     if (!q) return true;
-    return (c.name+' '+c.email+' '+(c.contact||'')).toLowerCase().includes(q);
+    if ((c.name+' '+c.email).toLowerCase().includes(q)) return true;
+    const foneDigits = (c.contact||'').replace(/\D/g,'');
+    if (qDigits && foneDigits.includes(qDigits)) return true;
+    return false;
   });
   // update page title count when searching
   const busqVal = document.getElementById('busca').value;

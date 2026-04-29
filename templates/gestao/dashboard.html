@@ -333,6 +333,7 @@ function abrirDetalhe(idx) {
         <button class="g-btn g-btn-outline" style="color:#FFA500;font-size:.8rem;" onclick="marcarNaoCompareceu(${ag.id},${idx},this);fecharDetalhe()">Não compareceu</button>
       ` : ''}
       ${!p ? `
+        <button class="g-btn g-btn-outline" style="font-size:.8rem;" onclick="abrirReagendar(${ag.id})">Reagendar</button>
         <form method="POST" action="/gestao/agendamentos/${ag.id}/status" style="display:inline">
           <input type="hidden" name="status" value="cancelado" />
           <button class="g-btn g-btn-outline" style="color:var(--error); font-size:0.8rem;" onclick="return confirm('Cancelar agendamento?')">Cancelar</button>
@@ -375,5 +376,160 @@ setInterval(() => {
   const detOpen = document.getElementById('detPanel').classList.contains('open');
   if (!detOpen) location.reload();
 }, 60000);
+
+// ── Reagendar (gestor) ──────────────────────────────
+let _reagAgId  = null;
+let _reagData  = null;
+let _reagSlot  = null;
+const _DIAS_R  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const _MESES_R = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function abrirReagendar(agId) {
+  _reagAgId = agId;
+  _reagData = null;
+  _reagSlot = null;
+  document.getElementById('reagSlotsArea').innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;">Selecione uma data</div>';
+  document.getElementById('reagMsg').textContent = '';
+  document.getElementById('btnReag').disabled = true;
+  _buildReagStrip();
+  document.getElementById('reagOverlay').style.display = 'block';
+  document.getElementById('reagModal').style.display   = 'flex';
+}
+
+function fecharReagendar() {
+  document.getElementById('reagOverlay').style.display = 'none';
+  document.getElementById('reagModal').style.display   = 'none';
+}
+
+function _toISOReag(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function _buildReagStrip() {
+  const strip = document.getElementById('reagStrip');
+  const hoje = new Date();
+  const dias = [];
+  let cur = new Date(hoje);
+  while (dias.length < 30) {
+    if (cur.getDay() !== 0) dias.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  strip.innerHTML = dias.map(d => {
+    const iso   = _toISOReag(d);
+    const label = d.toDateString() === hoje.toDateString() ? 'Hoje' : _DIAS_R[d.getDay()];
+    return `<button class="reag-data-btn" data-date="${iso}" onclick="_selecionarReagData('${iso}',this)"
+      style="display:flex;flex-direction:column;align-items:center;min-width:50px;padding:7px 5px;
+             border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.03);
+             cursor:pointer;font-family:var(--font-sans);transition:.15s;">
+      <span style="font-size:8px;font-weight:600;color:var(--text-muted);letter-spacing:.04em;">${label}</span>
+      <span style="font-size:17px;font-weight:700;color:var(--text);line-height:1.1;">${d.getDate()}</span>
+      <span style="font-size:8px;color:var(--text-muted);">${_MESES_R[d.getMonth()]}</span>
+    </button>`;
+  }).join('');
+}
+
+async function _selecionarReagData(iso, el) {
+  _reagData = iso;
+  _reagSlot = null;
+  document.getElementById('btnReag').disabled = true;
+  document.querySelectorAll('.reag-data-btn').forEach(b => {
+    b.style.background = 'rgba(255,255,255,.03)';
+    b.style.borderColor = 'var(--border)';
+    b.querySelector('span:nth-child(2)').style.color = 'var(--text)';
+  });
+  el.style.background   = 'var(--gold)';
+  el.style.borderColor  = 'var(--gold)';
+  el.querySelectorAll('span').forEach(s => s.style.color = '#000');
+
+  const area = document.getElementById('reagSlotsArea');
+  area.innerHTML = '<div style="color:var(--text-muted);font-size:.85rem;">Carregando...</div>';
+  try {
+    const res  = await fetch(`/api/horarios-disponiveis?data=${iso}`);
+    const body = await res.json();
+    if (body.fechado || !(body.disponiveis||[]).length) {
+      area.innerHTML = '<div style="color:var(--error);font-size:.85rem;">Sem horários disponíveis.</div>';
+      return;
+    }
+    area.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem;">
+      ${(body.disponiveis||[]).map(s =>
+        `<button class="reag-slot-btn" onclick="_selecionarReagSlot('${s}',this)"
+          style="padding:.4rem .8rem;border:1px solid var(--border);border-radius:var(--radius);
+                 background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;
+                 font-family:var(--font-sans);cursor:pointer;transition:.12s;">${s}</button>`
+      ).join('')}
+    </div>`;
+  } catch {
+    area.innerHTML = '<div style="color:var(--error);font-size:.85rem;">Erro ao carregar.</div>';
+  }
+}
+
+function _selecionarReagSlot(slot, el) {
+  _reagSlot = slot;
+  document.querySelectorAll('.reag-slot-btn').forEach(b => {
+    b.style.background = 'rgba(255,255,255,.03)';
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--text)';
+  });
+  el.style.background  = 'var(--gold)';
+  el.style.borderColor = 'var(--gold)';
+  el.style.color       = '#000';
+  document.getElementById('btnReag').disabled = false;
+}
+
+async function confirmarReagendar() {
+  if (!_reagAgId || !_reagData || !_reagSlot) return;
+  const btn = document.getElementById('btnReag');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  const msg = document.getElementById('reagMsg');
+  msg.textContent = '';
+  try {
+    const r = await fetch('/api/gestao/reagendar', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify({ag_id: _reagAgId, data_hora: _reagData + 'T' + _reagSlot + ':00'})
+    });
+    const body = await r.json();
+    if (body.ok) {
+      const ag = AGENDAMENTOS.find(a => a.id === _reagAgId);
+      if (ag) ag.data_hora = body.data_hora;
+      fecharReagendar();
+      fecharDetalhe();
+      renderLista();
+      renderStats();
+    } else {
+      msg.style.color = 'var(--error)';
+      msg.textContent = body.erro || 'Erro ao reagendar.';
+      btn.disabled = false;
+    }
+  } catch {
+    msg.style.color = 'var(--error)';
+    msg.textContent = 'Erro de conexão.';
+    btn.disabled = false;
+  }
+  btn.textContent = 'Confirmar';
+}
 </script>
+
+<!-- Modal Reagendar -->
+<div id="reagOverlay" onclick="fecharReagendar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;"></div>
+<div id="reagModal" style="display:none;position:fixed;inset:0;z-index:401;align-items:center;justify-content:center;padding:1rem;pointer-events:none;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+              padding:1.5rem;width:100%;max-width:420px;pointer-events:auto;position:relative;max-height:90dvh;overflow-y:auto;">
+    <button onclick="fecharReagendar()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+    <div style="font-weight:600;font-size:1rem;margin-bottom:1rem;">Reagendar Horário</div>
+
+    <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">Nova data</div>
+    <div id="reagStrip" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:4px;margin-bottom:1rem;scrollbar-width:none;"></div>
+
+    <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">Horário</div>
+    <div id="reagSlotsArea" style="min-height:40px;"></div>
+
+    <div id="reagMsg" style="font-size:.8rem;margin-top:.75rem;min-height:1rem;"></div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem;">
+      <button class="g-btn g-btn-outline" style="flex:1;" onclick="fecharReagendar()">Cancelar</button>
+      <button id="btnReag" class="g-btn" style="flex:1;background:var(--gold);color:#000;font-weight:700;" disabled onclick="confirmarReagendar()">Confirmar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
