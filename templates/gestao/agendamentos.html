@@ -98,6 +98,23 @@
   .slots-loading { color: var(--text-muted); font-size: 0.875rem; padding: 0.75rem 0; }
   .slots-fechado { color: var(--error); font-size: 0.875rem; padding: 0.75rem 0; }
 
+  /* Pagamento visual */
+  .pag-btn {
+    display: inline-flex; align-items: center; gap: .45rem;
+    padding: .6rem 1.1rem; border-radius: 10px;
+    border: 1.5px solid var(--border);
+    background: rgba(255,255,255,.03);
+    color: var(--text-muted); font-size: .875rem; font-weight: 500;
+    font-family: var(--font-sans); cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+    min-height: 44px; touch-action: manipulation;
+  }
+  .pag-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+  .pag-btn.pag-sel {
+    border-color: var(--gold); background: rgba(200,200,200,.08);
+    color: var(--text); font-weight: 600;
+  }
+
   /* Botão salvar */
   .btn-salvar {
     width: 100%; padding: 0.85rem;
@@ -172,14 +189,16 @@
 
   <!-- Forma pagamento -->
   <div class="mh-section-label" style="margin-bottom:0.6rem;">Forma de pagamento</div>
-  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem;">
-    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem;">
-      <input type="radio" name="formaPag" value="pagar_no_local" checked style="accent-color:var(--gold);" /> Pagar no local
-    </label>
-    <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem;">
-      <input type="radio" name="formaPag" value="pix" style="accent-color:var(--gold);" /> Pix
-    </label>
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.25rem;">
+    <button type="button" class="pag-btn pag-sel" data-pag="pagar_no_local" onclick="selPag(this)">
+      <span style="font-size:1rem;">💵</span> Pagar no local
+    </button>
+    <button type="button" class="pag-btn" data-pag="pix" onclick="selPag(this)">
+      <svg width="16" height="16" viewBox="0 0 512 512" fill="currentColor"><path d="M242.4 292.5C247.8 287.1 255.1 284.1 262.5 284.1C269.9 284.1 277.2 287.1 282.6 292.5L355.9 365.8C367.1 377 384.4 379.1 397.9 369.8L432 347.3L282.6 197.9C277.2 192.5 269.9 189.5 262.5 189.5C255.1 189.5 247.8 192.5 242.4 197.9L93.41 346.9L127.3 369.2C140.8 378.6 158.2 376.5 169.4 365.3L242.4 292.5zM510.6 227.3L471.2 187.9C459.1 175.8 443.1 169 426.4 169H369.2L433.1 233C451.4 251.3 451.4 280.7 433.1 298.1L369.2 343H426.4C443.1 343 459.1 336.2 471.2 324.1L510.6 284.7C522.5 272.8 522.5 239.2 510.6 227.3V227.3zM40.86 187.9L1.465 227.3C-10.44 239.2-10.44 272.8 1.465 284.7L40.86 324.1C52.95 336.2 68.99 343 85.6 343H142.8L78.9 298.1C60.61 280.7 60.61 251.3 78.9 233L142.8 169H85.6C68.99 169 52.95 175.8 40.86 187.9z"/></svg>
+      PIX
+    </button>
   </div>
+  <input type="hidden" id="formaPagHidden" value="pagar_no_local" />
 
   <!-- Slots -->
   <div class="mh-section-label" style="margin-bottom:0.6rem;">
@@ -398,7 +417,7 @@ async function salvar() {
   btn.textContent = 'Salvando...';
   msg.textContent = '';
   try {
-    const formaPag  = document.querySelector('input[name="formaPag"]:checked')?.value || 'pagar_no_local';
+    const formaPag  = document.getElementById('formaPagHidden').value || 'pagar_no_local';
     const payload   = {
       user_id: clienteSelecionado,
       data_hora: dataSelecionada + 'T' + slotSelecionado + ':00',
@@ -473,6 +492,12 @@ async function salvarNovoCliente() {
   } else {
     alert(body.erro || 'Erro ao criar cliente.');
   }
+}
+
+function selPag(btn) {
+  document.querySelectorAll('.pag-btn').forEach(b => b.classList.remove('pag-sel'));
+  btn.classList.add('pag-sel');
+  document.getElementById('formaPagHidden').value = btn.dataset.pag;
 }
 
 carregarServicos();
