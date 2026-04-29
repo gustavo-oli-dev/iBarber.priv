@@ -276,7 +276,17 @@ document.getElementById('mInputTel').addEventListener('keydown', e => {
 });
 
 {% if auto_rapido or preview_mode %}
-document.addEventListener('DOMContentLoaded', function() { abrirModal(); });
+document.addEventListener('DOMContentLoaded', function() {
+  abrirModal();
+  {% if auto_criar %}
+  _mTel = '11999990000';
+  document.getElementById('mStep1').classList.remove('ativo');
+  document.getElementById('mStep2').classList.add('ativo');
+  document.getElementById('modalTitle').textContent = 'Criar conta';
+  document.getElementById('modalSub').textContent = 'Só mais um segundo';
+  document.getElementById('mTelDisplay').textContent = '(11) 99999-0000';
+  {% endif %}
+});
 {% endif %}
 </script>
 {% endif %}

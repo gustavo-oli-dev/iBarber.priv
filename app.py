@@ -1086,7 +1086,19 @@ def preview_ag_sem_cadastro():
     from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     resp = make_response(render_template('index.html',
-        user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True, auto_rapido=True))
+        user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True,
+        auto_rapido=True, auto_criar=True))
+    resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    return resp
+
+@app.route('/preview/ag/google-contato')
+def preview_ag_google_contato():
+    from flask import make_response
+    tema_override = _build_ag_tema_override(request.args)
+    class MockUser:
+        email = 'carlos@gmail.com'; name = 'Carlos Silva'
+    resp = make_response(render_template('google_contato.html',
+        user=MockUser(), erro=None, hide_fabs=True, tema_override=tema_override, preview_mode=True))
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
