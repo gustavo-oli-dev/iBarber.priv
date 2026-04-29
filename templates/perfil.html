@@ -1,149 +1,361 @@
 {% extends 'base.html' %}
-{% block title %}Configurações — Barbearia{% endblock %}
+{% block title %}Perfil — Barbearia{% endblock %}
 {% block content %}
+{% set email_sintetico = user.email.endswith('@ibarber.local') %}
 <style>
-.toggle-row {
-  display:flex;align-items:center;justify-content:space-between;
-  padding:.7rem .9rem;background:var(--surface,#161616);
-  border:1px solid var(--border,#2a2a2a);border-radius:var(--radius,6px);
+.fab { display: none !important; }
+.pf-campo {
+  background: var(--surface, #161616);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius, 6px);
+  padding: .8rem .9rem;
+  margin-bottom: .4rem;
 }
-.toggle-switch{position:relative;width:40px;height:22px;flex-shrink:0;}
-.toggle-switch input{opacity:0;width:0;height:0;}
-.toggle-track{position:absolute;inset:0;background:#333;border-radius:22px;transition:background .2s;cursor:pointer;}
-.toggle-track:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;left:3px;top:3px;background:#888;transition:.2s;}
-.toggle-switch input:checked + .toggle-track{background:var(--gold,#C9A96E);}
-.toggle-switch input:checked + .toggle-track:before{transform:translateX(18px);background:#000;}
+.pf-view {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.pf-label {
+  font-size: .7rem; color: var(--text-muted, #888);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: .18rem;
+}
+.pf-valor { font-size: .92rem; color: var(--text, #f0ece4); }
+.pf-edit-btn {
+  background: none; border: none; color: var(--gold, #C9A96E);
+  font-size: .78rem; cursor: pointer; padding: .2rem .4rem;
+  font-family: inherit; flex-shrink: 0;
+}
+.pf-edit-box { margin-top: .55rem; }
+.pf-edit-actions {
+  display: flex; gap: .5rem; margin-top: .45rem; justify-content: flex-end;
+}
+.pf-edit-actions .btn { font-size: .82rem; padding: .38rem .85rem; }
+.pf-erro { color: #c0392b; font-size: .76rem; margin-top: .3rem; display: none; }
+.tel-input-wrap { display: flex; gap: .5rem; align-items: stretch; }
+.tel-prefix {
+  background: var(--surface, #161616);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius, 6px);
+  padding: 0 .75rem;
+  color: var(--text-muted, #888);
+  font-size: .95rem;
+  display: flex; align-items: center; flex-shrink: 0; user-select: none;
+}
+.lembrete-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .7rem .9rem;
+  background: var(--surface, #161616);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius, 6px);
+  cursor: pointer; user-select: none;
+  margin-bottom: .4rem;
+}
+.lembrete-row.ativo { border-color: #4caf82; background: rgba(76,175,130,.06); }
+.lembrete-label { font-size: .9rem; color: var(--text, #f0ece4); }
+.lembrete-sub   { font-size: .74rem; color: var(--text-muted, #888); margin-top: .1rem; }
+.toggle-switch  { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track   { position: absolute; inset: 0; background: #333; border-radius: 22px; transition: background .2s; cursor: pointer; }
+.toggle-track:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; left: 3px; top: 3px; background: #888; transition: .2s; }
+.toggle-switch input:checked + .toggle-track { background: #4caf82; }
+.toggle-switch input:checked + .toggle-track:before { transform: translateX(18px); background: #fff; }
 </style>
+
 <section class="auth-section">
   <div class="auth-card">
     <div class="auth-header">
       <span class="logo-mark">✦</span>
-      <h2 class="auth-title">Configurações</h2>
-      <p class="auth-sub">Seus dados cadastrais</p>
+      <h2 class="auth-title">Perfil</h2>
+      <p class="auth-sub">Seus dados</p>
     </div>
 
     {% if session.get('is_guest') %}
-      {# ── Visitante: só nome, contato, observação e criar conta ── #}
-      <div class="field">
-        <label class="field-label">Nome</label>
-        <p class="field-value">{{ user.name }}</p>
-      </div>
-      {% if user.contact %}
-      <div class="field">
-        <label class="field-label">Contato</label>
-        <p class="field-value">{{ user.contact }}</p>
-      </div>
-      {% endif %}
-      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:0.5rem;">
-        <div class="field">
-          <label class="field-label">Observação</label>
-          <textarea class="field-input" name="observation" rows="3"
-                    placeholder="Adicione uma observação..."
-                    style="resize:vertical;">{{ user.observation or '' }}</textarea>
-        </div>
-        <button type="submit" class="btn btn-outline btn-full" style="margin-top:0.5rem;">Salvar observação</button>
-      </form>
-      <div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--border);">
-        <p class="auth-sub" style="margin-bottom:0.8rem;">Cadastre-se para salvar seu histórico e receber lembretes.</p>
-        <a href="{{ url_for('register') }}" class="btn btn-gold btn-full">Criar conta</a>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:1.2rem;">
-        <a href="{{ url_for('logout') }}" class="link-danger">Sair</a>
-      </div>
+    <div class="pf-campo">
+      <div class="pf-label">Nome</div>
+      <div class="pf-valor">{{ user.name }}</div>
+    </div>
+    {% if user.contact %}
+    <div class="pf-campo">
+      <div class="pf-label">WhatsApp</div>
+      <div class="pf-valor">{{ user.contact }}</div>
+    </div>
+    {% endif %}
+    <div style="margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);">
+      <p class="auth-sub" style="margin-bottom:.8rem;">Cadastre-se para salvar seu histórico e receber lembretes.</p>
+      <a href="{{ url_for('register') }}" class="btn btn-gold btn-full">Criar conta</a>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+      <a href="{{ url_for('logout') }}" class="link-danger">Sair</a>
+    </div>
 
     {% else %}
-      {# ── Usuário cadastrado: exibição completa ── #}
-      {% set email_sintetico = user.email and user.email.endswith('@ibarber.local') %}
-      <div class="field">
-        <label class="field-label">Nome</label>
-        <p class="field-value">{{ user.name }}</p>
-      </div>
-      {% if user.contact %}
-      <div class="field">
-        <label class="field-label">WhatsApp</label>
-        <p class="field-value">{{ user.contact }}</p>
-      </div>
-      {% endif %}
-      {% if not email_sintetico %}
-      <div class="field">
-        <label class="field-label">E-mail</label>
-        <p class="field-value">{{ user.email }}</p>
-      </div>
-      {% endif %}
-      <form method="POST" action="{{ url_for('salvar_observacao') }}" style="margin-top:0.5rem;">
-        <div class="field">
-          <label class="field-label">Observação</label>
-          <textarea class="field-input" name="observation" rows="3"
-                    placeholder="Adicione uma observação..."
-                    style="resize:vertical;">{{ user.observation or '' }}</textarea>
-        </div>
-        <button type="submit" class="btn btn-outline btn-full" style="margin-top:0.5rem;">Salvar observação</button>
-      </form>
 
-      {# ── Toggle lembretes ── #}
-      <div style="margin-top:1rem;">
-        <div class="toggle-row" onclick="toggleLembretePerfil()" style="cursor:pointer;">
-          <div>
-            <div style="font-size:.9rem;color:var(--text);">Lembretes de agendamento</div>
-            <div style="font-size:.74rem;color:var(--text-muted);margin-top:.1rem;">Receba avisos por e-mail antes do horário</div>
+    <!-- Nome -->
+    <div class="pf-campo">
+      <div class="pf-view" id="view_nome">
+        <div>
+          <div class="pf-label">Nome</div>
+          <div class="pf-valor" id="mostrar_nome">{{ user.name }}</div>
+        </div>
+        <button class="pf-edit-btn" onclick="editarCampo('nome')">Editar</button>
+      </div>
+      <div class="pf-edit-box" id="edit_nome" style="display:none;">
+        <input class="field-input" type="text" id="input_nome" value="{{ user.name }}" placeholder="Seu nome" />
+        <p class="pf-erro" id="erro_nome"></p>
+        <div class="pf-edit-actions">
+          <button class="btn btn-outline" onclick="cancelarEdit('nome')">Cancelar</button>
+          <button class="btn btn-gold" onclick="salvarCampo('nome', 'nome', 'input_nome', 'mostrar_nome')">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telefone -->
+    <div class="pf-campo">
+      <div class="pf-view" id="view_telefone">
+        <div>
+          <div class="pf-label">WhatsApp</div>
+          <div class="pf-valor" id="mostrar_telefone" data-raw="{{ user.contact or '' }}">
+            {% if user.contact %}{{ user.contact }}{% else %}<span style="color:var(--text-muted);">Não cadastrado</span>{% endif %}
           </div>
-          <label class="toggle-switch" onclick="event.stopPropagation()">
-            <input type="checkbox" id="chkLembretePerfil"
-                   {% if user.receber_lembretes %}checked{% endif %}
-                   onchange="mostrarEmailPerfil(this.checked)" />
-            <span class="toggle-track"></span>
-          </label>
         </div>
-        <div id="campoEmailPerfil" style="display:{{ 'block' if (user.receber_lembretes or email_sintetico and user.receber_lembretes) else 'none' }};margin-top:.5rem;">
-          <input class="field-input" type="email" id="inputEmailPerfil"
-                 placeholder="seu@email.com"
-                 value="{{ '' if email_sintetico else user.email }}"
-                 oninput="this.value=this.value.toLowerCase()" />
+        <button class="pf-edit-btn" onclick="editarCampo('telefone')">{{ 'Editar' if user.contact else 'Adicionar' }}</button>
+      </div>
+      <div class="pf-edit-box" id="edit_telefone" style="display:none;">
+        <div class="tel-input-wrap">
+          <span class="tel-prefix">🇧🇷 +55</span>
+          <input class="field-input" type="tel" id="input_telefone" inputmode="numeric"
+                 placeholder="(11) 99999-9999"
+                 value="{{ user.contact or '' }}"
+                 oninput="mascaraTel(this)" style="flex:1;" />
         </div>
-        <button class="btn btn-gold btn-full" style="margin-top:.5rem;" onclick="salvarLembretePerfil()">Salvar preferências</button>
-        <p id="erroLembrete" style="color:#c0392b;font-size:.78rem;text-align:center;margin-top:.4rem;display:none;"></p>
-        <p id="okLembrete"   style="color:#4caf82;font-size:.78rem;text-align:center;margin-top:.4rem;display:none;">Salvo!</p>
+        <p class="pf-erro" id="erro_telefone"></p>
+        <div class="pf-edit-actions">
+          <button class="btn btn-outline" onclick="cancelarEdit('telefone')">Cancelar</button>
+          <button class="btn btn-gold" onclick="salvarTelefone()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- E-mail -->
+    <div class="pf-campo">
+      <div class="pf-view" id="view_email">
+        <div>
+          <div class="pf-label">E-mail</div>
+          <div class="pf-valor" id="mostrar_email">
+            {% if email_sintetico %}<span style="color:var(--text-muted);">Não cadastrado</span>
+            {% else %}{{ user.email }}{% endif %}
+          </div>
+        </div>
+        <button class="pf-edit-btn" onclick="editarCampo('email')">{{ 'Editar' if not email_sintetico else 'Adicionar' }}</button>
+      </div>
+      <div class="pf-edit-box" id="edit_email" style="display:none;">
+        <input class="field-input" type="email" id="input_email"
+               placeholder="seu@email.com"
+               value="{{ '' if email_sintetico else user.email }}"
+               oninput="this.value=this.value.toLowerCase()" />
+        <p class="pf-erro" id="erro_email"></p>
+        <div class="pf-edit-actions">
+          <button class="btn btn-outline" onclick="cancelarEdit('email')">Cancelar</button>
+          <button class="btn btn-gold" onclick="salvarEmail()">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lembretes -->
+    <div style="margin-top:.6rem;">
+      <div class="lembrete-row {% if user.receber_lembretes %}ativo{% endif %}"
+           id="lembreteRow" onclick="toggleLembretes()">
+        <div>
+          <div class="lembrete-label">Lembretes de agendamento</div>
+          <div class="lembrete-sub">Aviso por e-mail antes do horário</div>
+        </div>
+        <label class="toggle-switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="chkLembretes"
+                 {% if user.receber_lembretes %}checked{% endif %}
+                 onchange="onLembreteMudou(this.checked)" />
+          <span class="toggle-track"></span>
+        </label>
       </div>
 
-      <div class="perfil-links">
-        <a href="{{ url_for('logout') }}" class="link-danger">Sair da conta</a>
+      {% if email_sintetico %}
+      <div id="campoEmailLembrete" style="display:{{ 'block' if user.receber_lembretes else 'none' }};margin-bottom:.4rem;">
+        <input class="field-input" type="email" id="inputEmailLembrete"
+               placeholder="seu@email.com"
+               oninput="this.value=this.value.toLowerCase()" />
+        <p style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem;">E-mail para receber os lembretes.</p>
       </div>
+      {% else %}
+      <div id="campoEmailLembrete" style="display:{{ 'block' if user.receber_lembretes else 'none' }};padding:.3rem .1rem .4rem;">
+        <div style="font-size:.78rem;color:var(--text-muted);">
+          Lembretes enviados para <strong style="color:var(--text);">{{ user.email }}</strong>
+        </div>
+      </div>
+      {% endif %}
+
+      <button class="btn btn-gold btn-full" style="margin-top:.2rem;" onclick="salvarLembretes()">Salvar lembretes</button>
+      <p class="pf-erro" id="erroLembrete"></p>
+      <p id="okLembrete" style="color:#4caf82;font-size:.78rem;text-align:center;margin-top:.3rem;display:none;">Salvo!</p>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:1.2rem;">
+      <a href="{{ url_for('logout') }}" class="link-danger">Sair da conta</a>
+    </div>
     {% endif %}
 
-    <a href="{{ url_for('servicos') }}" class="btn btn-outline btn-full" style="margin-top:1.4rem;">
-      Voltar
-    </a>
+    <a href="{{ url_for('servicos') }}" class="btn btn-outline btn-full" style="margin-top:1rem;">Voltar</a>
   </div>
 </section>
+
 <script>
-function toggleLembretePerfil() {
-  const chk = document.getElementById('chkLembretePerfil');
+(function() {
+  const el  = document.getElementById('mostrar_telefone');
+  const raw = el ? el.dataset.raw : '';
+  if (raw) {
+    let v = raw.replace(/\D/g, '');
+    if (v.length > 2)  v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+    if (v.length > 10) v = v.slice(0,10) + '-' + v.slice(10);
+    el.textContent = v;
+  }
+  const inp = document.getElementById('input_telefone');
+  if (inp && inp.value) mascaraTel(inp);
+})();
+
+function mascaraTel(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 2)  v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+  if (v.length > 10) v = v.slice(0,10) + '-' + v.slice(10);
+  el.value = v;
+}
+
+function editarCampo(campo) {
+  document.getElementById('view_' + campo).style.display = 'none';
+  document.getElementById('edit_' + campo).style.display = 'block';
+}
+function cancelarEdit(campo) {
+  document.getElementById('view_' + campo).style.display = 'flex';
+  document.getElementById('edit_' + campo).style.display = 'none';
+  const err = document.getElementById('erro_' + campo);
+  if (err) err.style.display = 'none';
+}
+
+async function salvarCampo(campo, apiCampo, inputId, mostrarId) {
+  const valor = document.getElementById(inputId).value.trim();
+  const err   = document.getElementById('erro_' + campo);
+  err.style.display = 'none';
+  try {
+    const res  = await fetch('/api/perfil/update', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({campo: apiCampo, valor}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById(mostrarId).textContent = valor;
+      cancelarEdit(campo);
+    } else {
+      err.textContent = data.erro || 'Erro ao salvar.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Erro de conexão.';
+    err.style.display = 'block';
+  }
+}
+
+async function salvarTelefone() {
+  const raw = document.getElementById('input_telefone').value.replace(/\D/g, '');
+  const err = document.getElementById('erro_telefone');
+  err.style.display = 'none';
+  try {
+    const res  = await fetch('/api/perfil/update', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({campo: 'telefone', valor: raw}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      let v = raw;
+      if (v.length > 2)  v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+      if (v.length > 10) v = v.slice(0,10) + '-' + v.slice(10);
+      const el = document.getElementById('mostrar_telefone');
+      el.textContent = v;
+      el.dataset.raw = raw;
+      cancelarEdit('telefone');
+    } else {
+      err.textContent = data.erro || 'Erro ao salvar.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Erro de conexão.';
+    err.style.display = 'block';
+  }
+}
+
+async function salvarEmail() {
+  const valor = document.getElementById('input_email').value.trim();
+  const err   = document.getElementById('erro_email');
+  err.style.display = 'none';
+  try {
+    const res  = await fetch('/api/perfil/update', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({campo: 'email', valor}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('mostrar_email').textContent = valor;
+      cancelarEdit('email');
+      const info = document.getElementById('campoEmailLembrete');
+      if (info) {
+        info.innerHTML = '<div style="font-size:.78rem;color:var(--text-muted);">Lembretes enviados para <strong style="color:var(--text);">' + valor + '</strong></div>';
+      }
+    } else {
+      err.textContent = data.erro || 'Erro ao salvar.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Erro de conexão.';
+    err.style.display = 'block';
+  }
+}
+
+function toggleLembretes() {
+  const chk = document.getElementById('chkLembretes');
   if (!chk) return;
   chk.checked = !chk.checked;
-  mostrarEmailPerfil(chk.checked);
+  onLembreteMudou(chk.checked);
 }
-function mostrarEmailPerfil(mostrar) {
-  const campo = document.getElementById('campoEmailPerfil');
-  if (campo) campo.style.display = mostrar ? 'block' : 'none';
+function onLembreteMudou(ativo) {
+  document.getElementById('lembreteRow').classList.toggle('ativo', ativo);
+  const campo = document.getElementById('campoEmailLembrete');
+  if (campo) campo.style.display = ativo ? 'block' : 'none';
+  document.getElementById('okLembrete').style.display = 'none';
 }
-async function salvarLembretePerfil() {
-  const chk   = document.getElementById('chkLembretePerfil');
-  const email = (document.getElementById('inputEmailPerfil')?.value || '').trim();
-  const err   = document.getElementById('erroLembrete');
-  const ok    = document.getElementById('okLembrete');
+
+async function salvarLembretes() {
+  const ativo   = document.getElementById('chkLembretes').checked;
+  const emailEl = document.getElementById('inputEmailLembrete');
+  const email   = emailEl ? emailEl.value.trim() : '';
+  const err     = document.getElementById('erroLembrete');
+  const ok      = document.getElementById('okLembrete');
   err.style.display = 'none';
   ok.style.display  = 'none';
   try {
     const res  = await fetch('/api/auth/lembretes', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ativo: chk.checked, email}),
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ativo, email}),
     });
     const data = await res.json();
-    if (data.ok) { ok.style.display = 'block'; }
-    else { err.textContent = data.erro || 'Erro ao salvar.'; err.style.display = 'block'; }
+    if (data.ok) {
+      ok.style.display = 'block';
+      if (email && emailEl) {
+        const campo = document.getElementById('campoEmailLembrete');
+        campo.innerHTML = '<div style="font-size:.78rem;color:var(--text-muted);">Lembretes enviados para <strong style="color:var(--text);">' + email + '</strong></div>';
+        document.getElementById('mostrar_email').textContent = email;
+      }
+    } else {
+      err.textContent = data.erro || 'Erro ao salvar.';
+      err.style.display = 'block';
+    }
   } catch(e) {
-    err.textContent = 'Erro de conexão.'; err.style.display = 'block';
+    err.textContent = 'Erro de conexão.';
+    err.style.display = 'block';
   }
 }
 </script>

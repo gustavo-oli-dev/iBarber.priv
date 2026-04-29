@@ -6,6 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 import os, json, uuid, secrets, smtplib, requests as req_http
+from urllib.parse import urlencode
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -50,7 +51,10 @@ MAIL_PORT     = 587
 MAIL_USER     = os.environ.get('MAIL_USER', 'ibarbeariaaa@gmail.com')
 MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
 MAIL_FROM     = 'Barbearia <ibarbeariaaa@gmail.com>'
-API_TOKEN     = os.environ.get('API_TOKEN', '')
+API_TOKEN            = os.environ.get('API_TOKEN', '')
+GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.app.br/auth/google/callback')
 ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
 
 db = SQLAlchemy(app)
@@ -138,6 +142,7 @@ class User(db.Model):
     observation        = db.Column(db.Text,        nullable=True)
     receber_lembretes  = db.Column(db.Boolean,     default=True)
     guest              = db.Column(db.Boolean,     default=False)
+    google_id          = db.Column(db.String(200), nullable=True, index=True)
     criado_em          = db.Column(db.DateTime,    default=datetime.utcnow)
     tenant_id          = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     pedidos        = db.relationship('Pedido', backref='usuario', lazy=True,
@@ -660,6 +665,135 @@ def servicos():
     tenant = get_tenant_atual()
     tenant_slug = tenant.slug if tenant else None
     return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda, tenant_slug=tenant_slug)
+
+# ── Google OAuth ──────────────────────────────────────────────────────────────
+
+@app.route('/auth/google')
+def auth_google():
+    if not GOOGLE_CLIENT_ID:
+        flash('Login com Google não está configurado.', 'error')
+        return redirect(url_for('index'))
+    state = secrets.token_urlsafe(16)
+    session['oauth_state'] = state
+    params = urlencode({
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'state': state,
+        'access_type': 'online',
+        'prompt': 'select_account',
+    })
+    return redirect(f'https://accounts.google.com/o/oauth2/v2/auth?{params}')
+
+@app.route('/auth/google/callback')
+def auth_google_callback():
+    if request.args.get('state') != session.pop('oauth_state', None):
+        flash('Erro de segurança no login. Tente novamente.', 'error')
+        return redirect(url_for('index'))
+    code = request.args.get('code')
+    if not code:
+        flash('Login cancelado.', 'error')
+        return redirect(url_for('index'))
+    token_res = req_http.post('https://oauth2.googleapis.com/token', data={
+        'code': code,
+        'client_id': GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET,
+        'redirect_uri': GOOGLE_REDIRECT_URI,
+        'grant_type': 'authorization_code',
+    }, timeout=10)
+    token_data = token_res.json()
+    access_token = token_data.get('access_token')
+    if not access_token:
+        flash('Falha ao autenticar com Google.', 'error')
+        return redirect(url_for('index'))
+    user_info = req_http.get('https://www.googleapis.com/oauth2/v3/userinfo',
+                              headers={'Authorization': f'Bearer {access_token}'}, timeout=10).json()
+    google_id = user_info.get('sub')
+    email     = user_info.get('email', '').lower()
+    nome      = user_info.get('name', 'Usuário')
+    if not google_id or not email:
+        flash('Não foi possível obter dados do Google.', 'error')
+        return redirect(url_for('index'))
+    tid  = session.get('path_tenant_id')
+    user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
+    if not user:
+        user = User.query.filter_by(email=email, tenant_id=tid).first()
+        if user:
+            if not user.google_id:
+                user.google_id = google_id
+                db.session.commit()
+        else:
+            user = User(
+                name=nome, email=email,
+                password=generate_password_hash(secrets.token_hex(32)),
+                google_id=google_id, contact=None,
+                receber_lembretes=True, guest=False, tenant_id=tid,
+            )
+            db.session.add(user)
+            db.session.commit()
+    session['user_id']    = user.id
+    session['user_name']  = user.name
+    session['user_email'] = user.email
+    session.pop('is_guest', None)
+    if not user.contact:
+        return redirect(url_for('google_contato'))
+    return redirect(url_for('servicos'))
+
+@app.route('/auth/google/contato', methods=['GET', 'POST'])
+def google_contato():
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+    erro = None
+    if request.method == 'POST':
+        tel = ''.join(c for c in request.form.get('telefone', '') if c.isdigit())
+        if len(tel) < 10:
+            erro = 'Telefone inválido — mínimo 10 dígitos.'
+        else:
+            user = db.session.get(User, session['user_id'])
+            if user:
+                user.contact = tel
+                user.receber_lembretes = request.form.get('lembretes', '1') != '0'
+                db.session.commit()
+            return redirect(url_for('servicos'))
+    user = db.session.get(User, session['user_id'])
+    return render_template('google_contato.html', user=user, erro=erro)
+
+# ── Perfil — atualização de campo individual ──────────────────────────────────
+
+@app.route('/api/perfil/update', methods=['POST'])
+def api_perfil_update():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
+    data  = request.get_json(force=True) or {}
+    campo = data.get('campo', '').strip()
+    valor = data.get('valor', '').strip()
+    user  = db.session.get(User, session['user_id'])
+    if not user:
+        return jsonify({'erro': 'usuário não encontrado'}), 404
+    if campo == 'telefone':
+        tel = ''.join(c for c in valor if c.isdigit())
+        if len(tel) < 10:
+            return jsonify({'erro': 'Telefone inválido — mínimo 10 dígitos'}), 400
+        user.contact = tel
+    elif campo == 'email':
+        email = valor.lower()
+        if not email or '@' not in email or '.' not in email.split('@')[-1]:
+            return jsonify({'erro': 'E-mail inválido'}), 400
+        conflito = User.query.filter(User.email == email, User.id != user.id).first()
+        if conflito:
+            return jsonify({'erro': 'E-mail já está em uso'}), 400
+        user.email = email
+        session['user_email'] = email
+    elif campo == 'nome':
+        if len(valor) < 2:
+            return jsonify({'erro': 'Nome muito curto'}), 400
+        user.name = valor
+        session['user_name'] = valor
+    else:
+        return jsonify({'erro': 'Campo inválido'}), 400
+    db.session.commit()
+    return jsonify({'ok': True})
 
 @app.route('/perfil')
 def perfil():
