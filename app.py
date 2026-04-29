@@ -235,6 +235,7 @@ class FotoServico(db.Model):
     servico    = db.Column(db.String(100), nullable=True, index=True)   # nome do serviço
     filename   = db.Column(db.String(200), nullable=False)
     criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
+    tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
 class Agendamento(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
@@ -452,10 +453,16 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     if tenant_id is None:
         tenant_id = _api_tid()
     todos = Funcionario.query.filter_by(ativo=True, tenant_id=tenant_id).order_by(Funcionario.nome).all()
-    ausentes_ids = {
-        a.funcionario_id
-        for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
-    }
+    emp_ids = [f.id for f in todos]
+    ausentes_ids = set()
+    if emp_ids:
+        ausentes_ids = {
+            a.funcionario_id
+            for a in FuncionarioAusencia.query.filter(
+                FuncionarioAusencia.funcionario_id.in_(emp_ids),
+                FuncionarioAusencia.data == data_str
+            ).all()
+        }
     lista = [
         {
             'id': f.id,
@@ -1798,10 +1805,16 @@ def api_escala(data_str):
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     todos = Funcionario.query.filter_by(ativo=True, tenant_id=tid).order_by(Funcionario.nome).all()
-    ausentes_ids = {
-        a.funcionario_id
-        for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
-    }
+    emp_ids = [f.id for f in todos]
+    ausentes_ids = set()
+    if emp_ids:
+        ausentes_ids = {
+            a.funcionario_id
+            for a in FuncionarioAusencia.query.filter(
+                FuncionarioAusencia.funcionario_id.in_(emp_ids),
+                FuncionarioAusencia.data == data_str
+            ).all()
+        }
     if request.method == 'GET':
         return jsonify([{
             'id': f.id,
@@ -1811,7 +1824,11 @@ def api_escala(data_str):
     # POST: recebe lista de IDs que VÃO trabalhar
     data = request.get_json(silent=True) or {}
     trabalhando_ids = set(data.get('trabalhando', []))
-    FuncionarioAusencia.query.filter_by(data=data_str).delete()
+    if emp_ids:
+        FuncionarioAusencia.query.filter(
+            FuncionarioAusencia.funcionario_id.in_(emp_ids),
+            FuncionarioAusencia.data == data_str
+        ).delete(synchronize_session=False)
     for f in todos:
         if f.id not in trabalhando_ids:
             db.session.add(FuncionarioAusencia(funcionario_id=f.id, data=data_str))
@@ -2583,8 +2600,9 @@ def api_entrada_deletar(eid):
 
 @app.route('/api/fotos', methods=['GET'])
 def api_fotos_listar():
+    tid = _api_tid()
     categoria = request.args.get('categoria')
-    q = FotoServico.query
+    q = FotoServico.query.filter_by(tenant_id=tid)
     if categoria:
         q = q.filter_by(categoria=categoria)
     fotos = q.order_by(FotoServico.criado_em.desc()).all()
@@ -2598,7 +2616,8 @@ def api_fotos_listar():
 
 @app.route('/api/fotos', methods=['POST'])
 def api_fotos_upload():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     categoria = request.form.get('categoria', 'outros')
     servico   = request.form.get('servico', '').strip()
     arquivo   = request.files.get('foto')
@@ -2608,7 +2627,7 @@ def api_fotos_upload():
     if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
         return jsonify({'erro': 'formato inválido'}), 400
     if servico:
-        existente = FotoServico.query.filter_by(servico=servico).first()
+        existente = FotoServico.query.filter_by(servico=servico, tenant_id=tid).first()
         if existente:
             old = os.path.join(UPLOAD_FOLDER, existente.filename)
             if os.path.exists(old):
@@ -2616,16 +2635,17 @@ def api_fotos_upload():
             db.session.delete(existente)
     filename = f"{uuid.uuid4().hex}{ext}"
     arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
-    foto = FotoServico(categoria=categoria, servico=servico or None, filename=filename)
+    foto = FotoServico(categoria=categoria, servico=servico or None, filename=filename, tenant_id=tid)
     db.session.add(foto)
     db.session.commit()
     return jsonify({'ok': True, 'id': foto.id, 'url': f'/static/uploads/{filename}'})
 
 @app.route('/api/fotos/<int:fid>', methods=['DELETE'])
 def api_fotos_deletar(fid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     foto = db.session.get(FotoServico, fid)
-    if not foto:
+    if not foto or foto.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     caminho = os.path.join(UPLOAD_FOLDER, foto.filename)
     if os.path.exists(caminho):
