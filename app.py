@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -43,6 +45,10 @@ CORS(app, origins=origens, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///barbearia.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB upload limit
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -58,6 +64,7 @@ GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.ap
 ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
 
 db = SQLAlchemy(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri='memory://')
 
 # Dados demo usados quando o banco não existe / está vazio (preview independente de DB)
 _PREVIEW_CATS = [
@@ -477,6 +484,7 @@ def index():
     return redirect(url_for('landing'))
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit('20 per minute')
 def register():
     if 'user_id' in session:
         return redirect(url_for('index'))
@@ -522,6 +530,7 @@ def register():
     return render_template('register.html', hide_fabs=True)
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute')
 def login():
     if 'user_id' in session:
         return redirect(url_for('index'))
@@ -542,6 +551,7 @@ def login():
     return render_template('login.html', hide_fabs=True)
 
 @app.route('/login-rapido', methods=['POST'])
+@limiter.limit('15 per minute')
 def login_rapido():
     nome    = request.form.get('nome', '').strip()
     contato = request.form.get('contato', '').strip()
@@ -2743,6 +2753,7 @@ scheduler.add_job(limpar_trials_expirados, 'interval', hours=24)
 scheduler.start()
 
 @app.route('/admin/banco')
+@limiter.limit('20 per minute')
 def admin_banco():
     from sqlalchemy import inspect, text
     senha = request.args.get('key', '')
@@ -3639,6 +3650,7 @@ def api_pagamento_cartao():
     return jsonify({'erro': data.get('message', 'Pagamento recusado'), 'status': status}), 402
 
 @app.route('/admin/painel')
+@limiter.limit('20 per minute')
 def admin_painel():
     senha = request.args.get('key', '')
     if senha != API_TOKEN:
@@ -3954,6 +3966,14 @@ def tenant_site(slug):
     if 'user_id' in session:
         user = db.session.get(User, session['user_id'])
     return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
+
+@app.errorhandler(413)
+def erro_upload_grande(e):
+    return jsonify({'erro': 'Arquivo muito grande. Máximo 8 MB.'}), 413
+
+@app.errorhandler(429)
+def erro_rate_limit(e):
+    return jsonify({'erro': 'Muitas tentativas. Aguarde um momento.'}), 429
 
 if __name__ == '__main__':
     import threading
