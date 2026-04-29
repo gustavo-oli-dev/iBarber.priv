@@ -227,6 +227,7 @@ class EntradaMonetaria(db.Model):
     forma       = db.Column(db.String(30), default='dinheiro')  # dinheiro|cartao|pix
     criado_em   = db.Column(db.DateTime, default=datetime.utcnow)
     pedido_id   = db.Column(db.Integer, db.ForeignKey('pedido.id'), nullable=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
 class FotoServico(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
@@ -275,6 +276,7 @@ class HorarioEspecial(db.Model):
     abertura   = db.Column(db.String(5),  nullable=False, default='08:00')
     fechamento = db.Column(db.String(5),  nullable=False, default='18:00')
     criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
+    tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
 class Funcionario(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
@@ -285,6 +287,7 @@ class Funcionario(db.Model):
     foto          = db.Column(db.String(200),  nullable=True)
     ativo         = db.Column(db.Boolean, default=True)
     criado_em     = db.Column(db.DateTime, default=datetime.utcnow)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     perm_agendamentos = db.Column(db.Boolean, default=True)
     perm_calendario   = db.Column(db.Boolean, default=True)
     perm_marcar       = db.Column(db.Boolean, default=False)
@@ -448,7 +451,7 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     id=0 representa o gestor (proprietário) quando habilitado."""
     if tenant_id is None:
         tenant_id = _api_tid()
-    todos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    todos = Funcionario.query.filter_by(ativo=True, tenant_id=tenant_id).order_by(Funcionario.nome).all()
     ausentes_ids = {
         a.funcionario_id
         for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
@@ -1694,7 +1697,7 @@ def api_horarios_disponiveis():
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
     # horário especial para esta data sobrepõe o semanal
-    he = HorarioEspecial.query.filter_by(data=data_str).first()
+    he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
     if he:
         todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
     else:
@@ -1788,8 +1791,9 @@ def api_gestor_barbeiro():
 @app.route('/api/escala/<data_str>', methods=['GET', 'POST'])
 def api_escala(data_str):
     """GET: lista funcionários e se trabalham na data. POST: salva ausências."""
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    todos = Funcionario.query.filter_by(ativo=True).order_by(Funcionario.nome).all()
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    todos = Funcionario.query.filter_by(ativo=True, tenant_id=tid).order_by(Funcionario.nome).all()
     ausentes_ids = {
         a.funcionario_id
         for a in FuncionarioAusencia.query.filter_by(data=data_str).all()
@@ -1914,11 +1918,11 @@ def api_horarios_especiais():
                 if hora < abertura or hora >= fechamento:
                     ag.status = 'cancelado'
 
-        HorarioEspecial.query.filter_by(data=data).delete()
-        db.session.add(HorarioEspecial(data=data, abertura=abertura, fechamento=fechamento))
+        HorarioEspecial.query.filter_by(data=data, tenant_id=tid).delete()
+        db.session.add(HorarioEspecial(data=data, abertura=abertura, fechamento=fechamento, tenant_id=tid))
         db.session.commit()
         return jsonify({'ok': True})
-    hes = HorarioEspecial.query.order_by(HorarioEspecial.data).all()
+    hes = HorarioEspecial.query.filter_by(tenant_id=tid).order_by(HorarioEspecial.data).all()
     return jsonify([{'id': h.id, 'data': h.data, 'abertura': h.abertura, 'fechamento': h.fechamento} for h in hes])
 
 @app.route('/api/horarios-especiais/<int:hid>', methods=['DELETE'])
@@ -2266,7 +2270,7 @@ def api_stats_formas():
 def api_stats_receita_mes():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).all()
     contagem = {}
     for e in entradas:
         chave = e.criado_em.strftime('%Y-%m')
@@ -2278,7 +2282,7 @@ def api_stats_receita_mes():
 def api_stats_receita_forma():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).all()
     contagem = {}
     for e in entradas:
         f = (e.forma or 'dinheiro').strip()
@@ -2368,7 +2372,7 @@ def api_export():
 
     elif tipo == 'financeiro':
         w.writerow(['Data','Descrição','Valor (R$)','Forma Pagamento'])
-        q = EntradaMonetaria.query
+        q = EntradaMonetaria.query.filter(EntradaMonetaria.tenant_id == tid)
         if d_ini: q = q.filter(EntradaMonetaria.criado_em >= d_ini)
         if d_fim: q = q.filter(EntradaMonetaria.criado_em <= d_fim)
         for e in q.order_by(EntradaMonetaria.criado_em.desc()).all():
@@ -2522,8 +2526,9 @@ def api_agendamentos():
 
 @app.route('/api/entradas', methods=['GET'])
 def api_entradas():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.order_by(EntradaMonetaria.criado_em.desc()).all()
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).order_by(EntradaMonetaria.criado_em.desc()).all()
     return jsonify([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
         'forma': e.forma, 'criado_em': e.criado_em.isoformat(),
@@ -2543,7 +2548,8 @@ def api_entrada_criar():
         return jsonify({'erro': 'valor deve ser maior que zero'}), 400
     if forma not in formas_validas:
         forma = 'dinheiro'
-    e = EntradaMonetaria(descricao=descricao, valor=valor, forma=forma)
+    tid = verificar_token(request)
+    e = EntradaMonetaria(descricao=descricao, valor=valor, forma=forma, tenant_id=tid)
     db.session.add(e)
     db.session.commit()
     return jsonify({'ok': True, 'id': e.id})
@@ -2860,13 +2866,15 @@ def api_funcionarios_login():
 
 @app.route('/api/funcionarios', methods=['GET'])
 def api_funcionarios_listar():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    funs = Funcionario.query.order_by(Funcionario.nome).all()
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    funs = Funcionario.query.filter_by(tenant_id=tid).order_by(Funcionario.nome).all()
     return jsonify([f.to_dict() for f in funs])
 
 @app.route('/api/funcionarios', methods=['POST'])
 def api_funcionarios_criar():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
     email_func = d.get('email', '').strip().lower()
     if email_func and Funcionario.query.filter_by(email=email_func).first():
@@ -2877,6 +2885,7 @@ def api_funcionarios_criar():
         email=email_func,
         password=generate_password_hash(d.get('senha', '')),
         telefone=d.get('telefone', '').strip() or None,
+        tenant_id=tid,
         perm_agendamentos=perms.get('agendamentos', True),
         perm_calendario=perms.get('calendario', True),
         perm_marcar=perms.get('marcar', False),
