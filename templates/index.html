@@ -96,13 +96,22 @@
 
     <!-- Etapa 2: Novo usuário -->
     <div class="step" id="mStep2">
-      <div class="field">
+
+      <!-- Chip confirmando o número -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:.5rem;margin-bottom:1rem;">
+        <span style="background:rgba(76,175,130,.1);border:1px solid rgba(76,175,130,.35);border-radius:20px;padding:.28rem .9rem;font-size:.8rem;color:#4caf82;letter-spacing:.02em;">
+          📱 +55 <span id="mTelDisplay"></span>
+        </span>
+      </div>
+
+      <div class="field" style="margin-bottom:.75rem;">
         <label class="field-label">Seu nome</label>
         <input class="field-input" type="text" id="mInputNome"
                placeholder="Como quer ser chamado?" autocomplete="given-name" />
       </div>
 
-      <div class="lembrete-row" id="mLembreteRow" onclick="mToggleLembrete()">
+      <div class="lembrete-row" id="mLembreteRow" onclick="mToggleLembrete()"
+           style="background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1);">
         <div>
           <div class="lembrete-label">Receber lembretes</div>
           <div class="lembrete-sub">Aviso por e-mail antes do horário</div>
@@ -120,10 +129,10 @@
         <p style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem;">Seu e-mail para receber os lembretes.</p>
       </div>
 
-      <button class="btn btn-gold btn-full btn-lg" id="mBtnCriar" onclick="mCriarConta()">Entrar</button>
+      <button class="btn btn-gold btn-full btn-lg" id="mBtnCriar" style="margin-top:.25rem;" onclick="mCriarConta()">Criar conta</button>
       <p id="mErro2" style="color:#c0392b;font-size:.8rem;text-align:center;margin-top:.6rem;display:none;"></p>
       <p class="auth-switch" style="margin-top:.8rem;">
-        <a href="#" class="link-gold" onclick="mVoltarStep1(event)">Voltar</a>
+        <a href="#" class="link-gold" onclick="mVoltarStep1(event)">← Voltar</a>
       </p>
     </div>
 
@@ -188,6 +197,12 @@ async function mVerificarTel() {
       document.getElementById('mStep2').classList.add('ativo');
       document.getElementById('modalTitle').textContent = 'Criar conta';
       document.getElementById('modalSub').textContent = 'Só mais um segundo';
+      // Formata e exibe o número no chip
+      let v = _mTel;
+      if (v.length > 2)  v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+      if (v.length > 10) v = v.slice(0,10) + '-' + v.slice(10);
+      document.getElementById('mTelDisplay').textContent = v;
+      setTimeout(() => document.getElementById('mInputNome').focus(), 100);
     } else {
       err.textContent = data.erro || 'Erro ao verificar.';
       err.style.display = 'block';
