@@ -549,6 +549,14 @@ body { overflow: hidden; }
         lista.appendChild(li);
       });
     }
+    _syncSelecaoServicos();
+  }
+  function _syncSelecaoServicos() {
+    document.querySelectorAll('.servico-acordeao').forEach(ac => {
+      const btn = ac.querySelector('[data-servico]');
+      if (!btn) return;
+      ac.classList.toggle('selecionado', carrinho.some(i => i.nome === btn.dataset.servico));
+    });
   }
   // ── Confirmar pedido → abre calendário ───────────────────
   let pedidoAtual = null;   // { id, qr, total }

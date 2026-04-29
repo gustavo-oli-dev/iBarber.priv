@@ -610,6 +610,20 @@ main { flex: 1; }
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
+  transition: border-color .2s;
+}
+.servico-acordeao.selecionado {
+  border-color: #4caf82;
+}
+.servico-acordeao.selecionado .servico-btn--acordeao {
+  background: rgba(76,175,130,.07);
+}
+.servico-acordeao.selecionado .servico-label { color: #4caf82; }
+.servico-acordeao.selecionado .servico-preco { color: #4caf82; }
+.servico-acordeao.selecionado .btn-add-carrinho {
+  background: rgba(76,175,130,.12);
+  border-left-color: #4caf82;
+  color: #4caf82;
 }
 .servico-btn--acordeao {
   border: none;
