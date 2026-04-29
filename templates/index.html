@@ -14,94 +14,238 @@
     {% endif %}
   </div>
 </section>
+
 {% if not session.get('user_id') or auto_rapido %}
+<style>
+.step { display: none; }
+.step.ativo { display: block; }
+.tel-input-wrap { display: flex; gap: .5rem; align-items: stretch; }
+.tel-prefix {
+  background: var(--surface, #161616);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius, 6px);
+  padding: 0 .75rem;
+  color: var(--text-muted, #888);
+  font-size: .95rem;
+  display: flex; align-items: center; flex-shrink: 0; user-select: none;
+}
+.lembrete-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .7rem .9rem;
+  background: var(--surface, #161616);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius, 6px);
+  cursor: pointer; user-select: none;
+  margin-bottom: .5rem;
+}
+.lembrete-row.ativo { border-color: #4caf82; background: rgba(76,175,130,.06); }
+.lembrete-label { font-size: .9rem; color: var(--text, #f0ece4); }
+.lembrete-sub   { font-size: .74rem; color: var(--text-muted, #888); margin-top: .1rem; }
+.toggle-switch  { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track   { position: absolute; inset: 0; background: #333; border-radius: 22px; transition: background .2s; cursor: pointer; }
+.toggle-track:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; left: 3px; top: 3px; background: #888; transition: .2s; }
+.toggle-switch input:checked + .toggle-track { background: #4caf82; }
+.toggle-switch input:checked + .toggle-track:before { transform: translateX(18px); background: #fff; }
+.or-sep {
+  display: flex; align-items: center; gap: .75rem;
+  color: var(--text-muted, #666); font-size: .78rem; margin: .9rem 0;
+}
+.or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: var(--border, #2a2a2a); }
+.btn-google {
+  display: flex; align-items: center; justify-content: center; gap: .6rem;
+  width: 100%; padding: .65rem 1rem;
+  background: #fff; color: #333; font-weight: 600; font-size: .9rem;
+  border: 1px solid #ddd; border-radius: var(--radius, 6px);
+  cursor: pointer; transition: background .15s;
+  font-family: inherit; text-decoration: none;
+}
+.btn-google:hover { background: #f5f5f5; }
+</style>
+
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <button class="modal-close" id="modalClose" aria-label="Fechar">×</button>
     <div class="auth-header">
       <span class="logo-mark">✦</span>
       <h2 class="auth-title" id="modalTitle">Entrar</h2>
-      <p class="auth-sub">Acesse sua conta para agendar</p>
+      <p class="auth-sub" id="modalSub">Acesse sua conta para agendar</p>
     </div>
-    <form class="auth-form" method="POST" action="{{ url_for('login') }}" novalidate
-          onsubmit="this.querySelector('[type=submit]').classList.add('btn-loading')">
+
+    <!-- Etapa 1: Google + Telefone -->
+    <div class="step ativo" id="mStep1">
+      <a href="{{ url_for('auth_google') }}" class="btn-google" style="margin-bottom:.1rem;">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Entrar com Google
+      </a>
+
+      <div class="or-sep">ou</div>
+
       <div class="field">
-        <label class="field-label" for="email">E-mail</label>
-        <input class="field-input" type="email" id="email" name="email"
-               placeholder="seu@email.com" required autocomplete="email"
-               oninput="this.value=this.value.toLowerCase()" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="password">Senha</label>
-        <div class="field-input-wrap">
-          <input class="field-input" type="password" id="password" name="password"
-                 placeholder="••••••••" required autocomplete="current-password" />
-          <button type="button" class="toggle-pw" aria-label="Mostrar senha" data-target="password">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
+        <label class="field-label">WhatsApp</label>
+        <div class="tel-input-wrap">
+          <span class="tel-prefix">🇧🇷 +55</span>
+          <input class="field-input" type="tel" id="mInputTel"
+                 placeholder="(11) 99999-9999" inputmode="numeric"
+                 oninput="mMascaraTel(this)" style="flex:1;" />
         </div>
       </div>
-      <button type="submit" class="btn btn-gold btn-full btn-lg">Entrar</button>
-    </form>
-    <div class="auth-divider" id="mDivider"><span>ou</span></div>
-    <button type="button" class="btn btn-outline btn-full" id="mBtnRapido" onclick="mostrarRapidoModal()">Continuar sem cadastro</button>
+      <button class="btn btn-gold btn-full btn-lg" id="mBtnContinuar" onclick="mVerificarTel()">Continuar</button>
+      <p id="mErro1" style="color:#c0392b;font-size:.8rem;text-align:center;margin-top:.6rem;display:none;"></p>
+    </div>
 
-    <form class="auth-form" id="mFormRapido" method="POST" action="{{ url_for('login_rapido') }}" novalidate style="display:none;margin-top:1rem;">
+    <!-- Etapa 2: Novo usuário -->
+    <div class="step" id="mStep2">
       <div class="field">
-        <label class="field-label" for="mNome">Nome *</label>
-        <input class="field-input" type="text" id="mNome" name="nome" placeholder="Seu nome" required />
+        <label class="field-label">Seu nome</label>
+        <input class="field-input" type="text" id="mInputNome"
+               placeholder="Como quer ser chamado?" autocomplete="given-name" />
       </div>
-      <div class="field">
-        <label class="field-label" for="mContato">WhatsApp / Contato <span class="required">*</span></label>
-        <input class="field-input" type="tel" id="mContato" name="contato" placeholder="(00) 00000-0000" required />
-      </div>
-      <div class="field">
-        <label class="field-label" for="mAlergia">Alergia ou observação</label>
-        <textarea class="field-input" id="mAlergia" name="alergia" rows="2" placeholder="Ex: alergia a amônia..."></textarea>
-      </div>
-      <button type="submit" class="btn btn-gold btn-full btn-lg">Continuar</button>
-      <p style="margin-top:1rem;font-size:0.8rem;color:var(--text-muted);text-align:center;line-height:1.4;">
-        <strong style="color:var(--text);">Você só irá receber lembretes se se cadastrar.</strong>
-      </p>
-      <p class="auth-switch" style="margin-top:0.6rem;">
-        <a href="#" class="link-gold" onclick="voltarLoginModal(event)">Voltar para login</a>
-      </p>
-    </form>
 
-    <div class="modal-footer" id="mFooter">
-      <a href="{{ url_for('esqueci_senha') }}" class="link-muted">Esqueceu a senha?</a>
-      <a href="{{ url_for('register') }}" class="link-gold modal-register-link">Cadastrar</a>
+      <div class="lembrete-row" id="mLembreteRow" onclick="mToggleLembrete()">
+        <div>
+          <div class="lembrete-label">Receber lembretes</div>
+          <div class="lembrete-sub">Aviso por e-mail antes do horário</div>
+        </div>
+        <label class="toggle-switch" onclick="event.stopPropagation()">
+          <input type="checkbox" id="mChkLembretes" onchange="mOnLembrete(this.checked)" />
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div id="mCampoEmail" style="display:none;margin-bottom:.75rem;">
+        <input class="field-input" type="email" id="mInputEmail"
+               placeholder="seu@email.com" autocomplete="email"
+               oninput="this.value=this.value.toLowerCase()" />
+        <p style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem;">Seu e-mail para receber os lembretes.</p>
+      </div>
+
+      <button class="btn btn-gold btn-full btn-lg" id="mBtnCriar" onclick="mCriarConta()">Entrar</button>
+      <p id="mErro2" style="color:#c0392b;font-size:.8rem;text-align:center;margin-top:.6rem;display:none;"></p>
+      <p class="auth-switch" style="margin-top:.8rem;">
+        <a href="#" class="link-gold" onclick="mVoltarStep1(event)">Voltar</a>
+      </p>
+    </div>
+
+    <!-- Boas-vindas -->
+    <div class="step" id="mStepBemVindo">
+      <div style="text-align:center;padding:1.2rem 0 .4rem;">
+        <div style="font-size:1.2rem;font-weight:600;color:var(--gold,#C9A96E);" id="mBemVindoNome"></div>
+        <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem;">Entrando…</div>
+      </div>
     </div>
   </div>
 </div>
+
 <script>
-function mostrarRapidoModal() {
-  document.querySelector('.auth-form').style.display = 'none';
-  document.getElementById('mDivider').style.display = 'none';
-  document.getElementById('mBtnRapido').style.display = 'none';
-  document.getElementById('mFooter').style.display = 'none';
-  document.getElementById('mFormRapido').style.display = 'block';
+let _mTel = '';
+
+function mMascaraTel(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 2)  v = '(' + v.slice(0,2) + ') ' + v.slice(2);
+  if (v.length > 10) v = v.slice(0,10) + '-' + v.slice(10);
+  el.value = v;
 }
-function voltarLoginModal(e) {
+function mSetLoading(btn, ok) {
+  btn.disabled = !ok;
+  ok ? btn.classList.remove('btn-loading') : btn.classList.add('btn-loading');
+}
+function mToggleLembrete() {
+  const chk = document.getElementById('mChkLembretes');
+  chk.checked = !chk.checked;
+  mOnLembrete(chk.checked);
+}
+function mOnLembrete(ativo) {
+  const row   = document.getElementById('mLembreteRow');
+  const campo = document.getElementById('mCampoEmail');
+  campo.style.display = ativo ? 'block' : 'none';
+  row.classList.toggle('ativo', ativo);
+  if (ativo) document.getElementById('mInputEmail').focus();
+}
+
+async function mVerificarTel() {
+  const tel = document.getElementById('mInputTel').value.replace(/\D/g, '');
+  const err = document.getElementById('mErro1');
+  err.style.display = 'none';
+  if (tel.length < 10) { err.textContent = 'Informe um número válido.'; err.style.display = 'block'; return; }
+  _mTel = tel;
+  const btn = document.getElementById('mBtnContinuar');
+  mSetLoading(btn, false);
+  try {
+    const res  = await fetch('/api/auth/telefone', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({telefone: tel}),
+    });
+    const data = await res.json();
+    mSetLoading(btn, true);
+    if (data.ok) {
+      document.getElementById('mStep1').classList.remove('ativo');
+      document.getElementById('mStepBemVindo').classList.add('ativo');
+      document.getElementById('mBemVindoNome').textContent = 'Olá, ' + data.nome + '! 👋';
+      setTimeout(() => { window.location.href = '/servicos'; }, 900);
+    } else if (data.novo) {
+      document.getElementById('mStep1').classList.remove('ativo');
+      document.getElementById('mStep2').classList.add('ativo');
+      document.getElementById('modalTitle').textContent = 'Criar conta';
+      document.getElementById('modalSub').textContent = 'Só mais um segundo';
+    } else {
+      err.textContent = data.erro || 'Erro ao verificar.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    mSetLoading(btn, true);
+    err.textContent = 'Erro de conexão.'; err.style.display = 'block';
+  }
+}
+
+async function mCriarConta() {
+  const nome     = document.getElementById('mInputNome').value.trim();
+  const email    = document.getElementById('mInputEmail').value.trim();
+  const lembretes = document.getElementById('mChkLembretes').checked;
+  const err = document.getElementById('mErro2');
+  err.style.display = 'none';
+  if (!nome) { err.textContent = 'Informe seu nome.'; err.style.display = 'block'; return; }
+  if (lembretes && !email) { err.textContent = 'Informe o e-mail para receber lembretes.'; err.style.display = 'block'; return; }
+  const btn = document.getElementById('mBtnCriar');
+  mSetLoading(btn, false);
+  try {
+    const res  = await fetch('/api/auth/criar-telefone', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({telefone: _mTel, nome, email: email || '', lembretes}),
+    });
+    const data = await res.json();
+    mSetLoading(btn, true);
+    if (data.ok) {
+      document.getElementById('mStep2').classList.remove('ativo');
+      document.getElementById('mStepBemVindo').classList.add('ativo');
+      document.getElementById('mBemVindoNome').textContent = 'Bem-vindo, ' + data.nome + '! 👋';
+      setTimeout(() => { window.location.href = '/servicos'; }, 900);
+    } else {
+      err.textContent = data.erro || 'Erro ao criar conta.'; err.style.display = 'block';
+    }
+  } catch(e) {
+    mSetLoading(btn, true);
+    err.textContent = 'Erro de conexão.'; err.style.display = 'block';
+  }
+}
+
+function mVoltarStep1(e) {
   e.preventDefault();
-  document.querySelector('.auth-form').style.display = 'block';
-  document.getElementById('mDivider').style.display = 'flex';
-  document.getElementById('mBtnRapido').style.display = 'block';
-  document.getElementById('mFooter').style.display = 'flex';
-  document.getElementById('mFormRapido').style.display = 'none';
+  document.getElementById('mStep2').classList.remove('ativo');
+  document.getElementById('mStep1').classList.add('ativo');
+  document.getElementById('modalTitle').textContent = 'Entrar';
+  document.getElementById('modalSub').textContent = 'Acesse sua conta para agendar';
+  document.getElementById('mErro2').style.display = 'none';
 }
+
+document.getElementById('mInputTel').addEventListener('keydown', e => {
+  if (e.key === 'Enter') mVerificarTel();
+});
+
 {% if auto_rapido %}
-document.addEventListener('DOMContentLoaded', function() {
-  abrirModal();
-  mostrarRapidoModal();
-});
+document.addEventListener('DOMContentLoaded', function() { abrirModal(); });
 {% elif preview_mode and not session.get('user_id') %}
-document.addEventListener('DOMContentLoaded', function() {
-  abrirModal();
-});
+document.addEventListener('DOMContentLoaded', function() { abrirModal(); });
 {% endif %}
 </script>
 {% endif %}
