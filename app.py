@@ -195,10 +195,15 @@ def _gestao_tid():
     return session.get('gestao_tenant_id')
 
 def _api_tid():
-    """Retorna tenant_id a partir do contexto atual (gestão session ou path_tenant_id)."""
+    """Retorna tenant_id a partir do contexto atual (gestão session, Bearer token ou path)."""
     tid = session.get('gestao_tenant_id')
     if tid:
         return tid
+    token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    if token:
+        tid_tok, _ = _extrair_tenant_token(token)
+        if tid_tok:
+            return tid_tok
     t = get_tenant_atual()
     return t.id if t else None
 
@@ -2175,11 +2180,11 @@ def api_pedido_status(pid):
 
 @app.route('/api/stats/servicos', methods=['GET'])
 def api_stats_servicos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    # Busca categorias reais para enriquecer a resposta
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True).all()}
     contagem = {}
-    pedidos = Pedido.query.filter(Pedido.status != 'cancelado').all()
+    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').all()
     for p in pedidos:
         for i in p.itens:
             nome = (i.nome or '').strip()
@@ -2196,10 +2201,11 @@ def api_stats_servicos():
 
 @app.route('/api/stats/barbeiros', methods=['GET'])
 def api_stats_barbeiros():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     contagem = {}
     ags = (Agendamento.query
-           .filter(Agendamento.status == 'ativo')
+           .filter(Agendamento.tenant_id == tid, Agendamento.status == 'ativo')
            .options(joinedload(Agendamento.funcionario))
            .all())
     _, gestor_nome = _gestor_como_barbeiro()
@@ -2219,7 +2225,7 @@ def api_stats_barbeiros():
 def api_stats_ags_mes():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    ags = Agendamento.query.filter(Agendamento.status != 'cancelado').all()
+    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').all()
     contagem = {}
     for ag in ags:
         chave = ag.data_hora.strftime('%Y-%m')
@@ -2298,7 +2304,7 @@ def api_stats_pedidos_status():
 def api_stats_categorias():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.filter(Pedido.status != 'cancelado').all()
+    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').all()
     contagem = {}
     for p in pedidos:
         for i in p.itens:
