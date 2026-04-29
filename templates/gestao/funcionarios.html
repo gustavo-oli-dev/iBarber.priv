@@ -20,9 +20,9 @@
       <input type="file" id="inputFotoGestor" accept="image/*" style="display:none;" onchange="uploadFotoGestor(this)" />
     </div>
     <div style="flex:1;display:flex;flex-direction:column;gap:.6rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-        <span style="font-size:.875rem;">Gestor aparece como barbeiro disponível</span>
-        <label class="toggle-switch">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;cursor:pointer;" onclick="document.getElementById('gestorAtivo').click()">
+        <span style="font-size:.875rem;user-select:none;">Gestor aparece como barbeiro disponível</span>
+        <label class="toggle-switch" onclick="event.stopPropagation()">
           <input type="checkbox" id="gestorAtivo" onchange="salvarGestor()" />
           <span class="toggle-track"></span>
         </label>

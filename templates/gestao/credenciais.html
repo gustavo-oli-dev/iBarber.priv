@@ -1,27 +1,29 @@
 {% extends 'gestao/base_gestao.html' %}
 {% block title %}Credenciais{% endblock %}
 {% block content %}
-<h1 class="g-page-title">Credenciais de Pagamento</h1>
+<div class="g-page-header">
+  <h1 class="g-page-title">Credenciais de Pagamento</h1>
+</div>
 
 <div style="max-width:520px;">
 
   <!-- Ativar / Desativar -->
   <div class="g-section" style="margin-bottom:1.5rem;">
     <div class="g-section-title" style="margin-bottom:.75rem;">Formas de pagamento ativas</div>
-    <label class="toggle-switch-row">
+    <div class="toggle-switch-row" onclick="document.getElementById('togglePix').click()">
       <span class="toggle-label">⚡ PIX</span>
-      <label class="toggle-switch">
+      <label class="toggle-switch" onclick="event.stopPropagation()">
         <input type="checkbox" id="togglePix" onchange="salvarToggle('pix_ativo',this.checked)" {% if pix_ativo %}checked{% endif %} />
         <span class="toggle-track"></span>
       </label>
-    </label>
-    <label class="toggle-switch-row" style="margin-top:.6rem;">
+    </div>
+    <div class="toggle-switch-row" style="margin-top:.6rem;" onclick="document.getElementById('toggleCartao').click()">
       <span class="toggle-label">💳 Cartão (Mercado Pago)</span>
-      <label class="toggle-switch">
+      <label class="toggle-switch" onclick="event.stopPropagation()">
         <input type="checkbox" id="toggleCartao" onchange="salvarToggle('cartao_ativo',this.checked)" {% if cartao_ativo %}checked{% endif %} />
         <span class="toggle-track"></span>
       </label>
-    </label>
+    </div>
   </div>
 
   <!-- Credenciais PIX -->
@@ -84,23 +86,11 @@
 </div>
 
 <style>
-.toggle-switch { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
-.toggle-switch input { opacity:0; width:0; height:0; }
-.toggle-track {
-  position:absolute; inset:0; background:var(--border);
-  border-radius:12px; cursor:pointer; transition:.2s;
-}
-.toggle-track::after {
-  content:''; position:absolute; left:3px; top:3px;
-  width:18px; height:18px; background:#fff;
-  border-radius:50%; transition:.2s;
-}
-.toggle-switch input:checked + .toggle-track { background:var(--gold); }
-.toggle-switch input:checked + .toggle-track::after { transform:translateX(20px); }
 .toggle-switch-row {
   display:flex; align-items:center; justify-content:space-between;
   background:var(--surface); border:1px solid var(--border);
   border-radius:var(--radius); padding:.75rem 1rem; cursor:pointer;
+  user-select:none;
 }
 .toggle-label { font-size:.88rem; font-weight:500; color:var(--text); }
 </style>
