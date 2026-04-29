@@ -676,11 +676,8 @@ const PRESETS = {
 
 const AG_SCREENS = [
   {id:'inicio',       label:'Início (Login)',    urlFn: ()=> '/preview/ag/inicio?' + _agParams(T.ag)},
-  {id:'sem-cadastro', label:'Sem Cadastro',      urlFn: ()=> '/preview/ag/sem-cadastro?' + _agParams(T.ag)},
   {id:'logado',       label:'Serviços / Carrinho', urlFn: ()=> '/preview/ag/servicos?' + _agParams(T.ag)},
-  {id:'register',     label:'Cadastro',          urlFn: ()=> '/preview/ag/register?' + _agParams(T.ag)},
   {id:'perfil',       label:'Perfil',            urlFn: ()=> '/preview/ag/perfil?' + _agParams(T.ag)},
-  {id:'esqueci',      label:'Esqueci Senha',     urlFn: ()=> '/preview/ag/esqueci?' + _agParams(T.ag)},
 ];
 const GT_SCREENS = [
   {id:'dashboard',    label:'Dashboard',     urlFn: ()=> buildGtUrl('dashboard')},
@@ -837,11 +834,8 @@ function setScreen(site, screenId) {
 function syncSidebarFromRoute(rota) {
   // Agendamento
   if(rota === '/')                                                          { agScreen = 'inicio'; }
-  else if(rota === '/preview/ag/sem-cadastro')                             { agScreen = 'sem-cadastro'; }
-  else if(rota === '/register'  || rota === '/preview/ag/register')        { agScreen = 'register'; }
   else if(rota === '/servicos'  || rota === '/preview/ag/servicos')        { agScreen = 'logado'; }
   else if(rota === '/perfil'    || rota === '/preview/ag/perfil')          { agScreen = 'perfil'; }
-  else if(rota === '/esqueci-senha' || rota === '/preview/ag/esqueci')     { agScreen = 'esqueci'; }
   // Gestão — preview routes
   else if(rota.startsWith('/preview/gt/')) {
     const sc = rota.replace('/preview/gt/','').split('?')[0];
@@ -1073,7 +1067,7 @@ function showHideIframes() {
 }
 
 function updateUrlBar() {
-  const agUrlMap = {inicio:'', 'sem-cadastro':'', logado:'servicos', register:'register', perfil:'perfil', esqueci:'esqueci-senha'};
+  const agUrlMap = {inicio:'', logado:'servicos', perfil:'perfil'};
   const slug = (document.getElementById('id-nome') && document.getElementById('id-nome').value.trim()
     ? document.getElementById('id-nome').value.trim().toLowerCase().replace(/\s+/g,'-')
     : 'sua-barbearia');
