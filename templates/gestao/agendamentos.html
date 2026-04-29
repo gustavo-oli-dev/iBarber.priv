@@ -220,13 +220,9 @@
       <label class="g-label">Nome *</label>
       <input class="g-input" id="novoNome" placeholder="Nome completo" required data-validate="nome" />
     </div>
-    <div class="g-form-group" style="margin-bottom:0.85rem;">
-      <label class="g-label">Contato *</label>
-      <input class="g-input" id="novoContato" type="tel" placeholder="(00) 00000-0000" required data-mask="tel" data-validate="tel" />
-    </div>
     <div class="g-form-group" style="margin-bottom:1.1rem;">
-      <label class="g-label">Observação</label>
-      <input class="g-input" id="novoObs" placeholder="Opcional" />
+      <label class="g-label">Número (WhatsApp) *</label>
+      <input class="g-input" id="novoContato" type="tel" placeholder="(00) 00000-0000" required data-mask="tel" data-validate="tel" />
     </div>
     <div style="display:flex; gap:0.75rem;">
       <button class="g-btn g-btn-outline" style="flex:1;" onclick="fecharModalCliente()">Cancelar</button>
@@ -471,14 +467,13 @@ function fecharModalSeFora(e) {
 async function salvarNovoCliente() {
   const nome    = document.getElementById('novoNome').value.trim();
   const contato = document.getElementById('novoContato').value.trim();
-  const obs     = document.getElementById('novoObs').value.trim();
   const boxModal = document.getElementById('modalCliente').querySelector('.modal-box');
   if (!ibForms.validarForm(boxModal)) return;
   const email = 'guest_' + Math.random().toString(36).slice(2,10) + '@gestao.local';
   const res = await fetch('/api/usuarios', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
-    body: JSON.stringify({ name: nome, email, contact: contato, observation: obs })
+    body: JSON.stringify({ name: nome, email, contact: contato })
   });
   const body = await res.json();
   if (body.id || body.ok) {
@@ -488,7 +483,6 @@ async function salvarNovoCliente() {
     fecharModalCliente();
     document.getElementById('novoNome').value = '';
     document.getElementById('novoContato').value = '';
-    document.getElementById('novoObs').value = '';
   } else {
     alert(body.erro || 'Erro ao criar cliente.');
   }

@@ -369,5 +369,11 @@ async function marcarNaoCompareceu(agId, idx, btn) {
 // Inicializa
 renderLista();
 renderStats();
+
+// Auto-refresh: recarrega a página a cada 60s para manter agendamentos atualizados
+setInterval(() => {
+  const detOpen = document.getElementById('detPanel').classList.contains('open');
+  if (!detOpen) location.reload();
+}, 60000);
 </script>
 {% endblock %}

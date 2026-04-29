@@ -140,6 +140,11 @@ body { overflow: hidden; }
   color: #888;
   margin-top: .35rem;
 }
+#barbeiroGrid button.selecionado {
+  border-color: #C9A96E !important;
+  background: rgba(201,169,110,0.15) !important;
+  color: #f0ece4 !important;
+}
 .hist-total-row {
   display: flex;
   justify-content: space-between;
@@ -156,8 +161,11 @@ body { overflow: hidden; }
   <div style="max-width:480px;width:90%;margin:0 auto;">
     <div style="border:1.5px solid #C9A96E;border-radius:16px;padding:1.2rem 1.4rem 1rem;background:rgba(201,169,110,0.06);">
       <p style="color:#C9A96E;font-size:1.15rem;font-weight:600;text-align:center;margin:0;line-height:1.5;">Seu agendamento é {{ agendamento_info.dia }}, às {{ agendamento_info.hora }}</p>
+      {% if agendamento_info.barbeiro %}
+      <p style="color:#C9A96E;font-size:0.82rem;text-align:center;margin:0.3rem 0 0;opacity:0.75;">✦ {{ agendamento_info.barbeiro }}</p>
+      {% endif %}
       {% if agendamento_info.forma_pagamento %}
-      <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.4rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
+      <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.3rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
       {% endif %}
       <div style="border-top:1px solid rgba(201,169,110,0.2);margin-top:.85rem;padding-top:.7rem;display:flex;justify-content:space-between;align-items:center;">
         <button onclick="abrirHistorico()" style="background:none;border:none;color:#C9A96E;font-size:0.78rem;cursor:pointer;padding:0;display:flex;align-items:center;gap:0.3rem;opacity:0.8;">
@@ -696,7 +704,12 @@ body { overflow: hidden; }
   }
 
 
-  function _abrirModalBarbeiro(funcionarios, hora) {
+  async function _abrirModalBarbeiro(funcionarios, hora) {
+    if (funcionarios.length === 1) {
+      calBarbeiroSel = funcionarios[0].id;
+      await confirmarAgendamento();
+      return;
+    }
     const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const d = new Date(calDiaSel);
     document.getElementById('barbeiroSubtitulo').textContent =
@@ -1088,6 +1101,20 @@ body { overflow: hidden; }
       if (e.key === 'ArrowLeft')  navegarLightbox(-1);
     }
   });
+  // Auto-refresh dos slots a cada 60s para manter disponibilidade atualizada
+  setInterval(() => {
+    const calModal = document.getElementById('calModal');
+    const calOpen = calModal && calModal.style.display !== 'none';
+    if (!calOpen && calDiaSel) {
+      const data = new Date(calDiaSel);
+      const iso = `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;
+      fetch(`/api/horarios-disponiveis?data=${iso}`)
+        .then(r => r.json())
+        .then(body => { if (body && !body.fechado) window._slotsCache = body.disponiveis || []; })
+        .catch(() => {});
+    }
+  }, 60000);
+
   let swipeX = 0;
   const lb = document.getElementById('lightbox');
   lb.addEventListener('touchstart', e => { swipeX = e.touches[0].clientX; }, { passive: true });

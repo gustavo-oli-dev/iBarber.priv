@@ -473,9 +473,11 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     ]
     gestor_ativo, gestor_nome = _gestor_como_barbeiro(tenant_id)
     if gestor_ativo:
-        gf = _get_setting('gestor_foto', tenant_id)
-        gestor_foto = f'/static/uploads/{gf.value}' if gf and gf.value else None
-        lista.insert(0, {'id': 0, 'nome': gestor_nome, 'foto_url': gestor_foto})
+        gestor_ausente_s = _get_setting(f'gestor_ausente_{data_str}', tenant_id)
+        if not (gestor_ausente_s and gestor_ausente_s.value == '1'):
+            gf = _get_setting('gestor_foto', tenant_id)
+            gestor_foto = f'/static/uploads/{gf.value}' if gf and gf.value else None
+            lista.insert(0, {'id': 0, 'nome': gestor_nome, 'foto_url': gestor_foto})
     return lista
 
 def _gerar_slots(abertura='08:00', fechamento='18:00', duracao=40):
@@ -679,10 +681,18 @@ def servicos():
           .first())
     if ag:
         _forma_label = {'dinheiro': 'Pagar no local', 'pix': 'PIX', 'cartao': 'Cartão'}
+        _, gestor_nome = _gestor_como_barbeiro(_api_tid())
+        if ag.funcionario_id == 0:
+            _barb_nome = gestor_nome or 'Gestor'
+        elif ag.funcionario:
+            _barb_nome = ag.funcionario.nome
+        else:
+            _barb_nome = None
         agendamento_info = {
             'dia': f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}",
             'hora': ag.data_hora.strftime('%H:%M'),
             'forma_pagamento': _forma_label.get(ag.forma_pagamento or '', ''),
+            'barbeiro': _barb_nome,
         }
     sd = _get_setting('dias_agenda', _api_tid())
     dias_agenda = int(sd.value) if sd and sd.value else 20
@@ -1284,9 +1294,28 @@ def cancelar_agendamento(ag_id):
         pedido = db.session.get(Pedido, ag.pedido_id)
         if pedido:
             pedido.status = 'cancelado'
-        # Remover entrada monetária automática vinculada a este pedido
         EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
     db.session.commit()
+    # Email de cancelamento ao cliente
+    user = db.session.get(User, ag.user_id)
+    if user and not user.email.endswith('@ibarber.local'):
+        data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
+        hora_fmt = ag.data_hora.strftime('%H:%M')
+        html_cancel = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                    background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+          <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
+          <p>Olá, <strong>{user.name}</strong>! Seu agendamento foi cancelado.</p>
+          <div style="background:#1a1a1a;border-left:4px solid #c0392b;
+                      padding:16px 20px;border-radius:6px;margin:20px 0;">
+            <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
+            <p style="margin:8px 0 0;font-size:28px;font-weight:bold;
+                      color:#c0392b;letter-spacing:2px;">⏰ {hora_fmt}</p>
+          </div>
+          <p style="color:#888;font-size:13px;">Acesse o site para agendar um novo horário.</p>
+        </div>
+        """
+        _enviar_email(user.email, 'Agendamento cancelado — Barbearia', html_cancel)
     return jsonify({'ok': True})
 
 @app.route('/meu-agendamento')
@@ -1815,15 +1844,28 @@ def api_escala(data_str):
                 FuncionarioAusencia.data == data_str
             ).all()
         }
+    gestor_ativo, gestor_nome = _gestor_como_barbeiro(tid)
+    gestor_ausente_key = f'gestor_ausente_{data_str}'
+    gestor_ausente_setting = _get_setting(gestor_ausente_key, tid)
+    gestor_trabalhando = not (gestor_ausente_setting and gestor_ausente_setting.value == '1')
+
     if request.method == 'GET':
-        return jsonify([{
-            'id': f.id,
-            'nome': f.nome,
-            'trabalhando': f.id not in ausentes_ids,
-        } for f in todos])
-    # POST: recebe lista de IDs que VÃO trabalhar
+        result = [{'id': f.id, 'nome': f.nome, 'trabalhando': f.id not in ausentes_ids} for f in todos]
+        if gestor_ativo:
+            result.insert(0, {'id': 0, 'nome': gestor_nome or 'Proprietário', 'trabalhando': gestor_trabalhando})
+        return jsonify(result)
+
+    # POST: recebe lista de IDs que VÃO trabalhar (0 = gestor)
     data = request.get_json(silent=True) or {}
     trabalhando_ids = set(data.get('trabalhando', []))
+    # Salvar ausência do gestor
+    if gestor_ativo:
+        if 0 in trabalhando_ids:
+            if gestor_ausente_setting:
+                db.session.delete(gestor_ausente_setting)
+        else:
+            _upsert_setting(gestor_ausente_key, '1', tid)
+    # Salvar ausências dos funcionários
     if emp_ids:
         FuncionarioAusencia.query.filter(
             FuncionarioAusencia.funcionario_id.in_(emp_ids),
@@ -3183,8 +3225,29 @@ def gestao_agendamento_status(ag_id):
     if redir: return redir
     ag = db.session.get(Agendamento, ag_id)
     if ag and ag.tenant_id == _gestao_tid():
-        ag.status = request.form.get('status', 'ativo')
+        novo_status = request.form.get('status', 'ativo')
+        ag.status = novo_status
         db.session.commit()
+        if novo_status == 'cancelado':
+            user = db.session.get(User, ag.user_id)
+            if user and not user.email.endswith('@ibarber.local'):
+                data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
+                hora_fmt = ag.data_hora.strftime('%H:%M')
+                html_cancel = f"""
+                <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                            background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+                  <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
+                  <p>Olá, <strong>{user.name}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
+                  <div style="background:#1a1a1a;border-left:4px solid #c0392b;
+                              padding:16px 20px;border-radius:6px;margin:20px 0;">
+                    <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
+                    <p style="margin:8px 0 0;font-size:28px;font-weight:bold;
+                              color:#c0392b;letter-spacing:2px;">⏰ {hora_fmt}</p>
+                  </div>
+                  <p style="color:#888;font-size:13px;">Acesse o site para reagendar.</p>
+                </div>
+                """
+                _enviar_email(user.email, 'Agendamento cancelado — Barbearia', html_cancel)
     return redirect(url_for('gestao_agendamentos'))
 
 @app.route('/gestao/pedidos')
