@@ -15,9 +15,17 @@
 </style>
 {% endblock %}
 {% block content %}
-<h1 class="g-page-title">Preços</h1>
+<div class="g-page-header">
+  <h1 class="g-page-title">Preços</h1>
+  {% if servicos %}
+  <div style="display:flex;gap:.75rem;align-items:center;">
+    <span style="font-size:.8rem;color:var(--text-muted);">{{ servicos|length }} serviço{{ 's' if servicos|length != 1 else '' }}</span>
+    <button class="g-btn g-btn-primary" type="submit" form="formPrecos">Salvar preços</button>
+  </div>
+  {% endif %}
+</div>
 
-<form method="POST" action="{{ url_for('gestao_precos') }}">
+<form id="formPrecos" method="POST" action="{{ url_for('gestao_precos') }}">
   <!-- Tabela desktop -->
   <div class="g-table-wrap desktop-only">
     <table class="g-table">
@@ -34,9 +42,10 @@
           <td>{{ s.nome }}</td>
           <td style="color:var(--gold)">R$ {{ "%.2f"|format(s.preco or 0) }}</td>
           <td>
-            <input class="g-input" type="number" step="0.01" min="0"
-              name="preco_{{ s.id }}" placeholder="{{ "%.2f"|format(s.preco or 0) }}"
-              style="max-width:120px;" />
+            <input class="g-input" type="text" inputmode="decimal"
+              name="preco_{{ s.id }}" placeholder="Novo preço"
+              data-mask="moeda"
+              style="max-width:140px;" />
           </td>
         </tr>
         {% else %}
@@ -53,8 +62,8 @@
       <div class="preco-card-nome">{{ s.nome }}</div>
       <div class="preco-card-row">
         <span class="preco-card-atual">Atual: R$ {{ "%.2f"|format(s.preco or 0) }}</span>
-        <input class="g-input" type="number" step="0.01" min="0"
-          name="preco_{{ s.id }}" placeholder="Novo preço" style="flex:1;" />
+        <input class="g-input" type="text" inputmode="decimal"
+          name="preco_{{ s.id }}" placeholder="Novo preço" data-mask="moeda" style="flex:1;" />
       </div>
     </div>
     {% else %}
@@ -62,10 +71,5 @@
     {% endfor %}
   </div>
 
-  {% if servicos %}
-  <div style="margin-top:1rem;">
-    <button class="g-btn g-btn-primary" type="submit" style="width:100%;max-width:220px;">Salvar preços</button>
-  </div>
-  {% endif %}
 </form>
 {% endblock %}

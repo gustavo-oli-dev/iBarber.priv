@@ -1,9 +1,12 @@
 {% extends 'gestao/base_gestao.html' %}
 {% block title %}Pedidos{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
-  <h1 class="g-page-title" style="margin:0">Pedidos</h1>
+<div class="g-page-header">
+  <h1 class="g-page-title">Pedidos</h1>
 </div>
+
+<!-- Stats bar -->
+<div class="ped-stats" id="pedStats"></div>
 
 <!-- Filtros -->
 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
@@ -71,6 +74,18 @@
 .pedido-card-data { font-size: .75rem; color: var(--text-muted); }
 .pedido-card-acoes { display: flex; gap: .4rem; flex-wrap: wrap; }
 .pedido-card-acoes button { font-size: .78rem; padding: .3rem .7rem; min-height: 36px; }
+.ped-stats {
+  display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.ped-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: .55rem 1rem;
+  display: flex; flex-direction: column; gap: .1rem; min-width: 100px;
+}
+.ped-stat-val { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+.ped-stat-val.gold { color: var(--gold); }
+.ped-stat-val.warn  { color: #FFA500; }
+.ped-stat-lbl { font-size: .7rem; color: var(--text-muted); }
 </style>
 
 <script>
@@ -200,6 +215,18 @@ async function cancelar(pid, btn) {
   } else { btn.disabled=false; alert('Erro ao cancelar pedido'); }
 }
 
+function renderStats() {
+  const total = PEDIDOS.length;
+  const pendentes = PEDIDOS.filter(p=>p.status==='pendente').length;
+  const receita = PEDIDOS.filter(p=>p.status==='pago').reduce((s,p)=>s+parseFloat(p.total||0),0);
+  const fmtBRL = v => 'R$ '+v.toFixed(2).replace('.',',');
+  document.getElementById('pedStats').innerHTML =
+    `<div class="ped-stat"><span class="ped-stat-val">${total}</span><span class="ped-stat-lbl">Pedidos</span></div>` +
+    `<div class="ped-stat"><span class="ped-stat-val gold">${fmtBRL(receita)}</span><span class="ped-stat-lbl">Receita realizada</span></div>` +
+    (pendentes > 0 ? `<div class="ped-stat"><span class="ped-stat-val warn">${pendentes}</span><span class="ped-stat-lbl">Pendente${pendentes!==1?'s':''}</span></div>` : '');
+}
+
+renderStats();
 renderPedidos();
 </script>
 {% endblock %}

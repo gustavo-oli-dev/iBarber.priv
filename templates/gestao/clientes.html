@@ -1,12 +1,14 @@
 {% extends 'gestao/base_gestao.html' %}
 {% block title %}Clientes{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
-  <h1 class="g-page-title" style="margin:0">Clientes</h1>
-  <span id="totalClientes" style="color:var(--text-muted);font-size:.85rem;"></span>
+<div class="g-page-header">
+  <h1 class="g-page-title">Clientes</h1>
 </div>
 
-<input id="busca" class="g-input" style="margin-bottom:1rem;max-width:340px;" placeholder="Buscar por nome, e-mail ou telefone..." oninput="renderClientes()">
+<!-- Stats -->
+<div class="cli-stats" id="cliStats"></div>
+
+<input id="busca" class="g-input" style="margin-bottom:1rem;max-width:480px;" placeholder="Buscar por nome, e-mail ou telefone..." oninput="renderClientes()">
 
 <!-- Desktop: tabela -->
 <div class="g-table-wrap desktop-only">
@@ -59,10 +61,33 @@
 .cliente-card-info { flex: 1; min-width: 0; }
 .cliente-card-nome { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cliente-card-sub { font-size: .75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cli-stats {
+  display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.cli-stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: .55rem 1rem;
+  display: flex; flex-direction: column; gap: .1rem;
+}
+.cli-stat-val { font-size: 1.1rem; font-weight: 700; }
+.cli-stat-lbl { font-size: .7rem; color: var(--text-muted); }
 </style>
 
 <script>
 const CLIENTES = {{ clientes_json|safe }};
+
+(function renderCliStats() {
+  const total = CLIENTES.length;
+  const mesAtual = new Date().getMonth();
+  const anoAtual = new Date().getFullYear();
+  const novos = CLIENTES.filter(c => {
+    const d = new Date(c.criado_em);
+    return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+  }).length;
+  document.getElementById('cliStats').innerHTML =
+    `<div class="cli-stat"><span class="cli-stat-val">${total}</span><span class="cli-stat-lbl">Clientes</span></div>` +
+    (novos > 0 ? `<div class="cli-stat"><span class="cli-stat-val" style="color:var(--gold)">${novos}</span><span class="cli-stat-lbl">Novos este mês</span></div>` : '');
+})();
 
 function fmtData(iso) {
   return new Date(iso).toLocaleDateString('pt-BR');
@@ -74,7 +99,10 @@ function renderClientes() {
     if (!q) return true;
     return (c.name+' '+c.email+' '+(c.contact||'')).toLowerCase().includes(q);
   });
-  document.getElementById('totalClientes').textContent = filtered.length + ' cliente(s)';
+  // update page title count when searching
+  const busqVal = document.getElementById('busca').value;
+  document.getElementById('cliStats').querySelector('.cli-stat-val').textContent =
+    busqVal ? filtered.length + '/' + CLIENTES.length : CLIENTES.length;
 
   // Desktop
   const tbody = document.getElementById('tbody');
