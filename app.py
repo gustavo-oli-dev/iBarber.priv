@@ -1758,13 +1758,15 @@ def api_barbeiros_disponiveis():
     ativos = _funcionarios_ativos_para_data(data_str)
     if not ativos:
         return jsonify({'funcionarios': []})
-    # Quais já têm agendamento nesse slot
+    # Quais já têm agendamento nesse slot (filtrado por tenant via _api_tid já aplicado em ativos)
+    _tid = _api_tid()
     ocupados_ids = {
         ag.funcionario_id
         for ag in Agendamento.query
-            .filter_by(status='ativo')
-            .filter(Agendamento.data_hora == data_hora)
-            .filter(Agendamento.funcionario_id.isnot(None))
+            .filter(Agendamento.tenant_id == _tid,
+                    Agendamento.status == 'ativo',
+                    Agendamento.data_hora == data_hora,
+                    Agendamento.funcionario_id.isnot(None))
             .all()
     }
     disponiveis = [f for f in ativos if f['id'] not in ocupados_ids]
@@ -2096,17 +2098,18 @@ def verificar_pagamento(mp_payment_id):
 
 @app.route('/api/precos', methods=['GET', 'POST'])
 def api_precos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         for nome, valor in data.items():
-            sv = Servico.query.filter_by(nome=nome).first()
+            sv = Servico.query.filter_by(nome=nome, tenant_id=tid).first()
             if sv:
                 sv.preco = _sf(valor)
         db.session.commit()
-        svs = Servico.query.filter_by(ativo=True).order_by(Servico.categoria, Servico.ordem).all()
+        svs = Servico.query.filter_by(ativo=True, tenant_id=tid).order_by(Servico.categoria, Servico.ordem).all()
         return jsonify({'ok': True, 'precos': {sv.nome: sv.preco for sv in svs}})
-    svs = Servico.query.filter_by(ativo=True).order_by(Servico.categoria, Servico.ordem).all()
+    svs = Servico.query.filter_by(ativo=True, tenant_id=tid).order_by(Servico.categoria, Servico.ordem).all()
     return jsonify({sv.nome: sv.preco for sv in svs})
 
 @app.route('/api/usuarios', methods=['GET', 'POST'])
@@ -2146,9 +2149,10 @@ def api_usuarios():
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
 def api_usuario(uid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     u = db.session.get(User, uid)
-    if not u:
+    if not u or u.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     data = user_dict(u)
     data['pedidos'] = [pedido_dict(p) for p in u.pedidos]
@@ -2163,17 +2167,19 @@ def api_pedidos():
 
 @app.route('/api/pedidos/<int:pid>', methods=['GET'])
 def api_pedido(pid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     p = db.session.get(Pedido, pid)
-    if not p:
+    if not p or p.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     return jsonify(pedido_dict(p))
 
 @app.route('/api/pedidos/<int:pid>/status', methods=['POST'])
 def api_pedido_status(pid):
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     p = db.session.get(Pedido, pid)
-    if not p:
+    if not p or p.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     status = (request.get_json(silent=True) or {}).get('status', '').strip()
     if status not in ('pendente', 'pago', 'cancelado', 'nao_compareceu'):
@@ -2242,7 +2248,7 @@ def api_stats_ags_dia():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     dias_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-    ags = Agendamento.query.filter(Agendamento.status != 'cancelado').all()
+    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').all()
     contagem = {d: 0 for d in dias_pt}
     for ag in ags:
         contagem[dias_pt[ag.data_hora.weekday()]] += 1
@@ -2254,6 +2260,7 @@ def api_stats_formas():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     ags = Agendamento.query.filter(
+        Agendamento.tenant_id == tid,
         Agendamento.status != 'cancelado',
         Agendamento.forma_pagamento.isnot(None)
     ).all()
@@ -3189,15 +3196,17 @@ def gestao_cliente_detalhe(uid):
 def gestao_entradas():
     redir = _gestao_login_required()
     if redir: return redir
+    _tid = _gestao_tid()
     if request.method == 'POST':
         desc = request.form.get('descricao', '').strip()
         valor = float(request.form.get('valor', 0) or 0)
         forma = request.form.get('forma', 'dinheiro')
         if desc and valor > 0:
-            db.session.add(EntradaMonetaria(descricao=desc, valor=valor, forma=forma))
+            db.session.add(EntradaMonetaria(descricao=desc, valor=valor, forma=forma, tenant_id=_tid))
             db.session.commit()
         return redirect(url_for('gestao_entradas'))
-    ags = (Agendamento.query.options(joinedload(Agendamento.usuario))
+    ags = (Agendamento.query.filter_by(tenant_id=_tid)
+           .options(joinedload(Agendamento.usuario))
            .order_by(Agendamento.data_hora.desc()).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
     pedidos_map = {p.id: p for p in Pedido.query.filter(Pedido.id.in_(pedido_ids))
@@ -3211,7 +3220,7 @@ def gestao_entradas():
                 'total': p.total,
                 'usuario': ag.usuario.name if ag.usuario else '—',
             })
-    entradas = EntradaMonetaria.query.order_by(EntradaMonetaria.criado_em.desc()).all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).all()
     entradas_json = json.dumps([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
         'forma': e.forma or 'dinheiro', 'criado_em': e.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
@@ -3225,7 +3234,7 @@ def gestao_entrada_deletar(eid):
     redir = _gestao_login_required()
     if redir: return redir
     e = db.session.get(EntradaMonetaria, eid)
-    if e:
+    if e and e.tenant_id == _gestao_tid():
         db.session.delete(e)
         db.session.commit()
     return redirect(url_for('gestao_entradas'))
@@ -3301,7 +3310,7 @@ def gestao_horarios():
     dias_ag_s = _get_setting('dias_agenda', _tid)
     dias_fechados_s = _get_setting('dias_fechados', _tid)
     dias_fechados = json.loads(dias_fechados_s.value) if dias_fechados_s and dias_fechados_s.value else []
-    especiais = HorarioEspecial.query.order_by(HorarioEspecial.data).all()
+    especiais = HorarioEspecial.query.filter_by(tenant_id=tenant.id).order_by(HorarioEspecial.data).all()
     config_geral = {
         'slot_minutos': int(slot_s.value) if slot_s and slot_s.value else 40,
         'dias_agenda': int(dias_ag_s.value) if dias_ag_s and dias_ag_s.value else 20,
