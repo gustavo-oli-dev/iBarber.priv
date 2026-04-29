@@ -1275,8 +1275,8 @@ main { flex: 1; }
 }
 .cal-dia-btn:hover { border-color: var(--gold-dim); }
 .cal-dia-btn.selecionado {
-  border-color: var(--gold);
-  background: rgba(200,200,200,0.05);
+  border-color: #4caf82;
+  background: rgba(76,175,130,0.08);
 }
 .cal-dia-semana {
   font-size: 0.65rem;
@@ -1297,7 +1297,7 @@ main { flex: 1; }
 .cal-dia-btn.selecionado .cal-dia-num,
 .cal-dia-btn.selecionado .cal-dia-semana,
 .cal-dia-btn.selecionado .cal-dia-mes {
-  color: var(--gold);
+  color: #4caf82;
 }
 .cal-horarios-grid {
   display: grid;
@@ -1325,9 +1325,9 @@ main { flex: 1; }
 }
 .cal-hora-btn:hover { border-color: var(--gold-dim); }
 .cal-hora-btn.selecionado {
-  border-color: var(--gold);
-  background: rgba(200,200,200,0.06);
-  color: var(--gold);
+  border-color: #4caf82;
+  background: rgba(76,175,130,0.08);
+  color: #4caf82;
   font-weight: 600;
 }
 .cal-hora-btn.hora-ocupada {
@@ -1351,9 +1351,9 @@ main { flex: 1; }
 }
 
 .pagamento-btn.selecionado-pg {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: rgba(200,200,200,0.04);
+  border-color: #4caf82;
+  color: #4caf82;
+  background: rgba(76,175,130,0.06);
 }
 .pg-sucesso-label {
   background: rgba(76,175,130,0.12);
