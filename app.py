@@ -1232,7 +1232,7 @@ def agendar():
     capacidade = max(1, len(ativos))
     from collections import Counter
     ags_slot = (Agendamento.query
-                .filter_by(status='ativo')
+                .filter_by(status='ativo', tenant_id=_api_tid())
                 .filter(Agendamento.data_hora == data_hora)
                 .all())
     if len(ags_slot) >= capacidade:
@@ -1891,7 +1891,8 @@ def api_horarios_especiais():
             inicio_dia = datetime.combine(data_obj, datetime.min.time())
             fim_dia    = datetime.combine(data_obj, datetime.max.time())
             ags = (Agendamento.query
-                   .filter(Agendamento.data_hora >= inicio_dia,
+                   .filter(Agendamento.tenant_id == tid,
+                           Agendamento.data_hora >= inicio_dia,
                            Agendamento.data_hora <= fim_dia,
                            Agendamento.status == 'ativo')
                    .all())
@@ -1913,7 +1914,8 @@ def api_horarios_especiais():
             inicio_dia = datetime.combine(data_obj, datetime.min.time())
             fim_dia    = datetime.combine(data_obj, datetime.max.time())
             ags = (Agendamento.query
-                   .filter(Agendamento.data_hora >= inicio_dia,
+                   .filter(Agendamento.tenant_id == tid,
+                           Agendamento.data_hora >= inicio_dia,
                            Agendamento.data_hora <= fim_dia,
                            Agendamento.status == 'ativo')
                    .all())
@@ -2416,7 +2418,8 @@ def api_export():
 
 @app.route('/api/agendamentos', methods=['GET', 'POST'])
 def api_agendamentos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
 
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
@@ -2429,7 +2432,7 @@ def api_agendamentos():
         if not user_id:
             return jsonify({'erro': 'user_id obrigatório'}), 400
         user = db.session.get(User, user_id)
-        if not user:
+        if not user or user.tenant_id != tid:
             return jsonify({'erro': 'usuário não encontrado'}), 404
         data_str = data_hora.strftime('%Y-%m-%d')
         dias_s = _get_setting('dias_fechados', _api_tid())
@@ -2449,7 +2452,7 @@ def api_agendamentos():
         forma_pag     = data.get('forma_pagamento', 'pagar_no_local')
         funcionario_id = data.get('funcionario_id', None)
 
-        ag = Agendamento(user_id=user_id, data_hora=data_hora)
+        ag = Agendamento(user_id=user_id, data_hora=data_hora, tenant_id=tid)
         if funcionario_id is not None:
             ag.funcionario_id = funcionario_id
 
@@ -2459,7 +2462,7 @@ def api_agendamentos():
         if servico_ids:
             for sid in servico_ids:
                 sv = db.session.get(Servico, sid)
-                if sv:
+                if sv and sv.tenant_id == tid:
                     servicos_validos.append(sv)
         if servicos_validos:
             total_pedido = sum(sv.preco or 0 for sv in servicos_validos)
@@ -2467,6 +2470,7 @@ def api_agendamentos():
                 user_id=user_id,
                 status='pago' if forma_pag == 'pagar_no_local' else 'pendente',
                 total=total_pedido,
+                tenant_id=tid,
             )
             db.session.add(pedido)
             db.session.flush()
@@ -2489,6 +2493,7 @@ def api_agendamentos():
                 descricao=f'{nomes} — {user.name}',
                 valor=total_pedido,
                 forma='dinheiro',
+                tenant_id=tid,
             ))
 
         db.session.commit()
@@ -2499,6 +2504,7 @@ def api_agendamentos():
         return jsonify(resp)
 
     ags = (Agendamento.query
+           .filter_by(tenant_id=tid)
            .options(joinedload(Agendamento.usuario), joinedload(Agendamento.funcionario))
            .order_by(Agendamento.data_hora.asc())
            .all())
@@ -3079,7 +3085,9 @@ def gestao_dashboard():
     # Todos agendamentos (últimos 60 dias + próximos 30) para o JS filtrar por dia
     janela_ini = datetime.utcnow() - timedelta(days=60)
     janela_fim = datetime.utcnow() + timedelta(days=30)
+    _tid = _gestao_tid()
     ags = (Agendamento.query
+           .filter_by(tenant_id=_tid)
            .options(joinedload(Agendamento.usuario), joinedload(Agendamento.funcionario))
            .filter(Agendamento.data_hora >= janela_ini, Agendamento.data_hora <= janela_fim)
            .order_by(Agendamento.data_hora.asc()).all())
