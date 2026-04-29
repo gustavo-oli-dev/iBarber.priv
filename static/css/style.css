@@ -3,6 +3,10 @@
   margin: 0;
   padding: 0;
 }
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
 :root {
   --bg:        #080808;
   --surface:   #111111;
@@ -389,9 +393,9 @@ main { flex: 1; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: clamp(1.8rem, 5vw, 2.8rem);
+  padding: clamp(1.2rem, 5vw, 2.8rem);
   width: 100%;
-  max-width: 420px;
+  max-width: min(420px, 96vw);
   position: relative;
   transform: translateY(16px) scale(0.98);
   transition: transform 0.25s ease;
@@ -840,8 +844,7 @@ main { flex: 1; }
   bottom: 0;
   left: 0;
   right: 0;
-  height: 72vh;
-  height: 72dvh;
+  height: min(72dvh, calc(100dvh - 60px));
   background: var(--surface);
   border-top: 1px solid var(--border);
   border-radius: 20px 20px 0 0;
@@ -988,11 +991,11 @@ main { flex: 1; }
 }
 .auth-card {
   width: 100%;
-  max-width: 440px;
+  max-width: min(440px, 96vw);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: clamp(2rem, 5vw, 3rem);
+  padding: clamp(1.2rem, 5vw, 3rem);
 }
 .auth-header {
   text-align: center;
@@ -1257,9 +1260,9 @@ main { flex: 1; }
   padding: 0.45rem 1.1rem;
 }
 .cal-modal {
-  max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
-  width: min(420px, 94vw);
+  width: min(420px, 96vw);
   gap: 0;
 }
 .cal-dias {
@@ -1754,3 +1757,48 @@ main { animation: pageFadeIn 0.35s ease both; }
   text-align: center;
 }
 .guest-notice strong { color: var(--gold); }
+
+/* ── Mobile global fixes ──────────────────────────────────── */
+img, video, iframe, table { max-width: 100%; }
+
+@media (max-width: 480px) {
+  /* Auth pages */
+  .auth-section { padding: 1rem 0.75rem; }
+  .auth-header { margin-bottom: 1.5rem; }
+  .auth-title { font-size: 1.6rem; }
+
+  /* Modal */
+  .modal-overlay { padding: 0.5rem; }
+
+  /* Calendar modal */
+  .cal-modal { padding: 1.1rem 0.9rem !important; }
+  .cal-dia-btn { min-width: 48px; padding: 0.4rem 0.45rem; }
+  .cal-dia-semana, .cal-dia-mes { font-size: 0.62rem; }
+  .cal-dia-num { font-size: 1.05rem; }
+  .cal-horarios-grid { grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
+  .cal-hora-btn { font-size: 0.88rem; padding: 0.8rem 0; }
+
+  /* Lightbox */
+  .lightbox-nav { font-size: 2rem; padding: 0 0.3rem; }
+  .lightbox-conteudo { max-width: calc(100% - 3.5rem); }
+
+  /* Agendamento card */
+  .agendamento-card { padding: 1.2rem 1rem 3rem; }
+
+  /* Gestão page header */
+  .g-page-header { flex-wrap: wrap; gap: 0.5rem; }
+  .g-page-header .btn { min-width: unset; }
+
+  /* Buttons */
+  .btn-lg { padding: 0.75rem 1.2rem; font-size: 0.9rem; }
+}
+
+@media (max-width: 360px) {
+  .auth-card { padding: 1rem 0.85rem; }
+  .modal { padding: 1rem 0.85rem; }
+  .lembrete-label { font-size: 0.82rem; }
+  .lembrete-sub { font-size: 0.68rem; }
+  .cal-horarios-grid { grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+  .cal-dia-btn { min-width: 44px; padding: 0.35rem 0.4rem; }
+  .tel-prefix { font-size: 0.82rem; padding: 0 0.6rem; }
+}
