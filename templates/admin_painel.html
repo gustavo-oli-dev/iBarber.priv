@@ -116,46 +116,15 @@ tr:hover td{background:rgba(255,255,255,.02)}
     </div>
   </div>
 
-  <div class="grid2" style="margin-bottom:2rem;align-items:start">
-
-    <!-- CREDENCIAIS -->
-    <div class="card">
-      <div class="card-title">Credenciais Mercado Pago</div>
-      <div class="alert alert-ok" id="alertOk">✓ Credenciais salvas com sucesso</div>
-      <div class="alert alert-err" id="alertErr">Erro ao salvar</div>
-
-      <div class="status-row">
-        <div class="status-dot {{ 'dot-ok' if mp_token_set else 'dot-miss' }}"></div>
-        Access Token: <strong>{{ 'configurado' if mp_token_set else 'não configurado' }}</strong>
-      </div>
-      <div class="status-row">
-        <div class="status-dot {{ 'dot-ok' if mp_public_key else 'dot-miss' }}"></div>
-        Public Key: <strong>{{ 'configurada' if mp_public_key else 'não configurada' }}</strong>
-      </div>
-
-      <div class="field">
-        <label class="lbl">MP Access Token</label>
-        <input class="inp" id="mp_token" type="password" placeholder="APP_USR-..." autocomplete="off" data-validate="senha">
-        <div class="inp-hint">Conta Mercado Pago → Suas integrações → Credenciais de produção</div>
-      </div>
-      <div class="field">
-        <label class="lbl">MP Public Key</label>
-        <input class="inp" id="mp_pub" type="text" placeholder="APP_USR-..." value="{{ mp_public_key }}" data-validate="nome">
-        <div class="inp-hint">Usada no checkout do cartão (frontend)</div>
-      </div>
-      <button class="btn btn-gold" onclick="salvarCreds()">Salvar credenciais</button>
-    </div>
-
-    <!-- LINKS ÚTEIS -->
-    <div class="card">
-      <div class="card-title">Links úteis</div>
-      <div style="display:flex;flex-direction:column;gap:.75rem;font-size:.85rem">
-        <a href="/admin/banco?key={{ key }}" target="_blank" style="color:var(--gold)">Banco de dados completo</a>
-        <a href="/personalizar" target="_blank" style="color:var(--gold)">Página personalizar</a>
-        <a href="/planos" target="_blank" style="color:var(--gold)">Página de planos</a>
-        <a href="/pagamento" target="_blank" style="color:var(--gold)">Página de pagamento</a>
-        <a href="/landing" target="_blank" style="color:var(--gold)">Landing page</a>
-      </div>
+  <!-- LINKS ÚTEIS -->
+  <div class="card" style="margin-bottom:2rem;max-width:400px">
+    <div class="card-title">Links úteis</div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;font-size:.85rem">
+      <a href="/admin/banco?key={{ key }}" target="_blank" style="color:var(--gold)">Banco de dados completo</a>
+      <a href="/personalizar" target="_blank" style="color:var(--gold)">Página personalizar</a>
+      <a href="/planos" target="_blank" style="color:var(--gold)">Página de planos</a>
+      <a href="/pagamento" target="_blank" style="color:var(--gold)">Página de pagamento</a>
+      <a href="/landing" target="_blank" style="color:var(--gold)">Landing page</a>
     </div>
   </div>
 
@@ -263,22 +232,6 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <script>
 const KEY = '{{ key }}';
 
-// ── Credenciais ──────────────────────────────────────────────────────────────
-async function salvarCreds() {
-  const token = document.getElementById('mp_token').value.trim();
-  const pub   = document.getElementById('mp_pub').value.trim();
-  if (!token && !pub) return;
-  try {
-    const r = await fetch('/api/admin/credenciais', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({key: KEY, mp_token: token, mp_public_key: pub})
-    });
-    const d = await r.json();
-    mostrarAlert(d.ok ? 'ok' : 'err', d.erro);
-    if (d.ok) document.getElementById('mp_token').value = '';
-  } catch(e) { mostrarAlert('err'); }
-}
-
 // ── Ativar ───────────────────────────────────────────────────────────────────
 async function ativarManual(id) {
   if (!confirm('Ativar assinatura manualmente?')) return;
@@ -351,16 +304,7 @@ document.getElementById('modalVenc').addEventListener('click', function(e) {
   if (e.target === this) fecharVencimento();
 });
 
-// ── Alert ────────────────────────────────────────────────────────────────────
-function mostrarAlert(tipo, msg) {
-  const ok  = document.getElementById('alertOk');
-  const err = document.getElementById('alertErr');
-  ok.style.display = err.style.display = 'none';
-  const el = tipo === 'ok' ? ok : err;
-  if (msg) el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display = 'none', 3500);
-}
+
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 </script>
 <script src="/static/js/ibarber-forms.js"></script>
