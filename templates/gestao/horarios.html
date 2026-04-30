@@ -87,6 +87,20 @@
   </div>
 </div>
 
+<!-- Modal: conflito dia fechado -->
+<div id="modalConflitoDia" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:440px;">
+    <div style="font-size:.75rem;font-weight:700;letter-spacing:.08em;color:#f87171;text-transform:uppercase;margin-bottom:.5rem;">⚠️ Agendamentos neste dia</div>
+    <p style="font-size:.83rem;color:var(--text-muted);margin-bottom:.9rem;">Os clientes abaixo têm horário marcado nesta data. Deseja cancelar e avisar por e-mail?</p>
+    <div id="listaConflitoDia" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:200px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.4rem;"></div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+      <button class="g-btn g-btn-outline" onclick="fecharConflitoDia()">Voltar</button>
+      <button class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarFechado(false)">Fechar sem cancelar</button>
+      <button class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarFechado(true)">Cancelar e avisar clientes</button>
+    </div>
+  </div>
+</div>
+
 <!-- Tab 3: Horários especiais -->
 <div id="tab-especiais" style="display:none;">
   <div class="g-section-title" style="margin-bottom:.75rem;">Horários Especiais</div>
@@ -185,13 +199,46 @@ function renderFechados() {
   }).join('');
 }
 
+let _pendingDia = null;
+
 async function addFechado() {
   const d = document.getElementById('novoFechado').value;
   if (!d) return;
   if (diasFechados.includes(d)) { alert('Data já adicionada'); return; }
+  // Verifica conflitos antes de fechar o dia
+  const cr = await fetch(`/api/dias-fechados/conflitos?data=${d}`, {
+    headers:{'Authorization':'Bearer '+TOKEN}
+  });
+  const cdata = await cr.json();
+  if (cdata.conflitos && cdata.conflitos.length > 0) {
+    _pendingDia = d;
+    document.getElementById('listaConflitoDia').innerHTML = cdata.conflitos.map(c =>
+      `<div style="display:flex;justify-content:space-between;padding:.2rem 0;border-bottom:1px solid var(--border);">
+        <span>${c.nome}</span><span style="color:var(--text-muted)">${c.hora}</span>
+      </div>`
+    ).join('');
+    const m = document.getElementById('modalConflitoDia');
+    m.style.display = 'flex';
+    return;
+  }
+  await _executarFechado(d, false);
+}
+
+function fecharConflitoDia() {
+  document.getElementById('modalConflitoDia').style.display = 'none';
+  _pendingDia = null;
+}
+
+async function confirmarFechado(cancelar) {
+  document.getElementById('modalConflitoDia').style.display = 'none';
+  if (_pendingDia) await _executarFechado(_pendingDia, cancelar);
+  _pendingDia = null;
+}
+
+async function _executarFechado(d, cancelar) {
   const r = await fetch('/api/dias-fechados', {
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({data:d})
+    body: JSON.stringify({data:d, cancelar})
   });
   if (r.ok) { diasFechados.push(d); diasFechados.sort(); renderFechados(); document.getElementById('novoFechado').value=''; }
   else alert('Erro ao adicionar');

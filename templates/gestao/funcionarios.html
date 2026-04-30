@@ -93,6 +93,20 @@
 </div>
 
 
+<!-- Modal: conflito funcionário / gestor -->
+<div id="modalConflitoBarbeiro" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:440px;">
+    <div style="font-size:.75rem;font-weight:700;letter-spacing:.08em;color:#f87171;text-transform:uppercase;margin-bottom:.5rem;">⚠️ Agendamentos futuros</div>
+    <p id="conflitoBarbeiroMsg" style="font-size:.83rem;color:var(--text-muted);margin-bottom:.9rem;"></p>
+    <div id="listaConflitoBarbeiro" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:200px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.4rem;"></div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+      <button class="g-btn g-btn-outline" onclick="fecharConflitoBarbeiro()">Voltar</button>
+      <button class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarBarbeiro(false)">Desativar sem cancelar</button>
+      <button class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarBarbeiro(true)">Cancelar e avisar clientes</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const TOKEN = "{{ token }}";
 const PERMS_LISTA = [
@@ -255,17 +269,50 @@ async function salvarFuncionario() {
   } else { const d=await r.json(); alert(d.erro||'Erro ao salvar'); }
 }
 
+let _pendingBarbeiro = null; // {tipo: 'func'|'gestor', id, cancelar}
+
 async function desativarFuncionario() {
   const id = document.getElementById('editId').value;
-  if (!id || !confirm('Desativar este funcionário?')) return;
-  const r = await fetch(`/api/funcionarios/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
-  if (r.ok) { fecharModal(); await carregar(); }
-  else alert('Erro ao desativar');
+  if (!id) return;
+  const cr = await fetch(`/api/funcionarios/${id}/conflitos`, {
+    headers:{'Authorization':'Bearer '+TOKEN}
+  });
+  const cdata = await cr.json();
+  if (cdata.conflitos && cdata.conflitos.length > 0) {
+    _pendingBarbeiro = {tipo:'func', id};
+    document.getElementById('conflitoBarbeiroMsg').textContent =
+      'Este barbeiro tem agendamentos futuros. Deseja cancelar e avisar os clientes por e-mail?';
+    document.getElementById('listaConflitoBarbeiro').innerHTML = cdata.conflitos.map(c =>
+      `<div style="display:flex;justify-content:space-between;padding:.2rem 0;border-bottom:1px solid var(--border);">
+        <span>${c.nome}</span><span style="color:var(--text-muted)">${c.hora}</span>
+      </div>`).join('');
+    document.getElementById('modalConflitoBarbeiro').style.display = 'flex';
+    return;
+  }
+  await _executarDesativarFunc(id, false);
 }
 
 async function salvarGestor() {
   const ativo = document.getElementById('gestorAtivo').checked;
   const nome  = document.getElementById('gestorNome').value.trim();
+  if (!ativo) {
+    // Verifica conflitos antes de desativar
+    const cr = await fetch('/api/gestor-barbeiro/conflitos', {
+      headers:{'Authorization':'Bearer '+TOKEN}
+    });
+    const cdata = await cr.json();
+    if (cdata.conflitos && cdata.conflitos.length > 0) {
+      _pendingBarbeiro = {tipo:'gestor', nome};
+      document.getElementById('conflitoBarbeiroMsg').textContent =
+        'O gestor tem agendamentos futuros como barbeiro. Deseja cancelar e avisar os clientes por e-mail?';
+      document.getElementById('listaConflitoBarbeiro').innerHTML = cdata.conflitos.map(c =>
+        `<div style="display:flex;justify-content:space-between;padding:.2rem 0;border-bottom:1px solid var(--border);">
+          <span>${c.nome}</span><span style="color:var(--text-muted)">${c.hora}</span>
+        </div>`).join('');
+      document.getElementById('modalConflitoBarbeiro').style.display = 'flex';
+      return;
+    }
+  }
   await fetch('/api/gestor-barbeiro', {
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({ativo, nome})
@@ -274,6 +321,40 @@ async function salvarGestor() {
 function salvarGestorDebounce() {
   clearTimeout(gestorDebTimer);
   gestorDebTimer = setTimeout(salvarGestor, 600);
+}
+
+function fecharConflitoBarbeiro() {
+  document.getElementById('modalConflitoBarbeiro').style.display = 'none';
+  // Reverte toggle do gestor se estava desativando
+  if (_pendingBarbeiro?.tipo === 'gestor') {
+    document.getElementById('gestorAtivo').checked = true;
+  }
+  _pendingBarbeiro = null;
+}
+
+async function confirmarBarbeiro(cancelar) {
+  document.getElementById('modalConflitoBarbeiro').style.display = 'none';
+  const p = _pendingBarbeiro;
+  _pendingBarbeiro = null;
+  if (!p) return;
+  if (p.tipo === 'func') {
+    await _executarDesativarFunc(p.id, cancelar);
+  } else {
+    await fetch('/api/gestor-barbeiro', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify({ativo: false, nome: p.nome, cancelar})
+    });
+  }
+}
+
+async function _executarDesativarFunc(id, cancelar) {
+  const r = await fetch(`/api/funcionarios/${id}`, {
+    method:'DELETE',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({cancelar})
+  });
+  if (r.ok) { fecharModal(); await carregar(); }
+  else alert('Erro ao desativar');
 }
 
 function toggleSenhaFunc() {

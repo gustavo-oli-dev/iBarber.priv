@@ -934,6 +934,60 @@ def _enviar_confirmacao_agendamento(user, data_hora):
     """
     _enviar_email(user.email, 'Agendamento confirmado — Barbearia', html)
 
+def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
+    if not user or not getattr(user, 'email', None):
+        return
+    data_fmt = f"{DIAS_PT[data_hora.weekday()]}, {data_hora.day} de {MESES_PT[data_hora.month-1]}"
+    hora_fmt = data_hora.strftime('%H:%M')
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+      <h2 style="color:#f87171;margin-top:0;">⚠️ Agendamento Cancelado</h2>
+      <p>Olá, <strong>{user.name}</strong>!</p>
+      <p style="color:#ccc;">Seu agendamento foi cancelado:</p>
+      <p style="color:#f87171;font-weight:600;">{motivo}</p>
+      <div style="background:#1a1a1a;border-left:4px solid #f87171;
+                  padding:16px 20px;border-radius:6px;margin:20px 0;">
+        <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
+        <p style="margin:8px 0 0;font-size:32px;font-weight:bold;
+                  color:#f87171;letter-spacing:2px;">⏰ {hora_fmt}</p>
+      </div>
+      <p style="color:#888;font-size:13px;">
+        Pedimos desculpas pelo transtorno. Entre em contato com a barbearia para reagendar.
+      </p>
+      <p style="color:#888;font-size:13px;">— {tenant_nome}</p>
+    </div>
+    """
+    _enviar_email(user.email, f'Agendamento cancelado — {tenant_nome}', html)
+
+def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
+    """Retorna agendamentos futuros ativos filtrados por data e/ou funcionario_id."""
+    now = datetime.utcnow()
+    q = Agendamento.query.filter(
+        Agendamento.tenant_id == tenant_id,
+        Agendamento.status == 'ativo',
+        Agendamento.data_hora > now
+    )
+    if data:
+        q = q.filter(db.func.date(Agendamento.data_hora) == data)
+    if funcionario_id is not None:
+        q = q.filter(Agendamento.funcionario_id == funcionario_id)
+    result = []
+    for ag in q.order_by(Agendamento.data_hora).all():
+        user = db.session.get(User, ag.user_id)
+        result.append({
+            'ag': ag, 'user': user,
+            'nome': user.name if user else 'Cliente',
+            'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M'),
+        })
+    return result
+
+def _cancelar_conflitos(conflitos, tenant_nome, motivo):
+    for c in conflitos:
+        c['ag'].status = 'cancelado'
+        if c['user']:
+            _enviar_cancelamento_por_fechamento(c['user'], tenant_nome, c['ag'].data_hora, motivo)
+
 def _enviar_comprovante_pagamento(user, pedido):
     itens_html = ''.join([
         f'<tr><td style="padding:6px 0;color:#ccc;">{i.nome}</td>'
@@ -2018,6 +2072,11 @@ def api_gestor_barbeiro():
     data = request.get_json(silent=True) or {}
     if 'ativo' in data:
         _upsert_setting('gestor_e_barbeiro', '1' if data['ativo'] else '0', _tid)
+        if not data['ativo'] and data.get('cancelar'):
+            tenant = db.session.get(Tenant, _tid)
+            conflitos = _conflitos_agendamentos_futuros(_tid, funcionario_id=0)
+            _cancelar_conflitos(conflitos, tenant.nome if tenant else 'Barbearia',
+                                'Barbeiro não está mais disponível')
     if 'nome' in data:
         _upsert_setting('gestor_nome', data['nome'], _tid)
     db.session.commit()
@@ -2102,6 +2161,15 @@ def api_config_publica():
     sd = _get_setting('dias_agenda', _api_tid())
     return jsonify({'dias_agenda': int(sd.value) if sd and sd.value else 20})
 
+@app.route('/api/dias-fechados/conflitos', methods=['GET'])
+def api_dias_fechados_conflitos():
+    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    data_val = request.args.get('data', '')
+    if not data_val:
+        return jsonify({'erro': 'data obrigatória'}), 400
+    conflitos = _conflitos_agendamentos_futuros(_api_tid(), data=data_val)
+    return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
+
 @app.route('/api/dias-fechados', methods=['GET', 'POST', 'DELETE'])
 def api_dias_fechados():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
@@ -2109,9 +2177,15 @@ def api_dias_fechados():
     s = _get_setting('dias_fechados', _tid)
     dias = json.loads(s.value) if s and s.value else []
     if request.method in ('POST', 'DELETE'):
-        data_val = (request.get_json(silent=True) or {}).get('data', '')
+        body = request.get_json(silent=True) or {}
+        data_val = body.get('data', '')
         if request.method == 'POST' and data_val and data_val not in dias:
             dias.append(data_val); dias.sort()
+            if body.get('cancelar'):
+                tenant = db.session.get(Tenant, _tid)
+                conflitos = _conflitos_agendamentos_futuros(_tid, data=data_val)
+                _cancelar_conflitos(conflitos, tenant.nome if tenant else 'Barbearia',
+                                    'Dia fechado pela barbearia')
         elif request.method == 'DELETE' and data_val in dias:
             dias.remove(data_val)
         _upsert_setting('dias_fechados', json.dumps(dias), _tid)
@@ -3278,6 +3352,12 @@ def api_funcionario_detalhe(fid):
     if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
+        body = request.get_json(silent=True) or {}
+        if body.get('cancelar'):
+            tenant = db.session.get(Tenant, tid)
+            conflitos = _conflitos_agendamentos_futuros(tid, funcionario_id=fid)
+            _cancelar_conflitos(conflitos, tenant.nome if tenant else 'Barbearia',
+                                f'Barbeiro {f.nome} não está mais disponível')
         f.ativo = False
         db.session.commit()
         return jsonify({'ok': True})
@@ -3303,6 +3383,23 @@ def api_funcionario_detalhe(fid):
         f.perm_fotos        = perms.get('fotos',        f.perm_fotos)
     db.session.commit()
     return jsonify({'ok': True})
+
+@app.route('/api/funcionarios/<int:fid>/conflitos', methods=['GET'])
+def api_funcionario_conflitos(fid):
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    f = db.session.get(Funcionario, fid)
+    if not f or f.tenant_id != tid:
+        return jsonify({'erro': 'não encontrado'}), 404
+    conflitos = _conflitos_agendamentos_futuros(tid, funcionario_id=fid)
+    return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
+
+@app.route('/api/gestor-barbeiro/conflitos', methods=['GET'])
+def api_gestor_barbeiro_conflitos():
+    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    _tid = _api_tid()
+    conflitos = _conflitos_agendamentos_futuros(_tid, funcionario_id=0)
+    return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
 @app.route('/api/funcionarios/<int:fid>/foto', methods=['POST', 'DELETE'])
 def api_funcionario_foto(fid):
