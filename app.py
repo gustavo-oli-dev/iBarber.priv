@@ -457,6 +457,10 @@ SLOTS_PADRAO = {
     6: [],                     # Dom – fechado
 }
 
+def _safe_json(data):
+    """json.dumps seguro para embedding em <script>: escapa <, > e & para evitar XSS."""
+    return json.dumps(data, ensure_ascii=False).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+
 def _gestor_como_barbeiro(tenant_id=None):
     """Retorna (ativo: bool, nome: str) do gestor como barbeiro."""
     if tenant_id is None:
@@ -3478,7 +3482,7 @@ def gestao_dashboard():
         hoje_dia=hoje.day,
         hoje_mes=MESES[hoje.month - 1],
         proximos_dias=proximos_dias,
-        agendamentos_json=json.dumps(ags_json, ensure_ascii=False),
+        agendamentos_json=_safe_json(ags_json),
         token=_gerar_token(tenant.id, 0),
     )
 
@@ -3490,10 +3494,10 @@ def gestao_agendamentos():
     # Gera token de admin para o JS usar na API
     token = _gerar_token(tenant.id, 0)
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
-    clientes_json = json.dumps([
+    clientes_json = _safe_json([
         {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
         for c in clientes
-    ], ensure_ascii=False)
+    ])
     return render_template('gestao/agendamentos.html', active='agendamentos',
                            token=token, clientes_json=clientes_json)
 
@@ -3538,12 +3542,12 @@ def gestao_pedidos():
                .filter_by(tenant_id=tenant.id)
                .options(joinedload(Pedido.usuario), joinedload(Pedido.itens))
                .order_by(Pedido.criado_em.desc()).limit(500).all())
-    pedidos_json = json.dumps([{
+    pedidos_json = _safe_json([{
         'id': p.id, 'status': p.status, 'total': p.total,
         'criado_em': p.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
         'usuario': p.usuario.name if p.usuario else '—',
         'itens': [{'nome': i.nome, 'categoria': i.categoria or '', 'preco': i.preco} for i in p.itens],
-    } for p in pedidos], ensure_ascii=False)
+    } for p in pedidos])
     return render_template('gestao/pedidos.html', active='pedidos', pedidos_json=pedidos_json, token=token)
 
 @app.route('/gestao/clientes')
@@ -3553,10 +3557,10 @@ def gestao_clientes():
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
-    clientes_json = json.dumps([{
+    clientes_json = _safe_json([{
         'id': c.id, 'name': c.name, 'email': c.email,
         'contact': c.contact or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
-    } for c in clientes], ensure_ascii=False)
+    } for c in clientes])
     return render_template('gestao/clientes.html', active='clientes', clientes_json=clientes_json, token=token)
 
 @app.route('/gestao/clientes/<int:uid>')
@@ -3596,13 +3600,13 @@ def gestao_entradas():
                 'usuario': ag.usuario.name if ag.usuario else '—',
             })
     entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).all()
-    entradas_json = json.dumps([{
+    entradas_json = _safe_json([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
         'forma': e.forma or 'dinheiro', 'criado_em': e.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
-    } for e in entradas], ensure_ascii=False)
+    } for e in entradas])
     return render_template('gestao/entradas.html', active='entradas',
                            entradas_json=entradas_json,
-                           agendamentos_json=json.dumps(ags_json, ensure_ascii=False))
+                           agendamentos_json=_safe_json(ags_json))
 
 @app.route('/gestao/entradas/<int:eid>/deletar', methods=['POST'])
 def gestao_entrada_deletar(eid):
@@ -3690,7 +3694,7 @@ def gestao_horarios():
         'slot_minutos': int(slot_s.value) if slot_s and slot_s.value else 40,
         'dias_agenda': int(dias_ag_s.value) if dias_ag_s and dias_ag_s.value else 20,
     }
-    especiais_json = json.dumps([{'id': e.id, 'data': e.data,
+    especiais_json = _safe_json([{'id': e.id, 'data': e.data,
         'abertura': e.abertura, 'fechamento': e.fechamento} for e in especiais])
     return render_template('gestao/horarios.html', active='horarios',
                            config_dias=config_dias, config_geral=config_geral,
