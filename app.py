@@ -551,7 +551,8 @@ def register():
             flash('Use um e-mail com domínio válido (ex: @gmail.com, @hotmail.com).', 'error')
             return render_template('register.html', hide_fabs=True)
 
-        if User.query.filter_by(email=email).first():
+        _reg_tid = session.get('path_tenant_id') or session.get('tenant_id')
+        if User.query.filter_by(email=email, tenant_id=_reg_tid).first():
             flash('Este e-mail já está cadastrado.', 'error')
             return render_template('register.html', hide_fabs=True)
 
@@ -956,7 +957,8 @@ def _enviar_comprovante_pagamento(user, pedido):
 def esqueci_senha():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
-        user  = User.query.filter_by(email=email).first()
+        _reset_tid = session.get('path_tenant_id') or session.get('tenant_id')
+        user  = User.query.filter_by(email=email, tenant_id=_reset_tid).first()
         flash('Confira seu e-mail!', 'success')
         if user:
             PasswordResetToken.query.filter_by(user_id=user.id, used=False).delete()
