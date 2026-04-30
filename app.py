@@ -43,8 +43,18 @@ def _gestao_trial_ctx():
 origens = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://localhost:8888,http://localhost:9999,http://localhost:7777').split(',')
 CORS(app, origins=origens, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///barbearia.db'
+_DB_URL = os.environ.get(
+    'DATABASE_URL',
+    'mysql+pymysql://ibarber:SUA_SENHA@localhost/ibarber?charset=utf8mb4'
+)
+app.config['SQLALCHEMY_DATABASE_URI'] = _DB_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,    # reconecta automaticamente se a conexão cair
+    'pool_recycle':  300,     # recicla conexões a cada 5 min (evita timeout MySQL)
+    'pool_size':     10,
+    'max_overflow':  20,
+}
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -361,31 +371,31 @@ with app.app_context():
     _user_cols = {c['name'] for c in _inspector.get_columns('user')} if 'user' in _existing else set()
     if 'guest' not in _user_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE user ADD COLUMN guest INTEGER DEFAULT 0'))
+            _conn.execute(db.text('ALTER TABLE `user` ADD COLUMN guest INTEGER DEFAULT 0'))
             _conn.commit()
     _serv_cols = {c['name'] for c in _inspector.get_columns('servico')} if 'servico' in _existing else set()
     if 'categoria_id' not in _serv_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE servico ADD COLUMN categoria_id INTEGER REFERENCES categoria(id)'))
+            _conn.execute(db.text('ALTER TABLE servico ADD COLUMN categoria_id INTEGER'))
             _conn.commit()
     _entrada_cols = {c['name'] for c in _inspector.get_columns('entrada_monetaria')} if 'entrada_monetaria' in _existing else set()
     if 'pedido_id' not in _entrada_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE entrada_monetaria ADD COLUMN pedido_id INTEGER REFERENCES pedido(id)'))
+            _conn.execute(db.text('ALTER TABLE entrada_monetaria ADD COLUMN pedido_id INTEGER'))
             _conn.commit()
     if 'tenant_id' not in _user_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE user ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
+            _conn.execute(db.text('ALTER TABLE `user` ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
     _pedido_cols = {c['name'] for c in _inspector.get_columns('pedido')} if 'pedido' in _existing else set()
     if 'tenant_id' not in _pedido_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE pedido ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
+            _conn.execute(db.text('ALTER TABLE pedido ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
     _ag_cols = {c['name'] for c in _inspector.get_columns('agendamento')} if 'agendamento' in _existing else set()
     if 'tenant_id' not in _ag_cols:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER REFERENCES tenant(id)'))
+            _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
 
 
@@ -3130,13 +3140,13 @@ def admin_banco():
     tabelas = insp.get_table_names()
     html_tabelas = ''
     for tabela in tabelas:
-        rows = db.session.execute(text(f'SELECT * FROM "{tabela}" LIMIT 200')).fetchall()
+        rows = db.session.execute(text(f'SELECT * FROM `{tabela}` LIMIT 200')).fetchall()
         cols = [c['name'] for c in insp.get_columns(tabela)]
         thead = ''.join(f'<th>{c}</th>' for c in cols)
         tbody = ''
         for row in rows:
             tbody += '<tr>' + ''.join(f'<td>{v}</td>' for v in row) + '</tr>'
-        total = db.session.execute(text(f'SELECT COUNT(*) FROM "{tabela}"')).scalar()
+        total = db.session.execute(text(f'SELECT COUNT(*) FROM `{tabela}`')).scalar()
         html_tabelas += f'''
         <div class="tabela-bloco">
             <h3>{tabela} <span class="badge">{total} registros</span></h3>
