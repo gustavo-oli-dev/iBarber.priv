@@ -125,7 +125,7 @@ body{display:flex;flex-direction:column}
       <div class="fg full">
         <label>Seu link exclusivo</label>
         <input type="text" id="f-slug" placeholder="barbearia-do-joao" oninput="onSlug(this.value)">
-        <span class="hint">barberos.app/<span id="slug-preview">seu-link</span></span>
+        <span class="hint">ibarber.app.br/<span id="slug-preview">seu-link</span></span>
         <span class="err" id="err-slug"></span>
       </div>
 
@@ -165,6 +165,17 @@ body{display:flex;flex-direction:column}
 
 <script>
 let slugTouched = false;
+
+// Pré-preenche nome do localStorage (digitado no passo Personalizar)
+try {
+  const tema = JSON.parse(localStorage.getItem('onb_tema') || '{}');
+  const nomeDisplay = tema.ag?.nomeDisplay || tema.nomeDisplay || '';
+  if (nomeDisplay) {
+    const fNome = document.getElementById('f-nome');
+    fNome.value = nomeDisplay;
+    onNome(nomeDisplay);
+  }
+} catch(e) {}
 
 function onNome(val) {
   if(!slugTouched) {
