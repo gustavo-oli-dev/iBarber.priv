@@ -3800,46 +3800,11 @@ def planos():
 
 @app.route('/trial')
 def trial():
-    return render_template('trial.html')
+    return redirect(url_for('personalizar'), 301)
 
 @app.route('/api/trial', methods=['POST'])
 def api_trial():
-    import re
-    d    = request.get_json(force=True) or {}
-    nome = d.get('nome', '').strip()
-    slug = d.get('slug', '').lower().strip()
-    email = d.get('email', '').strip().lower()
-    senha = d.get('senha', '').strip()
-    whats = d.get('whatsapp', '').strip() or None
-    if not nome:
-        return jsonify({'erro': 'Informe o nome da barbearia'}), 400
-    if not re.match(r'^[a-z0-9-]{3,30}$', slug):
-        return jsonify({'erro': 'Link inválido — use letras, números e hífens (3-30 chars)'}), 400
-    if Tenant.query.filter_by(slug=slug).first():
-        return jsonify({'erro': 'Esse link já está em uso'}), 400
-    if not email or not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', email):
-        return jsonify({'erro': 'E-mail inválido'}), 400
-    if Tenant.query.filter_by(email=email).first():
-        return jsonify({'erro': 'E-mail já cadastrado'}), 400
-    if len(senha) < 6:
-        return jsonify({'erro': 'Senha deve ter ao menos 6 caracteres'}), 400
-    tenant = Tenant(
-        slug=slug,
-        nome=nome,
-        email=email,
-        password=generate_password_hash(senha),
-        whatsapp=whats,
-        tema=json.dumps({}),
-        ativo=True,
-        assinatura_ativa=True,
-        trial_expira=datetime.utcnow() + timedelta(days=7),
-    )
-    db.session.add(tenant)
-    db.session.commit()
-    # Auto-login no painel de gestão
-    session['gestao_tenant_id'] = tenant.id
-    session['gestao_nome']      = tenant.nome
-    return jsonify({'ok': True, 'slug': slug})
+    return jsonify({'erro': 'Trial encerrado. Acesse /personalizar para criar sua conta.'}), 410
 
 @app.route('/cadastro')
 def cadastro():

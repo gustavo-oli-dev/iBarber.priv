@@ -171,21 +171,7 @@ body{display:flex;flex-direction:column}
     <p>Sem contratos. Cancele quando quiser.</p>
   </div>
 
-  <!-- TRIAL CARD -->
-  <div class="trial-card" id="card-trial" onclick="selPlano('trial')">
-    <div class="trial-card-left">
-      <div class="trial-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4caf82" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-      </div>
-      <div>
-        <div class="trial-title">7 dias grátis <span class="trial-badge">Grátis</span></div>
-        <div class="trial-sub">Acesso completo. Sem cartão de crédito. Cancele quando quiser.</div>
-      </div>
-    </div>
-    <button class="btn-trial" onclick="selEContinuar('trial')">Começar grátis</button>
-  </div>
 
-  <div class="planos-divider"><span>ou escolha um plano pago</span></div>
 
   <div class="cards">
 
@@ -271,7 +257,7 @@ if (savedPlano) selPlano(savedPlano);
 
 function selPlano(p) {
   planoSel = p;
-  ['trial','mensal','trimestral','semestral','anual'].forEach(x => {
+  ['mensal','trimestral','semestral','anual'].forEach(x => {
     document.getElementById('card-'+x).classList.toggle('sel', x === p);
   });
 }
