@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Teste Grátis — iBarber</title>
+<link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+<link rel="apple-touch-icon" href="/static/images/icon-192.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);
+  --gold:#C9A96E;--gold2:#e0be88;--text:#f5f5f5;--muted:#888;
+}
+html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow-x:hidden}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:2rem 1.25rem;}
+
+.glow{position:fixed;top:-160px;left:50%;transform:translateX(-50%);width:600px;height:400px;
+  background:radial-gradient(ellipse,rgba(201,169,110,.08) 0%,transparent 70%);pointer-events:none;z-index:0}
+
+.card{
+  position:relative;z-index:1;
+  width:100%;max-width:440px;
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  border-radius:20px;padding:2.5rem 2rem 2rem;
+}
+
+.logo{text-align:center;margin-bottom:1.75rem;}
+.logo-mark{font-size:1.6rem;color:var(--gold);}
+.logo-title{font-family:'Playfair Display',serif;font-size:1.75rem;font-weight:700;margin-top:.4rem;}
+.logo-title span{color:var(--gold);}
+.logo-sub{color:var(--muted);font-size:.875rem;margin-top:.4rem;}
+
+.trial-badge{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:rgba(76,175,130,.1);border:1px solid rgba(76,175,130,.3);
+  color:#4caf82;border-radius:50px;padding:.3rem .85rem;font-size:.75rem;font-weight:600;
+  margin-bottom:1.5rem;
+}
+
+.fg{display:flex;flex-direction:column;gap:.3rem;margin-bottom:.9rem;}
+.fg label{font-size:.73rem;color:var(--muted);font-weight:500;letter-spacing:.03em;}
+.fg input{
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text);
+  padding:11px 13px;border-radius:10px;font-size:.9rem;width:100%;
+  outline:none;transition:border-color .2s;font-family:'Inter',sans-serif;
+}
+.fg input:focus{border-color:var(--gold);}
+.fg input::placeholder{color:#444;}
+.fg .hint{font-size:.7rem;color:#555;margin-top:.15rem;}
+.fg .err{font-size:.72rem;color:#f87171;display:none;margin-top:.15rem;}
+
+.btn-criar{
+  width:100%;padding:14px;background:var(--gold);color:#000;border:none;
+  border-radius:10px;font-size:1rem;font-weight:800;cursor:pointer;
+  transition:background .2s,transform .15s;letter-spacing:.02em;margin-top:.5rem;
+}
+.btn-criar:hover{background:var(--gold2);transform:translateY(-1px);}
+.btn-criar:disabled{opacity:.4;cursor:default;transform:none;}
+
+.err-geral{font-size:.82rem;color:#f87171;text-align:center;display:none;margin-top:.75rem;}
+
+.footer-link{text-align:center;margin-top:1.25rem;font-size:.78rem;color:var(--muted);}
+.footer-link a{color:var(--gold);text-decoration:none;}
+.footer-link a:hover{text-decoration:underline;}
+
+.perks{display:flex;gap:.5rem;flex-direction:column;margin-bottom:1.5rem;}
+.perk{display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:var(--muted);}
+.perk-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0;}
+
+@media(max-width:480px){.card{padding:2rem 1.25rem 1.5rem;}}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="card">
+  <div class="logo">
+    <div class="logo-mark">✦</div>
+    <div class="logo-title">i<span>Barber</span></div>
+    <div class="logo-sub">Painel completo para sua barbearia</div>
+  </div>
+
+  <div style="text-align:center;margin-bottom:1.25rem;">
+    <span class="trial-badge">✓ 7 dias grátis · sem cartão</span>
+  </div>
+
+  <div class="perks">
+    <div class="perk"><div class="perk-dot"></div>Site de agendamento pronto na hora</div>
+    <div class="perk"><div class="perk-dot"></div>App de gestão para gerenciar tudo</div>
+    <div class="perk"><div class="perk-dot"></div>Sem personalização no trial — títulos e tipografia padrão</div>
+  </div>
+
+  <div class="fg">
+    <label>Nome da barbearia</label>
+    <input type="text" id="f-nome" placeholder="Ex: Barbearia do João" oninput="onNome(this.value)" autocomplete="organization">
+  </div>
+
+  <div class="fg">
+    <label>Seu link exclusivo</label>
+    <input type="text" id="f-slug" placeholder="barbearia-joao" oninput="onSlug(this.value)" autocomplete="off">
+    <span class="hint">ibarber.app.br/<span id="slug-preview">seu-link</span></span>
+    <span class="err" id="err-slug"></span>
+  </div>
+
+  <div class="fg">
+    <label>WhatsApp <span style="color:#555;font-weight:400;">(opcional)</span></label>
+    <input type="tel" id="f-whats" placeholder="(11) 99999-9999" autocomplete="tel">
+  </div>
+
+  <div class="fg">
+    <label>E-mail de acesso</label>
+    <input type="email" id="f-email" placeholder="email@exemplo.com" autocomplete="email">
+    <span class="err" id="err-email"></span>
+  </div>
+
+  <div class="fg" style="margin-bottom:.4rem;">
+    <label>Senha</label>
+    <input type="password" id="f-senha" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+    <span class="err" id="err-senha"></span>
+  </div>
+
+  <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta grátis →</button>
+  <div class="err-geral" id="err-geral"></div>
+
+  <div class="footer-link">
+    Já tem conta? <a href="/gestao/login">Entrar no painel</a>
+  </div>
+</div>
+
+<script>
+let slugTouched = false;
+
+function onNome(val) {
+  if (!slugTouched) {
+    const slug = val.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,30);
+    document.getElementById('f-slug').value = slug;
+    document.getElementById('slug-preview').textContent = slug || 'seu-link';
+  }
+}
+
+function onSlug(val) {
+  slugTouched = true;
+  const slug = val.toLowerCase().replace(/[^a-z0-9-]/g,'');
+  document.getElementById('f-slug').value = slug;
+  document.getElementById('slug-preview').textContent = slug || 'seu-link';
+  document.getElementById('err-slug').style.display = 'none';
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function clearErrs() {
+  ['err-slug','err-email','err-senha','err-geral'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+
+async function submeter() {
+  clearErrs();
+  const nome  = document.getElementById('f-nome').value.trim();
+  const slug  = document.getElementById('f-slug').value.trim();
+  const whats = document.getElementById('f-whats').value.trim();
+  const email = document.getElementById('f-email').value.trim().toLowerCase();
+  const senha = document.getElementById('f-senha').value;
+
+  if (!nome)  { showErr('err-geral','Informe o nome da barbearia'); return; }
+  if (!slug || !/^[a-z0-9-]{3,30}$/.test(slug)) { showErr('err-slug','Link inválido (letras, números e hífens, 3-30 chars)'); return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('err-email','E-mail inválido'); return; }
+  if (senha.length < 6) { showErr('err-senha','Mínimo 6 caracteres'); return; }
+
+  const btn = document.getElementById('btn-criar');
+  btn.disabled = true;
+  btn.textContent = 'Criando conta...';
+
+  try {
+    const r = await fetch('/api/trial', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({nome, slug, whatsapp: whats, email, senha})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = 'Entrando no painel...';
+      location.replace('/gestao/');
+    } else {
+      showErr('err-geral', d.erro || 'Erro ao criar a conta');
+      btn.disabled = false;
+      btn.textContent = 'Criar conta grátis →';
+    }
+  } catch(e) {
+    showErr('err-geral','Erro de conexão. Tente novamente.');
+    btn.disabled = false;
+    btn.textContent = 'Criar conta grátis →';
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Enter') submeter(); });
+</script>
+</body>
+</html>
