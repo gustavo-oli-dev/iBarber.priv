@@ -3714,20 +3714,25 @@ def gestao_contato():
     if redir: return redir
     tenant = _gestao_tenant()
     if request.method == 'POST':
-        tenant.whatsapp = request.form.get('whatsapp', '').strip() or None
-        tenant.maps_url = request.form.get('maps_url', '').strip() or None
-        tenant.contato  = request.form.get('contato', '').strip() or None
-        # Texto dos botões FAB
+        whatsapp  = request.form.get('whatsapp', '').strip()
+        maps_url  = request.form.get('maps_url', '').strip()
+        contato   = request.form.get('contato', '').strip()
+        if whatsapp:  tenant.whatsapp = whatsapp
+        if maps_url:  tenant.maps_url = maps_url
+        if contato:   tenant.contato  = contato
+        # Texto dos botões FAB — só atualiza se preenchido
         wpp_texto  = request.form.get('wpp_texto', '').strip()
         maps_texto = request.form.get('maps_texto', '').strip()
-        try: wpp_cfg  = json.loads(tenant.fab_wpp  or '{}')
-        except: wpp_cfg = {}
-        try: maps_cfg = json.loads(tenant.fab_maps or '{}')
-        except: maps_cfg = {}
-        if wpp_texto:  wpp_cfg['texto']  = wpp_texto
-        if maps_texto: maps_cfg['texto'] = maps_texto
-        if wpp_texto or wpp_cfg:  tenant.fab_wpp  = json.dumps(wpp_cfg)
-        if maps_texto or maps_cfg: tenant.fab_maps = json.dumps(maps_cfg)
+        if wpp_texto:
+            try: wpp_cfg = json.loads(tenant.fab_wpp or '{}')
+            except: wpp_cfg = {}
+            wpp_cfg['texto'] = wpp_texto
+            tenant.fab_wpp = json.dumps(wpp_cfg)
+        if maps_texto:
+            try: maps_cfg = json.loads(tenant.fab_maps or '{}')
+            except: maps_cfg = {}
+            maps_cfg['texto'] = maps_texto
+            tenant.fab_maps = json.dumps(maps_cfg)
         db.session.commit()
         flash('Contato atualizado.', 'success')
         return redirect(url_for('gestao_contato'))

@@ -14,15 +14,15 @@
         <div class="g-section-title">Informações de contato</div>
         <div class="g-form-group" style="margin-bottom:1rem;">
           <label class="g-label">Telefone de contato</label>
-          <input class="g-input" name="contato" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.contato or '' }}" data-mask="tel" data-validate="tel" />
+          <input class="g-input" name="contato" type="tel" placeholder="{{ tenant.contato or '(00) 00000-0000' }}" data-mask="tel" data-validate="tel" />
         </div>
         <div class="g-form-group" style="margin-bottom:1rem;">
           <label class="g-label">WhatsApp</label>
-          <input class="g-input" name="whatsapp" type="tel" placeholder="(00) 00000-0000" value="{{ tenant.whatsapp or '' }}" data-mask="tel" data-validate="tel" />
+          <input class="g-input" name="whatsapp" type="tel" placeholder="{{ tenant.whatsapp or '(00) 00000-0000' }}" data-mask="tel" data-validate="tel" />
         </div>
         <div class="g-form-group">
           <label class="g-label">Link do Google Maps</label>
-          <input class="g-input" name="maps_url" type="url" placeholder="https://maps.google.com/..." value="{{ tenant.maps_url or '' }}" data-validate="url" />
+          <input class="g-input" name="maps_url" type="url" placeholder="{{ tenant.maps_url or 'https://maps.google.com/...' }}" data-validate="url" />
         </div>
       </div>
 
@@ -51,7 +51,7 @@
         <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Texto exibido no botão flutuante do WhatsApp no site de agendamento.</p>
         <div class="g-form-group" style="margin-bottom:.5rem;">
           <label class="g-label">Nome do botão</label>
-          <input class="g-input" name="wpp_texto" placeholder="Ex: Nos ache, Fale conosco, Chame no Zap…" value="{{ wpp_texto or '' }}" />
+          <input class="g-input" name="wpp_texto" placeholder="{{ wpp_texto or 'Ex: Nos ache, Fale conosco, Chame no Zap…' }}" />
         </div>
         <div class="ct-btn-preview ct-wpp">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.855L.053 23.5l5.798-1.524A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.017-1.378l-.36-.214-3.44.905.918-3.353-.234-.373A9.818 9.818 0 0112 2.182c5.426 0 9.818 4.392 9.818 9.818 0 5.427-4.392 9.818-9.818 9.818z"/></svg>
@@ -64,7 +64,7 @@
         <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:.9rem;">Texto exibido no botão flutuante do Maps no site de agendamento.</p>
         <div class="g-form-group" style="margin-bottom:.5rem;">
           <label class="g-label">Nome do botão</label>
-          <input class="g-input" name="maps_texto" placeholder="Ex: Como chegar, Estamos aqui, Ver no mapa…" value="{{ maps_texto or '' }}" />
+          <input class="g-input" name="maps_texto" placeholder="{{ maps_texto or 'Ex: Como chegar, Estamos aqui, Ver no mapa…' }}" />
         </div>
         <div class="ct-btn-preview ct-maps">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4285F4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
