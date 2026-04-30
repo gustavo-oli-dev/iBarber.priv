@@ -4209,29 +4209,70 @@ def api_pagamento_criar_v2():
     plano = d.get('plano', '')
     if plano not in PLANOS:
         return jsonify({'erro': 'plano inválido'}), 400
-    mp_token     = get_mp_token()
-    mp_pub_key_s = _get_setting('admin_mp_public_key')
-    mp_pub_key = mp_pub_key_s.value if mp_pub_key_s else ''
+
+    mp_token = get_mp_token()
+    # Public key: env var primeiro, depois DB setting
+    mp_pub_key = os.environ.get('MP_PUBLIC_KEY', '')
+    if not mp_pub_key:
+        mp_pub_key_s = _get_setting('admin_mp_public_key')
+        mp_pub_key = mp_pub_key_s.value if mp_pub_key_s else ''
+
     amount = PLANOS[plano]['total']
-    preference = {
-        'items': [{'title': f'BarberOS — Plano {plano.capitalize()}',
-                   'quantity': 1, 'currency_id': 'BRL', 'unit_price': amount}],
-        'back_urls': {'success': f'{request.host_url}sucesso/{tenant.slug}',
-                      'failure':  f'{request.host_url}falha',
-                      'pending':  f'{request.host_url}pendente'},
-        'auto_return': 'approved',
-        'notification_url': f'{request.host_url}api/pagamento/webhook',
-        'metadata': {'tenant_id': tenant.id, 'plano': plano},
-    }
+    meta   = {'tenant_id': tenant.id, 'plano': plano, 'tipo': 'assinatura'}
+
+    # ── Gerar QR Code PIX ──────────────────────────────────────────────────────
+    pix_code = None
+    pix_url  = None
+    pix_payment_id = None
+    if mp_token:
+        try:
+            pix_r = req_http.post(
+                'https://api.mercadopago.com/v1/payments',
+                json={
+                    'transaction_amount': float(amount),
+                    'description': f'iBarber — Plano {plano.capitalize()}',
+                    'payment_method_id': 'pix',
+                    'payer': {'email': tenant.email},
+                    'metadata': meta,
+                    'notification_url': f'{request.host_url}api/pagamento/webhook',
+                },
+                headers={'Authorization': f'Bearer {mp_token}',
+                         'Content-Type': 'application/json',
+                         'X-Idempotency-Key': str(uuid.uuid4())},
+                timeout=15,
+            )
+            if pix_r.status_code in (200, 201):
+                pix_data = pix_r.json()
+                td = pix_data.get('point_of_interaction', {}).get('transaction_data', {})
+                pix_code       = td.get('qr_code', '')
+                pix_url        = td.get('qr_code_base64', '')
+                pix_payment_id = str(pix_data.get('id', ''))
+        except Exception:
+            pass
+
+    # ── Gerar preference para Brick de cartão ──────────────────────────────────
     pref_id = None
     if mp_token:
-        res = req_http.post(
-            'https://api.mercadopago.com/checkout/preferences',
-            headers={'Authorization': f'Bearer {mp_token}', 'Content-Type': 'application/json'},
-            json=preference, timeout=15,
-        )
-        pref_data = res.json()
-        pref_id = pref_data.get('id')
+        try:
+            pref_r = req_http.post(
+                'https://api.mercadopago.com/checkout/preferences',
+                headers={'Authorization': f'Bearer {mp_token}', 'Content-Type': 'application/json'},
+                json={
+                    'items': [{'title': f'iBarber — Plano {plano.capitalize()}',
+                               'quantity': 1, 'currency_id': 'BRL', 'unit_price': float(amount)}],
+                    'back_urls': {'success': f'{request.host_url}sucesso/{tenant.slug}',
+                                  'failure':  f'{request.host_url}falha',
+                                  'pending':  f'{request.host_url}pendente'},
+                    'auto_return': 'approved',
+                    'notification_url': f'{request.host_url}api/pagamento/webhook',
+                    'metadata': meta,
+                },
+                timeout=15,
+            )
+            pref_id = pref_r.json().get('id')
+        except Exception:
+            pass
+
     assinatura = Assinatura(
         tenant_id=tenant.id, plano=plano,
         valor_total=PLANOS[plano]['total'], valor_mensal=PLANOS[plano]['mensal'],
@@ -4239,9 +4280,18 @@ def api_pagamento_criar_v2():
     )
     db.session.add(assinatura)
     db.session.commit()
-    return jsonify({'ok': True, 'preference_id': pref_id,
-                    'public_key': mp_pub_key, 'amount': amount,
-                    'tenant_id': tenant.id, 'plano': plano})
+
+    return jsonify({
+        'ok': True,
+        'preference_id': pref_id,
+        'public_key':    mp_pub_key,
+        'amount':        amount,
+        'tenant_id':     tenant.id,
+        'plano':         plano,
+        'pix_code':      pix_code,
+        'pix_url':       pix_url,
+        'pix_payment_id': pix_payment_id,
+    })
 
 @app.route('/api/pagamento/webhook', methods=['POST'])
 def api_pagamento_webhook():
