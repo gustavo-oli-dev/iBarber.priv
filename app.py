@@ -523,6 +523,7 @@ def manifest():
 def index():
     tenant = get_tenant_atual()
     if tenant:
+        session.pop('is_preview', None)
         user = db.session.get(User, session['user_id']) if 'user_id' in session else None
         auto_rapido = bool(not user and request.args.get('agendar'))
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
@@ -1804,8 +1805,6 @@ def api_tenant_config_put():
 # ── Categorias ────────────────────────────────────────────────────
 @app.route('/api/categorias', methods=['GET'])
 def api_categorias_listar():
-    if session.get('is_preview'):
-        return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
     try:
         tid = session.get('tenant_id') or session.get('path_tenant_id')
         if not tid:
@@ -1814,6 +1813,8 @@ def api_categorias_listar():
         if not tid:
             t = get_tenant_atual()
             tid = t.id if t else None
+        if not tid and session.get('is_preview'):
+            return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
         q = Categoria.query.filter_by(ativo=True)
         if tid: q = q.filter_by(tenant_id=tid)
         cats = q.order_by(Categoria.ordem).all()
@@ -1855,8 +1856,6 @@ def api_categoria_detalhe(cid):
 # ── Serviços ───────────────────────────────────────────────────────
 @app.route('/api/servicos', methods=['GET'])
 def api_servicos_listar():
-    if session.get('is_preview'):
-        return jsonify(_PREVIEW_SVCS)
     try:
         q = Servico.query.filter_by(ativo=True)
         tid = session.get('tenant_id') or session.get('path_tenant_id')
@@ -1866,6 +1865,8 @@ def api_servicos_listar():
         if not tid:
             t = get_tenant_atual()
             tid = t.id if t else None
+        if not tid and session.get('is_preview'):
+            return jsonify(_PREVIEW_SVCS)
         if tid: q = q.filter_by(tenant_id=tid)
         svs = q.order_by(Servico.categoria_id, Servico.ordem).all()
         return jsonify([{
