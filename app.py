@@ -3215,8 +3215,9 @@ def api_funcionarios_login():
     data  = request.get_json(force=True) or {}
     email = data.get('email', '').strip().lower()
     senha = data.get('password', '')
-    f = Funcionario.query.filter_by(email=email, ativo=True).first()
-    if not f or not check_password_hash(f.password, senha):
+    candidatos = Funcionario.query.filter_by(email=email, ativo=True).all()
+    f = next((c for c in candidatos if check_password_hash(c.password, senha)), None)
+    if not f:
         return jsonify({'erro': 'credenciais inválidas'}), 401
     token = _gerar_token(f.tenant_id, f.id)
     return jsonify({
