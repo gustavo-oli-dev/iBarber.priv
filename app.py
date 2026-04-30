@@ -43,10 +43,9 @@ def _gestao_trial_ctx():
 origens = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://localhost:8888,http://localhost:9999,http://localhost:7777').split(',')
 CORS(app, origins=origens, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
-_DB_URL = os.environ.get(
-    'DATABASE_URL',
-    'mysql+pymysql://ibarber:SUA_SENHA@localhost/ibarber?charset=utf8mb4'
-)
+_DB_URL = os.environ.get('DATABASE_URL')
+if not _DB_URL:
+    raise RuntimeError('DATABASE_URL não definida no ambiente')
 app.config['SQLALCHEMY_DATABASE_URI'] = _DB_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -576,7 +575,11 @@ def login():
         email    = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
 
-        user = User.query.filter_by(email=email).first()
+        tid = session.get('path_tenant_id') or session.get('tenant_id')
+        q = User.query.filter_by(email=email)
+        if tid:
+            q = q.filter(db.or_(User.tenant_id == tid, User.tenant_id == None))
+        user = q.first()
         if user and check_password_hash(user.password, password):
             session['user_id'] = user.id
             session['user_name'] = user.name
@@ -697,7 +700,7 @@ def servicos():
     agendamento_info = None
     ag = (Agendamento.query
           .filter_by(user_id=session['user_id'], status='ativo')
-          .filter(Agendamento.data_hora > datetime.now())
+          .filter(Agendamento.data_hora > datetime.utcnow())
           .order_by(Agendamento.data_hora.asc())
           .first())
     if ag:
@@ -1062,7 +1065,7 @@ def preview_gt(screen):
     gt_tema_override = _gt_tema_override_css(request.args)
     gt_preview_nome  = 'João Silva'
 
-    hoje_dt = datetime.now()
+    hoje_dt = datetime.utcnow()
     hoje_str = hoje_dt.strftime('%Y-%m-%d')
     meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
              'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -1253,11 +1256,11 @@ def agendar():
         data_hora = datetime.fromisoformat(data_hora_str)
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
-    if data_hora <= datetime.now():
+    if data_hora <= datetime.utcnow():
         return jsonify({'erro': 'Data inválida. Escolha uma data futura.'}), 400
     existente = (Agendamento.query
                  .filter_by(user_id=session['user_id'], status='ativo')
-                 .filter(Agendamento.data_hora > datetime.now())
+                 .filter(Agendamento.data_hora > datetime.utcnow())
                  .first())
     if existente:
         return jsonify({'erro': 'Você já possui um agendamento marcado.'}), 400
@@ -1504,7 +1507,7 @@ def meu_agendamento():
     if not ag:
         return jsonify({'agendamento': None})
     if ag.funcionario_id == 0:
-        _, func_nome = _gestor_como_barbeiro()
+        _, func_nome = _gestor_como_barbeiro(ag.tenant_id)
     else:
         func_nome = ag.funcionario.nome if ag.funcionario else None
     return jsonify({'agendamento': {
@@ -1525,7 +1528,7 @@ def atualizar_forma_pagamento():
         return jsonify({'erro': 'forma inválida'}), 400
     ag = (Agendamento.query
           .filter_by(user_id=session['user_id'], status='ativo')
-          .filter(Agendamento.data_hora > datetime.now())
+          .filter(Agendamento.data_hora > datetime.utcnow())
           .first())
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
@@ -1572,7 +1575,7 @@ def meu_historico():
                      .options(joinedload(Pedido.itens)).all()}
         if pedido_ids else {}
     )
-    _, gestor_nome = _gestor_como_barbeiro()
+    _, gestor_nome = _gestor_como_barbeiro(_api_tid())
     resultado = []
     for ag in ags:
         p = pedidos.get(ag.pedido_id)
@@ -1952,7 +1955,7 @@ def api_horarios_disponiveis():
     todos_tomados = list(slot_counts.keys())
 
     # Para hoje, remove slots cujo horário já passou
-    agora = datetime.now()
+    agora = datetime.utcnow()
     if data_obj == agora.date():
         disponiveis = [
             s for s in todos_slots
@@ -2467,7 +2470,7 @@ def api_pedido_status(pid):
 def api_stats_servicos():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True).all()}
+    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True, tenant_id=tid).all()}
     contagem = {}
     pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').all()
     for p in pedidos:
@@ -2490,7 +2493,7 @@ def api_stats_barbeiros():
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     contagem  = {}
     receita   = {}
-    _, gestor_nome = _gestor_como_barbeiro()
+    _, gestor_nome = _gestor_como_barbeiro(tid)
     ags = (Agendamento.query
            .filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado')
            .options(joinedload(Agendamento.funcionario), joinedload(Agendamento.pedido))
@@ -2710,11 +2713,11 @@ def api_agendamentos():
         if not user or user.tenant_id != tid:
             return jsonify({'erro': 'usuário não encontrado'}), 404
         data_str = data_hora.strftime('%Y-%m-%d')
-        dias_s = _get_setting('dias_fechados', _api_tid())
+        dias_s = _get_setting('dias_fechados', tid)
         if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
             return jsonify({'erro': 'Este dia não está disponível.'}), 400
         slot_ocupado = (Agendamento.query
-                        .filter_by(status='ativo', tenant_id=_api_tid())
+                        .filter_by(status='ativo', tenant_id=tid)
                         .filter(Agendamento.data_hora == data_hora)
                         .first())
         if slot_ocupado:
@@ -2790,7 +2793,7 @@ def api_agendamentos():
                      .options(joinedload(Pedido.itens)).all()}
         if pedido_ids else {}
     )
-    _, gestor_nome = _gestor_como_barbeiro()
+    _, gestor_nome = _gestor_como_barbeiro(tid)
     result = []
     for ag in ags:
         u = ag.usuario
@@ -3415,7 +3418,7 @@ def gestao_logout():
 def gestao_dashboard():
     redir = _gestao_login_required()
     if redir: return redir
-    _, gestor_nome = _gestor_como_barbeiro()
+    _, gestor_nome = _gestor_como_barbeiro(_gestao_tid())
     hoje = datetime.utcnow().date()
     MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
     DIAS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
