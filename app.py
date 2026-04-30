@@ -521,6 +521,11 @@ def manifest():
 
 @app.route('/')
 def index():
+    tenant = get_tenant_atual()
+    if tenant:
+        user = db.session.get(User, session['user_id']) if 'user_id' in session else None
+        auto_rapido = bool(not user and request.args.get('agendar'))
+        return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
 
 @app.route('/register', methods=['GET', 'POST'])
