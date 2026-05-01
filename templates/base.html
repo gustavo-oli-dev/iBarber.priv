@@ -154,12 +154,13 @@
     if (!el) {
       el = document.createElement('a');
       el.id = idEl;
-      el.style.cssText = 'position:fixed;display:flex;align-items:center;gap:8px;border-radius:50px;padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;z-index:1000;transition:opacity .2s,transform .2s;border:none';
+      el.style.cssText = 'position:fixed;display:flex;align-items:center;gap:8px;border-radius:50px;padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;z-index:1000;transition:opacity .2s,transform .2s;border:2px solid transparent';
       el.innerHTML = svgHtml + '<span></span>';
       document.body.appendChild(el);
     }
     el.style.display = cfg.mostrar ? 'flex' : 'none';
     el.style.background = cfg.cor;
+    el.style.borderColor = cfg.cor;
     el.style.color = cfg.corTexto;
     el.style.bottom = cfg.bottom + 'px';
     el.style[cfg.posicaoH === 'right' ? 'right' : 'left'] = '24px';

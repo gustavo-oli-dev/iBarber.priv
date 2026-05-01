@@ -36,7 +36,7 @@ body{display:flex;flex-direction:column}
 .topbar-right{display:flex;align-items:center;gap:.6rem;margin-left:auto}
 .btn-salvar{
   background:var(--gold);color:#000;padding:7px 20px;border-radius:8px;
-  font-size:.8rem;font-weight:800;border:none;cursor:pointer;
+  font-size:.8rem;font-weight:800;border:1px solid var(--gold);cursor:pointer;
   transition:background .2s,transform .15s;white-space:nowrap;
 }
 .btn-salvar:hover{background:var(--gold2);transform:scale(1.02)}
@@ -140,7 +140,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .fg input:focus{border-color:var(--gold)}
 .fg input::placeholder{color:#444}
 .err-login{font-size:.78rem;color:#f87171;display:none;margin-bottom:.75rem;text-align:center}
-.btn-login{width:100%;padding:12px;background:var(--gold);color:#000;border:none;border-radius:9px;font-size:.92rem;font-weight:800;cursor:pointer;transition:background .2s,transform .15s;margin-top:.25rem}
+.btn-login{width:100%;padding:12px;background:var(--gold);color:#000;border:1px solid var(--gold);border-radius:9px;font-size:.92rem;font-weight:800;cursor:pointer;transition:background .2s,transform .15s;margin-top:.25rem}
 .btn-login:hover{background:var(--gold2);transform:translateY(-1px)}
 .btn-login:disabled{opacity:.4;cursor:default;transform:none}
 .login-footer{margin-top:1.25rem;text-align:center;font-size:.78rem;color:var(--muted)}
@@ -152,7 +152,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .pay-modal{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.88);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center}
 .pay-modal.show{display:flex}
 .pay-box{background:#0d0d0d;border:1px solid var(--border);border-radius:18px;padding:2rem;max-width:420px;width:94%;position:relative}
-.pay-close{position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;transition:color .2s}
+.pay-close{position:absolute;top:1rem;right:1rem;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:1.2rem;cursor:pointer;transition:color .2s;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
 .pay-close:hover{color:var(--text)}
 .pay-modal-title{font-family:'Playfair Display',serif;font-size:1.3rem;font-weight:700;color:var(--gold);margin-bottom:.3rem}
 .pay-modal-sub{font-size:.82rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.55}
@@ -168,7 +168,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .pix-wait{display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.78rem}
 .pix-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.btn-mp{width:100%;padding:12px;background:var(--gold);color:#000;border:none;border-radius:9px;font-size:.9rem;font-weight:800;cursor:pointer;transition:background .2s,transform .15s}
+.btn-mp{width:100%;padding:12px;background:var(--gold);color:#000;border:1px solid var(--gold);border-radius:9px;font-size:.9rem;font-weight:800;cursor:pointer;transition:background .2s,transform .15s}
 .btn-mp:hover{background:var(--gold2);transform:translateY(-1px)}
 .btn-mp:disabled{opacity:.4;cursor:default;transform:none}
 .card-icon{font-size:2.5rem}

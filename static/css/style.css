@@ -94,7 +94,7 @@ main { flex: 1; }
 }
 .nav-dots {
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 1.5rem;
   line-height: 1;
@@ -138,7 +138,7 @@ main { flex: 1; }
   top: 1.2rem;
   right: 1.2rem;
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 1.8rem;
   line-height: 1;
@@ -161,9 +161,10 @@ main { flex: 1; }
   width: 28px;
   height: 28px;
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   cursor: pointer;
   padding: 0;
+  border-radius: var(--radius);
 }
 .nav-toggle span {
   display: block;
@@ -277,7 +278,7 @@ main { flex: 1; }
 }
 .flash-close {
   background: none;
-  border: none;
+  border: 1px solid currentColor;
   color: inherit;
   font-size: 1.2rem;
   cursor: pointer;
@@ -408,7 +409,7 @@ main { flex: 1; }
   top: 1rem;
   right: 1.1rem;
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 1.5rem;
   line-height: 1;
@@ -594,8 +595,7 @@ main { flex: 1; }
 }
 .btn-add-carrinho {
   background: var(--surface2);
-  border: none;
-  border-left: 1px solid var(--border);
+  border: 1px solid var(--border);
   color: var(--gold);
   font-size: 1.3rem;
   font-weight: 300;
@@ -684,7 +684,7 @@ main { flex: 1; }
 }
 .btn-ver-mais-mini {
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-size: 0.75rem;
@@ -707,8 +707,9 @@ main { flex: 1; }
   top: 1rem;
   right: 1.2rem;
   background: none;
-  border: none;
+  border: 1px solid rgba(255,255,255,0.15);
   color: var(--text-muted);
+  border-radius: var(--radius);
   font-size: 2rem;
   cursor: pointer;
   line-height: 1;
@@ -737,8 +738,9 @@ main { flex: 1; }
 }
 .lightbox-nav {
   background: none;
-  border: none;
+  border: 1px solid rgba(255,255,255,0.12);
   color: var(--text-muted);
+  border-radius: var(--radius);
   font-size: 3.5rem;
   cursor: pointer;
   padding: 0 1rem;
@@ -797,7 +799,7 @@ main { flex: 1; }
   z-index: 400;
   background: var(--gold);
   color: var(--bg);
-  border: none;
+  border: 2px solid var(--gold-hover);
   border-radius: 50%;
   width: 56px;
   height: 56px;
@@ -873,8 +875,9 @@ main { flex: 1; }
 }
 .carrinho-fechar {
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
+  border-radius: var(--radius);
   font-size: 1.5rem;
   cursor: pointer;
   line-height: 1;
@@ -900,8 +903,9 @@ main { flex: 1; }
 }
 .carrinho-item-remover {
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
+  border-radius: var(--radius);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 0 0.2rem;
@@ -972,7 +976,7 @@ main { flex: 1; }
   align-items: center;
   gap: 0.4rem;
   background: none;
-  border: none;
+  border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-size: 0.9rem;

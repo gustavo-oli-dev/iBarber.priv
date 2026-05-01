@@ -164,9 +164,9 @@
     .detalhe-panel { width: 100vw; border-left: none; border-top: 1px solid var(--border); }
   }
   .detalhe-close {
-    background: none; border: none; color: var(--text-muted);
+    background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-muted);
     font-size: 1.5rem; cursor: pointer; float: right;
-    line-height: 1; padding: 0;
+    line-height: 1; padding: 0.1rem 0.4rem;
   }
   .detalhe-close:hover { color: var(--text); }
   .detalhe-nome { font-size: 1.2rem; font-weight: 600; margin: 1rem 0 0.25rem; }
@@ -516,7 +516,7 @@ async function confirmarReagendar() {
 <div id="reagModal" style="display:none;position:fixed;inset:0;z-index:401;align-items:center;justify-content:center;padding:1rem;pointer-events:none;">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
               padding:1.5rem;width:100%;max-width:420px;pointer-events:auto;position:relative;max-height:90dvh;overflow-y:auto;">
-    <button onclick="fecharReagendar()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+    <button onclick="fecharReagendar()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">×</button>
     <div style="font-weight:600;font-size:1rem;margin-bottom:1rem;">Reagendar Horário</div>
 
     <div style="font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.5rem;">Nova data</div>

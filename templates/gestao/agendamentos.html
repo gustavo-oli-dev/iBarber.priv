@@ -40,10 +40,10 @@
   .cliente-item-sub { color: var(--text-muted); font-size: 0.75rem; }
   .btn-novo-cliente {
     font-size: 0.78rem; color: var(--gold);
-    background: none; border: none; cursor: pointer;
+    background: none; border: 1px solid rgba(200,200,200,0.2); border-radius: var(--radius); cursor: pointer;
     font-family: var(--font-sans);
     display: flex; align-items: center; gap: 0.3rem;
-    padding: 0;
+    padding: 0.2rem 0.5rem;
   }
   .btn-novo-cliente:hover { opacity: 0.8; }
 
@@ -119,7 +119,7 @@
   .btn-salvar {
     width: 100%; padding: 0.85rem;
     background: var(--gold); color: #000;
-    border: none; border-radius: var(--radius);
+    border: 1px solid var(--gold); border-radius: var(--radius);
     font-size: 1rem; font-weight: 700;
     font-family: var(--font-sans);
     cursor: pointer; transition: opacity 0.15s;
@@ -549,7 +549,7 @@ function copiarPixGestao() {
 <div id="qrGestaoOverlay" onclick="fecharQrGestao()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:300;"></div>
 <div id="qrGestaoModal" style="display:none;position:fixed;inset:0;z-index:301;align-items:center;justify-content:center;padding:1rem;pointer-events:none;">
   <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:340px;text-align:center;pointer-events:auto;position:relative;">
-    <button onclick="fecharQrGestao()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;line-height:1;">×</button>
+    <button onclick="fecharQrGestao()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:1.2rem;cursor:pointer;line-height:1;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">×</button>
     <div class="g-section-title" style="margin-bottom:.25rem;">Pague via PIX</div>
     <div id="qrGestaoTotal" style="color:var(--gold);font-size:1.1rem;font-weight:600;margin-bottom:1rem;">R$ 0,00</div>
     <div id="qrGestaoLoading" style="padding:2rem 0;color:var(--text-muted);font-size:.875rem;">Gerando QR Code…</div>

@@ -76,7 +76,8 @@ body { overflow: hidden; }
 .hist-header h3 { font-size: .95rem; font-weight: 600; color: #f0ece4; margin: 0; }
 .hist-close {
   background: none;
-  border: none;
+  border: 1px solid #333;
+  border-radius: 6px;
   color: #888;
   font-size: 1.4rem;
   cursor: pointer;
@@ -170,7 +171,7 @@ body { overflow: hidden; }
       <p style="color:#888;font-size:0.78rem;text-align:center;margin:0.3rem 0 0;opacity:0.6;">{{ agendamento_info.forma_pagamento }}</p>
       {% endif %}
       <div style="border-top:1px solid rgba(201,169,110,0.2);margin-top:.85rem;padding-top:.7rem;display:flex;justify-content:space-between;align-items:center;">
-        <button onclick="abrirHistorico()" style="background:none;border:none;color:#C9A96E;font-size:0.78rem;cursor:pointer;padding:0;display:flex;align-items:center;gap:0.3rem;opacity:0.8;">
+        <button onclick="abrirHistorico()" style="background:none;border:1px solid rgba(201,169,110,0.4);border-radius:6px;color:#C9A96E;font-size:0.78rem;cursor:pointer;padding:.2rem .6rem;display:flex;align-items:center;gap:0.3rem;opacity:0.8;">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Ver histórico
         </button>
@@ -1350,7 +1351,7 @@ body { overflow: hidden; }
 <div id="reagModal2" style="display:none;position:fixed;inset:0;z-index:401;align-items:center;justify-content:center;padding:1rem;">
   <div style="background:#111;border:1px solid #2a2a2a;border-radius:16px;
               padding:1.5rem;width:100%;max-width:420px;position:relative;max-height:90dvh;overflow-y:auto;">
-    <button onclick="fecharReagendar2()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:#888;font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+    <button onclick="fecharReagendar2()" style="position:absolute;top:.75rem;right:.75rem;background:none;border:1px solid #333;border-radius:6px;color:#888;font-size:1.4rem;cursor:pointer;line-height:1;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">×</button>
     <span style="display:block;text-align:center;font-size:1.2rem;margin-bottom:.3rem;">✦</span>
     <h3 style="text-align:center;font-size:1rem;font-weight:600;color:#f0ece4;margin:0 0 1rem;">Reagendar horário</h3>
 
@@ -1367,7 +1368,7 @@ body { overflow: hidden; }
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button onclick="fecharReagendar2()" style="flex:1;padding:.6rem;border-radius:8px;border:1px solid #2a2a2a;background:none;color:#aaa;font-size:.9rem;cursor:pointer;">Cancelar</button>
       <button id="btnReag2" disabled onclick="confirmarReagendar2()"
-        style="flex:1;padding:.6rem;border-radius:8px;border:none;background:#C9A96E;color:#000;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .15s;">
+        style="flex:1;padding:.6rem;border-radius:8px;border:1px solid #C9A96E;background:#C9A96E;color:#000;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .15s;">
         Confirmar
       </button>
     </div>
