@@ -40,8 +40,9 @@ def _gestao_trial_ctx():
         'trial_ativo': tenant.em_trial(),
         'trial_dias': tenant.trial_dias_restantes(),
     }
-origens = os.environ.get('CORS_ORIGINS', 'http://localhost:5000,http://localhost:8888,http://localhost:9999,http://localhost:7777').split(',')
-CORS(app, origins=origens, supports_credentials=True)
+_cors_raw = os.environ.get('CORS_ORIGINS', '*')
+_cors_origins = _cors_raw.split(',') if _cors_raw != '*' else '*'
+CORS(app, origins=_cors_origins, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
 _DB_URL = os.environ.get('DATABASE_URL')
 if not _DB_URL:
