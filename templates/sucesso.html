@@ -52,11 +52,17 @@ h1,h2{font-family:'Playfair Display',serif}
       <button class="btn-copy" onclick="copiar('link-admin', this)">Copiar</button>
     </div>
 
-    <a class="btn-painel" href="/static/ibarber.apk" download>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Baixar app iBarber (Android)
+    <a id="btn-painel" class="btn-painel" href="#" style="margin-top:1.6rem;">
+      Acessar painel de gestão →
     </a>
-    <p class="apk-hint">⚙️ Ao instalar: <em>Configurações → Segurança → Permitir fontes desconhecidas</em></p>
+
+    <div style="margin-top:1rem;">
+      <a href="/static/app/ibarber.apk" download style="display:inline-flex;align-items:center;gap:.5rem;background:none;border:1px solid var(--border);color:var(--muted);padding:.65rem 1.4rem;border-radius:var(--radius);font-size:.82rem;text-decoration:none;transition:border-color .2s,color .2s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar app iBarber (Android)
+      </a>
+      <p class="apk-hint">⚙️ Ao instalar: <em>Configurações → Segurança → Permitir fontes desconhecidas</em></p>
+    </div>
   </div>
 </div>
 <script>
