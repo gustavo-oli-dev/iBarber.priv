@@ -185,7 +185,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
           </td>
           <td>
             <div class="td-actions">
-              <a href="/{{ t.slug }}" target="_blank" class="btn btn-outline btn-sm">Site</a>
+              <a href="https://{{ t.slug }}.ibarber.app.br" target="_blank" class="btn btn-outline btn-sm">Site</a>
               <a href="/admin/entrar-gestao/{{ t.id }}?key={{ key }}" target="_blank" class="btn btn-warn btn-sm">Gestão</a>
               {% if t.assinatura_ativa %}
                 <button class="btn btn-outline btn-sm" onclick="abrirVencimento({{ t.id }}, '{{ asn.vencimento.strftime('%Y-%m-%d') if asn and asn.vencimento else '' }}')">Venc.</button>
