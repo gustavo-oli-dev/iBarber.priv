@@ -3507,7 +3507,11 @@ def landing():
 
 def _gestao_login_required():
     """Retorna None se ok, ou um redirect se não autenticado."""
-    if not session.get('gestao_tenant_id'):
+    tid = session.get('gestao_tenant_id')
+    if not tid:
+        return redirect(url_for('gestao_login'))
+    if not db.session.get(Tenant, tid):
+        session.clear()
         return redirect(url_for('gestao_login'))
     return None
 

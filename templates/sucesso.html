@@ -67,10 +67,7 @@ h1,h2{font-family:'Playfair Display',serif}
 </div>
 <script>
 const slug = window.location.pathname.split('/').pop();
-// Site do cliente: slug.dominio.com
-const domainParts = location.hostname.split('.');
-const baseDomain  = domainParts.length >= 2 ? domainParts.slice(-2).join('.') : location.hostname;
-const siteUrl   = `${location.protocol}//${slug}.${baseDomain}`;
+const siteUrl = `https://${slug}.ibarber.app.br`;
 // Painel de gestão
 const painelUrl = `${location.origin}/gestao/login`;
 document.getElementById('link-site').href        = siteUrl;
