@@ -119,7 +119,9 @@ body{display:flex;flex-direction:column}
 
       <div class="fg full">
         <label>Nome da barbearia</label>
-        <input type="text" id="f-nome" placeholder="Ex: Barbearia do João" oninput="onNome(this.value)">
+        <input type="text" id="f-nome" placeholder="Ex: Barbearia do João"
+          oninput="onNome(this.value);clearErr('err-geral')"
+          onblur="this.value=this.value.trim();onNome(this.value)">
       </div>
 
       <div class="fg full">
@@ -131,25 +133,31 @@ body{display:flex;flex-direction:column}
 
       <div class="fg full">
         <label>WhatsApp</label>
-        <input type="tel" id="f-whats" placeholder="(11) 99999-9999">
+        <input type="tel" id="f-whats" placeholder="(11) 99999-9999" oninput="this.value=maskPhone(this.value)" maxlength="15">
       </div>
 
       <div class="divider"></div>
 
       <div class="fg full">
         <label>E-mail de acesso</label>
-        <input type="email" id="f-email" placeholder="email@exemplo.com">
+        <input type="email" id="f-email" placeholder="email@exemplo.com"
+          oninput="this.value=this.value.toLowerCase();clearErr('err-email')"
+          onblur="validateEmail()">
         <span class="err" id="err-email"></span>
       </div>
 
       <div class="fg">
         <label>Senha</label>
-        <input type="password" id="f-senha" placeholder="Mín. 6 caracteres">
+        <input type="password" id="f-senha" placeholder="Mín. 6 caracteres"
+          oninput="clearErr('err-senha')"
+          onblur="validateSenha()">
       </div>
 
       <div class="fg">
         <label>Confirmar senha</label>
-        <input type="password" id="f-senha2" placeholder="Repita a senha">
+        <input type="password" id="f-senha2" placeholder="Repita a senha"
+          oninput="clearErr('err-senha')"
+          onblur="validateSenha()">
         <span class="err" id="err-senha"></span>
       </div>
 
@@ -165,6 +173,34 @@ body{display:flex;flex-direction:column}
 
 <script>
 let slugTouched = false;
+
+function maskPhone(val) {
+  val = val.replace(/\D/g,'');
+  if(val.length > 11) val = val.slice(0,11);
+  if(val.length > 10) return val.replace(/^(\d{2})(\d{5})(\d{4})$/,'($1) $2-$3');
+  if(val.length > 6)  return val.replace(/^(\d{2})(\d{4,5})(\d{0,4})$/, (_, a, b, c) => c ? `(${a}) ${b}-${c}` : `(${a}) ${b}`);
+  if(val.length > 2)  return val.replace(/^(\d{2})(\d+)$/, '($1) $2');
+  return val;
+}
+
+function clearErr(id) {
+  const el = document.getElementById(id);
+  if(el) el.style.display = 'none';
+}
+
+function validateEmail() {
+  const email = document.getElementById('f-email').value.trim();
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    showErr('err-email','E-mail inválido');
+}
+
+function validateSenha() {
+  const s  = document.getElementById('f-senha').value;
+  const s2 = document.getElementById('f-senha2').value;
+  if(s && s.length < 6) { showErr('err-senha','Mínimo 6 caracteres'); return; }
+  if(s2 && s !== s2)    { showErr('err-senha','As senhas não coincidem'); return; }
+  clearErr('err-senha');
+}
 
 // Pré-preenche nome do localStorage (digitado no passo Personalizar)
 try {
@@ -202,9 +238,7 @@ function showErr(id, msg) {
 }
 
 function clearErrs() {
-  ['err-slug','err-email','err-senha','err-geral'].forEach(id => {
-    document.getElementById(id).style.display = 'none';
-  });
+  ['err-slug','err-email','err-senha','err-geral'].forEach(id => clearErr(id));
 }
 
 async function submeter() {

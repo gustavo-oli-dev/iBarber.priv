@@ -1809,26 +1809,22 @@ def inject_tenant():
             'heroUrl':     args.get('heroUrl',     ''),
         }
 
-    # FAB visibility — mostra se campo preenchido; só respeita toggle 'mostrar' se explicitamente definido
+    # FAB visibility — número/URL é pré-requisito; 'mostrar' só pode esconder, nunca mostrar sem dado
     fab_wpp_mostrar = False
     fab_maps_mostrar = False
     if t and not session.get('is_preview'):
-        try:
-            if t.fab_wpp:
-                wpp_cfg = json.loads(t.fab_wpp)
-                fab_wpp_mostrar = bool(wpp_cfg['mostrar']) if 'mostrar' in wpp_cfg else bool(t.whatsapp)
-            else:
-                fab_wpp_mostrar = bool(t.whatsapp)
-        except Exception:
-            fab_wpp_mostrar = bool(t.whatsapp)
-        try:
-            if t.fab_maps:
-                maps_cfg = json.loads(t.fab_maps)
-                fab_maps_mostrar = bool(maps_cfg['mostrar']) if 'mostrar' in maps_cfg else bool(t.maps_url)
-            else:
-                fab_maps_mostrar = bool(t.maps_url)
-        except Exception:
-            fab_maps_mostrar = bool(t.maps_url)
+        if t.whatsapp:
+            try:
+                wpp_cfg = json.loads(t.fab_wpp) if t.fab_wpp else {}
+                fab_wpp_mostrar = wpp_cfg.get('mostrar', True)
+            except Exception:
+                fab_wpp_mostrar = True
+        if t.maps_url:
+            try:
+                maps_cfg = json.loads(t.fab_maps) if t.fab_maps else {}
+                fab_maps_mostrar = maps_cfg.get('mostrar', True)
+            except Exception:
+                fab_maps_mostrar = True
 
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
@@ -3831,9 +3827,9 @@ def gestao_contato():
         whatsapp  = request.form.get('whatsapp', '').strip()
         maps_url  = request.form.get('maps_url', '').strip()
         contato   = request.form.get('contato', '').strip()
-        if whatsapp:  tenant.whatsapp = whatsapp
-        if maps_url:  tenant.maps_url = maps_url
-        if contato:   tenant.contato  = contato
+        tenant.whatsapp = whatsapp
+        tenant.maps_url = maps_url
+        tenant.contato  = contato
         # Texto dos botões FAB — só atualiza se preenchido
         wpp_texto  = request.form.get('wpp_texto', '').strip()
         maps_texto = request.form.get('maps_texto', '').strip()

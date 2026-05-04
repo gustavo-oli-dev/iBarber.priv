@@ -101,6 +101,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .font-sel:focus{border-color:var(--gold)}
 .font-sel option{background:#111;color:#f5f5f5}
 .font-sample{font-size:.95rem;color:var(--muted);margin-top:.35rem;line-height:1.2}
+.input-errmsg{font-size:.7rem;color:#f87171;display:none;margin-top:.25rem}
+.font-sel.invalid{border-color:#f87171!important}
 .img-upload-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .img-upload-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
 .img-upload-btn{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px dashed var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:.8rem;cursor:pointer;transition:border-color .2s,background .2s;white-space:nowrap}
@@ -484,16 +486,23 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <div class="p-title">Identidade</div>
       <div class="font-list">
         <div>
-          <div class="font-lbl">Nome exibido</div>
-          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João" oninput="onIdentidade('nomeDisplay',this.value);updateUrlBar()" />
+          <div class="font-lbl">Nome exibido *</div>
+          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João"
+            oninput="onIdentidade('nomeDisplay',this.value);updateUrlBar();clearNomeErr()"
+            onblur="this.value=this.value.trim();onIdentidade('nomeDisplay',this.value);updateUrlBar()" />
+          <span class="input-errmsg" id="err-nome">Informe o nome da barbearia para continuar</span>
         </div>
         <div>
           <div class="font-lbl">Slogan</div>
-          <input class="font-sel" id="id-tagline" placeholder="Ex: Bem-vindo" oninput="onIdentidade('tagline',this.value)" />
+          <input class="font-sel" id="id-tagline" placeholder="Ex: Bem-vindo"
+            oninput="onIdentidade('tagline',this.value)"
+            onblur="this.value=this.value.trim();onIdentidade('tagline',this.value)" />
         </div>
         <div>
           <div class="font-lbl">Botão principal</div>
-          <input class="font-sel" id="id-cta" placeholder="Ex: Agende agora" oninput="onIdentidade('ctaTexto',this.value)" />
+          <input class="font-sel" id="id-cta" placeholder="Ex: Agende agora"
+            oninput="onIdentidade('ctaTexto',this.value)"
+            onblur="this.value=this.value.trim();onIdentidade('ctaTexto',this.value)" />
         </div>
         <div>
           <div class="font-lbl">Logo</div>
@@ -1116,7 +1125,24 @@ function onMobScreenChange(id) {
 }
 
 // ── Navigate to next step ─────────────────────────────────────────────────────
+function clearNomeErr() {
+  const el = document.getElementById('err-nome');
+  const inp = document.getElementById('id-nome');
+  if(el) el.style.display = 'none';
+  if(inp) inp.classList.remove('invalid');
+}
+
 function irParaPlanos() {
+  const nomeEl = document.getElementById('id-nome');
+  const nome = nomeEl ? nomeEl.value.trim() : '';
+  if(!nome) {
+    const err = document.getElementById('err-nome');
+    if(err) err.style.display = 'block';
+    if(nomeEl) { nomeEl.classList.add('invalid'); nomeEl.focus(); }
+    // Scroll panel to the identity section on mobile
+    nomeEl && nomeEl.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
   localStorage.setItem('onb_tema', JSON.stringify({ag: T.ag, gt: T.gt}));
   location.replace('/planos');
 }
