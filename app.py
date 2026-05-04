@@ -70,6 +70,10 @@ GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.app.br/auth/google/callback')
 ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
+APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
+
+def _tenant_url(slug):
+    return f'https://{slug}.{APP_DOMAIN}'
 
 db = SQLAlchemy(app)
 limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri='memory://')
@@ -1549,7 +1553,7 @@ def _notificar_lista_espera(tenant_id, data_str):
           <p>Olá, <strong>{user.name}</strong>!</p>
           <p>Uma vaga abriu em <strong>{nome_barbearia}</strong> para <strong>{data_fmt}</strong>.</p>
           <div style="text-align:center;margin:24px 0;">
-            <a href="https://ibarber.app.br/{slug}"
+            <a href="{_tenant_url(slug)}"
                style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
                       text-decoration:none;font-weight:bold;font-size:15px;">
               Agendar agora
@@ -3182,7 +3186,7 @@ def enviar_retorno_automatico():
               <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
               <p>Que tal agendar seu próximo horário?</p>
               <div style="text-align:center;margin:24px 0;">
-                <a href="https://ibarber.app.br/{slug}"
+                <a href="{_tenant_url(slug)}"
                    style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
                           text-decoration:none;font-weight:bold;font-size:15px;">
                   Agendar agora
@@ -3460,9 +3464,8 @@ def api_gestor_foto():
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
 
 def _enviar_boas_vindas(tenant):
-    base = os.environ.get('APP_BASE_URL', 'https://ibarber.com.br')
-    site_url  = f'{base}/{tenant.slug}'
-    painel_url = f'{base}/gestao/login'
+    site_url   = _tenant_url(tenant.slug)
+    painel_url = f'https://{APP_DOMAIN}/gestao/login'
     corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;
       margin:0 auto;background:#0f0f0f;color:#f0f0f0;
