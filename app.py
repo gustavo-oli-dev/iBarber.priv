@@ -258,6 +258,7 @@ class Agendamento(db.Model):
     tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     usuario         = db.relationship('User', lazy='select')
     funcionario     = db.relationship('Funcionario', lazy='select', foreign_keys=[funcionario_id])
+    pedido          = db.relationship('Pedido', lazy='select', foreign_keys=[pedido_id])
 
 class Categoria(db.Model):
     id        = db.Column(db.Integer, primary_key=True)
