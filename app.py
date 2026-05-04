@@ -525,6 +525,17 @@ def manifest():
     from flask import send_from_directory
     return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
 
+_ADMIN_WEB = os.path.join(os.path.dirname(__file__), 'admin_web')
+
+@app.route('/admin', defaults={'path': ''})
+@app.route('/admin/<path:path>')
+def serve_admin_web(path):
+    from flask import send_from_directory
+    target = os.path.join(_ADMIN_WEB, path)
+    if path and os.path.isfile(target):
+        return send_from_directory(_ADMIN_WEB, path)
+    return send_from_directory(_ADMIN_WEB, 'index.html')
+
 @app.route('/')
 def index():
     tenant = get_tenant_atual()
