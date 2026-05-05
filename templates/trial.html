@@ -102,18 +102,18 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
   <div class="fg">
     <label>Seu link exclusivo</label>
     <input type="text" id="f-slug" placeholder="barbearia-joao" oninput="onSlug(this.value)" autocomplete="off">
-    <span class="hint">ibarber.app.br/<span id="slug-preview">seu-link</span></span>
+    <span class="hint"><span id="slug-preview">seu-link</span>.ibarber.app.br</span>
     <span class="err" id="err-slug"></span>
   </div>
 
   <div class="fg">
     <label>WhatsApp <span style="color:#555;font-weight:400;">(opcional)</span></label>
-    <input type="tel" id="f-whats" placeholder="(11) 99999-9999" autocomplete="tel">
+    <input type="tel" id="f-whats" placeholder="(11) 99999-9999" autocomplete="tel" oninput="this.value=maskPhone(this.value)" maxlength="15">
   </div>
 
   <div class="fg">
     <label>E-mail de acesso</label>
-    <input type="email" id="f-email" placeholder="email@exemplo.com" autocomplete="email">
+    <input type="email" id="f-email" placeholder="email@exemplo.com" autocomplete="email" oninput="this.value=this.value.toLowerCase()">
     <span class="err" id="err-email"></span>
   </div>
 
@@ -152,6 +152,15 @@ function onSlug(val) {
   document.getElementById('err-slug').style.display = 'none';
 }
 
+function maskPhone(val) {
+  val = val.replace(/\D/g,'');
+  if(val.length > 11) val = val.slice(0,11);
+  if(val.length > 10) return val.replace(/^(\d{2})(\d{5})(\d{4})$/,'($1) $2-$3');
+  if(val.length > 6)  return val.replace(/^(\d{2})(\d{4,5})(\d{0,4})$/, (_,a,b,c) => c ? `(${a}) ${b}-${c}` : `(${a}) ${b}`);
+  if(val.length > 2)  return val.replace(/^(\d{2})(\d+)$/,'($1) $2');
+  return val;
+}
+
 function showErr(id, msg) {
   const el = document.getElementById(id);
   el.textContent = msg;
@@ -173,7 +182,7 @@ async function submeter() {
   const senha = document.getElementById('f-senha').value;
 
   if (!nome)  { showErr('err-geral','Informe o nome da barbearia'); return; }
-  if (!slug || !/^[a-z0-9-]{3,30}$/.test(slug)) { showErr('err-slug','Link inválido (letras, números e hífens, 3-30 chars)'); return; }
+  if (!slug || !/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug)) { showErr('err-slug','Link inválido (mín. 3 chars, começa e termina com letra ou número)'); return; }
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('err-email','E-mail inválido'); return; }
   if (senha.length < 6) { showErr('err-senha','Mínimo 6 caracteres'); return; }
 

@@ -3956,7 +3956,7 @@ def api_cadastro_personalizar():
     import re
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
-    if not re.match(r'^[a-z0-9-]{3,30}$', slug):
+    if not re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug):
         return jsonify({'erro': 'slug inválido'}), 400
     if Tenant.query.filter_by(slug=slug).first():
         return jsonify({'erro': 'slug já em uso'}), 400
@@ -4094,7 +4094,7 @@ def api_cadastro():
     import re
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
-    if not re.match(r'^[a-z0-9-]{3,30}$', slug):
+    if not re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug):
         return jsonify({'erro': 'slug inválido'}), 400
     if Tenant.query.filter_by(slug=slug).first():
         return jsonify({'erro': 'slug já em uso'}), 400
@@ -4384,11 +4384,11 @@ def api_pagamento_criar_v2():
                 json={
                     'items': [{'title': f'iBarber — Plano {plano.capitalize()}',
                                'quantity': 1, 'currency_id': 'BRL', 'unit_price': float(amount)}],
-                    'back_urls': {'success': f'{request.host_url}sucesso/{tenant.slug}',
-                                  'failure':  f'{request.host_url}falha',
-                                  'pending':  f'{request.host_url}pendente'},
+                    'back_urls': {'success': f'https://{APP_DOMAIN}/sucesso/{tenant.slug}',
+                                  'failure':  f'https://{APP_DOMAIN}/falha',
+                                  'pending':  f'https://{APP_DOMAIN}/pendente'},
                     'auto_return': 'approved',
-                    'notification_url': f'{request.host_url}api/pagamento/webhook',
+                    'notification_url': f'https://{APP_DOMAIN}/api/pagamento/webhook',
                     'metadata': meta,
                 },
                 timeout=15,
@@ -4496,7 +4496,7 @@ def api_pagamento_webhook():
 def verificar_slug(slug):
     import re
     slug = slug.lower().strip()
-    valido = bool(re.match(r'^[a-z0-9-]{3,30}$', slug))
+    valido = bool(re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug))
     existe = Tenant.query.filter_by(slug=slug).first() is not None
     return jsonify({'disponivel': valido and not existe})
 
