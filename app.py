@@ -59,7 +59,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_size':     10,
     'max_overflow':  20,
 }
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB upload limit
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = not app.debug
@@ -554,77 +554,13 @@ def index():
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
 
-@app.route('/register', methods=['GET', 'POST'])
-@limiter.limit('20 per minute')
+@app.route('/register')
 def register():
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-
-    if request.method == 'POST':
-        name        = request.form.get('name', '').strip()
-        email       = request.form.get('email', '').strip().lower()
-        password    = request.form.get('password', '')
-        contact            = request.form.get('contact', '').strip()
-        observation        = request.form.get('observation', '').strip()
-        receber_lembretes  = request.form.get('receber_lembretes') == '1'
-
-        if not name or not email or not password or not contact:
-            flash('Preencha todos os campos obrigatórios.', 'error')
-            return render_template('register.html', hide_fabs=True)
-
-        digitos_contato = len([c for c in contact if c.isdigit()])
-        if digitos_contato < 8:
-            flash('Contato deve ter pelo menos 8 números.', 'error')
-            return render_template('register.html', hide_fabs=True)
-
-        dominio = email.split('@')[-1] if '@' in email else ''
-        if dominio not in DOMINIOS_VALIDOS:
-            flash('Use um e-mail com domínio válido (ex: @gmail.com, @hotmail.com).', 'error')
-            return render_template('register.html', hide_fabs=True)
-
-        _reg_tid = session.get('path_tenant_id') or session.get('tenant_id')
-        if User.query.filter_by(email=email, tenant_id=_reg_tid).first():
-            flash('Este e-mail já está cadastrado.', 'error')
-            return render_template('register.html', hide_fabs=True)
-
-        hashed = generate_password_hash(password)
-        user = User(name=name, email=email, password=hashed,
-                    contact=contact or None, observation=observation or None,
-                    receber_lembretes=receber_lembretes,
-                    tenant_id=session.get('path_tenant_id'))
-        db.session.add(user)
-        db.session.commit()
-        session['user_id'] = user.id
-        session['user_name'] = user.name
-        session['user_email'] = user.email
-        return redirect(url_for('servicos'))
-
-    return render_template('register.html', hide_fabs=True)
+    return redirect(url_for('index'))
 
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit('10 per minute')
 def login():
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-
-    if request.method == 'POST':
-        email    = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-
-        tid = session.get('path_tenant_id') or session.get('tenant_id')
-        q = User.query.filter_by(email=email)
-        if tid:
-            q = q.filter(db.or_(User.tenant_id == tid, User.tenant_id == None))
-        user = q.first()
-        if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id
-            session['user_name'] = user.name
-            session['user_email'] = user.email
-            return redirect(url_for('servicos'))
-
-        flash('E-mail ou senha incorretos.', 'error')
-
-    return render_template('login.html', hide_fabs=True)
+    return redirect(url_for('index'))
 
 @app.route('/login-rapido', methods=['POST'])
 @limiter.limit('15 per minute')
@@ -1038,66 +974,13 @@ def _enviar_comprovante_pagamento(user, pedido):
     """
     _enviar_email(user.email, 'Comprovante de pagamento — Barbearia', html)
 
-@app.route('/esqueci-senha', methods=['GET', 'POST'])
+@app.route('/esqueci-senha')
 def esqueci_senha():
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        _reset_tid = session.get('path_tenant_id') or session.get('tenant_id')
-        user  = User.query.filter_by(email=email, tenant_id=_reset_tid).first()
-        flash('Confira seu e-mail!', 'success')
-        if user:
-            PasswordResetToken.query.filter_by(user_id=user.id, used=False).delete()
-            token_str = secrets.token_urlsafe(32)
-            token = PasswordResetToken(
-                user_id    = user.id,
-                token      = token_str,
-                expires_at = datetime.utcnow() + timedelta(hours=1),
-            )
-            db.session.add(token)
-            db.session.commit()
-            host = os.environ.get('SERVER_HOST', request.host)
-            link = f"http://{host}{url_for('redefinir_senha', token=token_str)}"
-            html = f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;">
-              <h2 style="color:#C9A96E;">Redefinição de senha</h2>
-              <p>Olá, <strong>{user.name}</strong>!</p>
-              <p>Recebemos uma solicitação para redefinir a senha da sua conta.</p>
-              <p style="margin:24px 0;">
-                <a href="{link}"
-                   style="background:#C9A96E;color:#000;padding:12px 24px;
-                          border-radius:6px;text-decoration:none;font-weight:bold;">
-                  Redefinir minha senha
-                </a>
-              </p>
-              <p style="color:#888;font-size:13px;">
-                Este link expira em <strong>1 hora</strong>.<br>
-                Se não foi você, ignore este e-mail.
-              </p>
-            </div>
-            """
-            _enviar_email(user.email, 'Redefinição de senha — Barbearia', html)
-        return redirect(url_for('esqueci_senha'))
-    return render_template('esqueci_senha.html', hide_fabs=True)
+    return redirect(url_for('index'))
 
-@app.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
+@app.route('/redefinir-senha/<token>')
 def redefinir_senha(token):
-    t = PasswordResetToken.query.filter_by(token=token, used=False).first()
-    if not t or t.expires_at < datetime.utcnow():
-        flash('Link inválido ou expirado. Solicite um novo.', 'error')
-        return redirect(url_for('esqueci_senha'))
-    if request.method == 'POST':
-        nova = request.form.get('password', '')
-        if len(nova) < 6:
-            flash('A senha deve ter pelo menos 6 caracteres.', 'error')
-            return render_template('redefinir_senha.html', token=token, hide_fabs=True)
-        user = db.session.get(User, t.user_id)
-        user.password = generate_password_hash(nova)
-
-        t.used = True
-        db.session.commit()
-        flash('Senha redefinida com sucesso! Faça login.', 'success')
-        return redirect(url_for('login'))
-    return render_template('redefinir_senha.html', token=token, hide_fabs=True)
+    return redirect(url_for('index'))
 
 @app.route('/logout')
 def logout():

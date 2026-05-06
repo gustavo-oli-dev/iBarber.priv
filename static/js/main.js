@@ -124,3 +124,24 @@ document.querySelectorAll('.flash').forEach(el => {
 document.querySelectorAll('input[type="email"]').forEach(el => {
   el.addEventListener('input', function() { this.value = this.value.toLowerCase(); });
 });
+
+// Limites de caracteres globais
+const _LIMITS = {
+  'input[name="name"], input[id*="nome"], input[id*="Nome"]': 80,
+  'input[type="email"]': 254,
+  'textarea': 500,
+};
+Object.entries(_LIMITS).forEach(([sel, max]) => {
+  document.querySelectorAll(sel).forEach(el => { if (!el.maxLength || el.maxLength < 0 || el.maxLength > max) el.maxLength = max; });
+});
+
+// Anti double-submit: desabilita botão de submit após clique, reabilita em 8s
+document.querySelectorAll('form').forEach(form => {
+  form.addEventListener('submit', function() {
+    const btn = this.querySelector('button[type="submit"], input[type="submit"]');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.dataset._origText = btn.textContent;
+    setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset._origText; }, 8000);
+  });
+});
