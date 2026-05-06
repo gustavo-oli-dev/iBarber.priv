@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 import os, json, uuid, secrets, smtplib, requests as req_http
+import subprocess, socket, threading, time
 from urllib.parse import urlencode
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -3951,6 +3952,55 @@ def api_personalizar_upload():
     url = request.host_url.rstrip('/') + f'/static/uploads/{filename}'
     return jsonify({'ok': True, 'url': url})
 
+def _provisionar_ssl_tenant(slug, email):
+    domain = f"{slug}.{APP_DOMAIN}"
+    cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+    if os.path.exists(cert_path):
+        return
+    for _ in range(60):
+        try:
+            socket.gethostbyname(domain)
+            break
+        except socket.gaierror:
+            time.sleep(10)
+    else:
+        return
+    try:
+        r = subprocess.run(
+            ['certbot', 'certonly', '--nginx', '-d', domain,
+             '--non-interactive', '--agree-tos', '-m', email],
+            capture_output=True, text=True, timeout=120
+        )
+        if r.returncode != 0:
+            return
+    except Exception:
+        return
+    nginx_block = f"""
+server {{
+    listen 443 ssl;
+    server_name {domain};
+    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    location / {{
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+}}
+"""
+    try:
+        with open('/etc/nginx/sites-enabled/ibarber', 'a') as f:
+            f.write(nginx_block)
+        subprocess.run(['nginx', '-t'], check=True, capture_output=True, timeout=10)
+        subprocess.run(['systemctl', 'reload', 'nginx'], check=True, timeout=10)
+    except Exception:
+        pass
+
+
 @app.route('/api/cadastro-personalizar', methods=['POST'])
 def api_cadastro_personalizar():
     import re
@@ -3980,6 +4030,7 @@ def api_cadastro_personalizar():
     )
     db.session.add(tenant)
     db.session.commit()
+    threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'slug': slug, 'tenant_id': tenant.id})
 
 @app.route('/api/pagamento/status')
@@ -4116,6 +4167,7 @@ def api_cadastro():
     )
     db.session.add(tenant)
     db.session.commit()
+    threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
 
 
