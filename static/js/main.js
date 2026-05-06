@@ -121,3 +121,6 @@ if (contactInput) {
 document.querySelectorAll('.flash').forEach(el => {
   setTimeout(() => el.remove(), 5000);
 });
+document.querySelectorAll('input[type="email"]').forEach(el => {
+  el.addEventListener('input', function() { this.value = this.value.toLowerCase(); });
+});

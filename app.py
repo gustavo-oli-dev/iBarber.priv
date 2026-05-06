@@ -1820,15 +1820,15 @@ def inject_tenant():
         if t.whatsapp:
             try:
                 wpp_cfg = json.loads(t.fab_wpp) if t.fab_wpp else {}
-                fab_wpp_mostrar = wpp_cfg.get('mostrar', True)
+                fab_wpp_mostrar = wpp_cfg.get('mostrar', False)
             except Exception:
-                fab_wpp_mostrar = True
+                fab_wpp_mostrar = False
         if t.maps_url:
             try:
                 maps_cfg = json.loads(t.fab_maps) if t.fab_maps else {}
-                fab_maps_mostrar = maps_cfg.get('mostrar', True)
+                fab_maps_mostrar = maps_cfg.get('mostrar', False)
             except Exception:
-                fab_maps_mostrar = True
+                fab_maps_mostrar = False
 
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
