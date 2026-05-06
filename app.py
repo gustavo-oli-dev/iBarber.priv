@@ -73,6 +73,9 @@ GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.app.br/auth/google/callback')
 ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
 APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
+CF_TOKEN      = os.environ.get('CF_TOKEN', '')
+CF_ZONE_ID    = os.environ.get('CF_ZONE_ID', '')
+VPS_IP        = os.environ.get('VPS_IP', 'IP_REMOVIDO')
 
 def _tenant_url(slug):
     return f'https://{slug}.{APP_DOMAIN}'
@@ -3952,7 +3955,32 @@ def api_personalizar_upload():
     url = request.host_url.rstrip('/') + f'/static/uploads/{filename}'
     return jsonify({'ok': True, 'url': url})
 
+def _criar_dns_cloudflare(slug):
+    if not CF_TOKEN or not CF_ZONE_ID:
+        return
+    domain = f"{slug}.{APP_DOMAIN}"
+    headers = {
+        'Authorization': f'Bearer {CF_TOKEN}',
+        'Content-Type': 'application/json',
+    }
+    r = req_http.get(
+        f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
+        headers=headers,
+        params={'type': 'A', 'name': domain},
+        timeout=10,
+    )
+    if r.ok and r.json().get('result'):
+        return
+    req_http.post(
+        f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
+        headers=headers,
+        json={'type': 'A', 'name': domain, 'content': VPS_IP, 'ttl': 60, 'proxied': False},
+        timeout=10,
+    )
+
+
 def _provisionar_ssl_tenant(slug, email):
+    _criar_dns_cloudflare(slug)
     domain = f"{slug}.{APP_DOMAIN}"
     cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
     if os.path.exists(cert_path):
