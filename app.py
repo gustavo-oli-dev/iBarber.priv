@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
@@ -9,10 +9,13 @@ from dotenv import load_dotenv
 
 import os, json, uuid, secrets, smtplib, requests as req_http
 import subprocess, socket, threading, time
+import re, random, html, csv, io, hmac, hashlib, base64
+from calendar import monthrange
+from collections import Counter
 from urllib.parse import urlencode
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -59,6 +62,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = not app.debug
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -1359,7 +1363,6 @@ def agendar():
 
     ativos = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
-    from collections import Counter
     ags_slot = (Agendamento.query
                 .filter_by(status='ativo', tenant_id=_api_tid())
                 .filter(Agendamento.data_hora == data_hora)
@@ -1376,7 +1379,6 @@ def agendar():
         ocupados_ids = {ag.funcionario_id for ag in ags_slot if ag.funcionario_id}
         livres = [f for f in ativos if f['id'] not in ocupados_ids]
         if livres:
-            import random
             funcionario_id = random.choice(livres)['id']
 
     ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
@@ -1456,7 +1458,6 @@ def reagendar_agendamento():
     # Verifica disponibilidade no novo horário
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
     capacidade = max(1, len(ativos))
-    from collections import Counter
     ags_slot = Agendamento.query.filter_by(
         data_hora=nova_dt, status='ativo', tenant_id=ag.tenant_id).all()
     if len(ags_slot) >= capacidade:
@@ -1681,8 +1682,6 @@ def meu_historico():
             'servicos': [{'nome': i.nome, 'preco': i.preco} for i in p.itens] if p else [],
         })
     return jsonify({'historico': resultado})
-
-import hmac as _hmac, hashlib, base64 as _b64
 
 _SECRET = os.environ.get('SECRET_KEY', 'dev-secret')
 
@@ -2031,8 +2030,6 @@ def api_horarios_disponiveis():
     # Capacidade por slot = número de funcionários ativos nessa data (mínimo 1)
     ativos = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
-
-    from collections import Counter
     slot_counts = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
     tomados = {s for s, c in slot_counts.items() if c >= capacidade}
     todos_tomados = list(slot_counts.keys())
@@ -2216,7 +2213,6 @@ def api_horarios_especiais():
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         d = request.get_json(silent=True) or {}
-        import re as _re
         data       = d.get('data', '').strip()
         abertura   = d.get('abertura', '08:00').strip()
         fechamento = d.get('fechamento', '18:00').strip()
@@ -2479,7 +2475,6 @@ def api_usuarios():
         # email opcional: gera placeholder único se não fornecido
         if not email:
             slug = name.split()[0].lower().replace(' ', '')
-            import re; slug = re.sub(r'[^a-z0-9]', '', slug)
             base = f"{slug}.{contact.replace(' ','').replace('-','').replace('(','').replace(')','')}"
             email = f"{base}@admin.local"
             if User.query.filter_by(email=email).first():
@@ -2722,9 +2717,6 @@ def api_export():
         tid = verificar_token(request)
     if not tid:
         return jsonify({'erro': 'token inválido'}), 401
-    from flask import Response
-    import csv, io
-    from calendar import monthrange
     tipo   = request.args.get('tipo', 'agendamentos')
     mes    = request.args.get('mes', '')
     inicio = request.args.get('inicio', '')
@@ -3251,7 +3243,7 @@ def admin_banco():
         thead = ''.join(f'<th>{c}</th>' for c in cols)
         tbody = ''
         for row in rows:
-            tbody += '<tr>' + ''.join(f'<td>{v}</td>' for v in row) + '</tr>'
+            tbody += '<tr>' + ''.join(f'<td>{html.escape(str(v)) if v is not None else ""}</td>' for v in row) + '</tr>'
         total = db.session.execute(text(f'SELECT COUNT(*) FROM `{tabela}`')).scalar()
         html_tabelas += f'''
         <div class="tabela-bloco">
@@ -3550,8 +3542,8 @@ def gestao_dashboard():
     if redir: return redir
     _, gestor_nome = _gestor_como_barbeiro(_gestao_tid())
     hoje = datetime.utcnow().date()
-    MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-    DIAS_PT = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
+    MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    DIAS_ABREV = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
     # Todos agendamentos (últimos 60 dias + próximos 30) para o JS filtrar por dia
     janela_ini = datetime.utcnow() - timedelta(days=60)
     janela_fim = datetime.utcnow() + timedelta(days=30)
@@ -3596,8 +3588,8 @@ def gestao_dashboard():
             proximos_dias.append({
                 'data': cursor.strftime('%Y-%m-%d'),
                 'dia': cursor.day,
-                'dia_semana': DIAS_PT[cursor.weekday()],
-                'mes': MESES[cursor.month - 1],
+                'dia_semana': DIAS_ABREV[cursor.weekday()],
+                'mes': MESES_ABREV[cursor.month - 1],
                 'tem_ag': cursor.strftime('%Y-%m-%d') in datas_com_ag,
             })
         cursor += timedelta(days=1)
@@ -3606,7 +3598,7 @@ def gestao_dashboard():
         active='dashboard',
         hoje=hoje.strftime('%Y-%m-%d'),
         hoje_dia=hoje.day,
-        hoje_mes=MESES[hoje.month - 1],
+        hoje_mes=MESES_ABREV[hoje.month - 1],
         proximos_dias=proximos_dias,
         agendamentos_json=_safe_json(ags_json),
         token=_gerar_token(tenant.id, 0),
@@ -4031,7 +4023,6 @@ server {{
 
 @app.route('/api/cadastro-personalizar', methods=['POST'])
 def api_cadastro_personalizar():
-    import re
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
     if not re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug):
@@ -4170,7 +4161,6 @@ def pendente():
 
 @app.route('/api/cadastro', methods=['POST'])
 def api_cadastro():
-    import re
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
     if not re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug):
@@ -4499,7 +4489,6 @@ def api_pagamento_criar_v2():
 
 @app.route('/api/pagamento/webhook', methods=['POST'])
 def api_pagamento_webhook():
-    import hmac, hashlib
 
     # Verificação de assinatura do Mercado Pago
     mp_secret = os.environ.get('MP_WEBHOOK_SECRET', '')
@@ -4574,7 +4563,6 @@ def api_pagamento_webhook():
 
 @app.route('/verificar-slug/<slug>')
 def verificar_slug(slug):
-    import re
     slug = slug.lower().strip()
     valido = bool(re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug))
     existe = Tenant.query.filter_by(slug=slug).first() is not None
@@ -4599,7 +4587,6 @@ def api_minha_assinatura():
     })
 
 def _udp_broadcast():
-    import socket, time
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     while True:
