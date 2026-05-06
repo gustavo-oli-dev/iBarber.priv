@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, make_response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
@@ -1152,7 +1152,6 @@ def _gt_tema_override_css(args):
 
 @app.route('/preview/gt/<screen>')
 def preview_gt(screen):
-    from flask import make_response
     gt_tema_override = _gt_tema_override_css(request.args)
     gt_preview_nome  = 'João Silva'
 
@@ -1224,7 +1223,6 @@ def preview_gt(screen):
 
 @app.route('/preview/ag/inicio')
 def preview_ag_inicio():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     resp = make_response(render_template('index.html',
         user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True))
@@ -1233,7 +1231,6 @@ def preview_ag_inicio():
 
 @app.route('/preview/ag/sem-cadastro')
 def preview_ag_sem_cadastro():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     resp = make_response(render_template('index.html',
         user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True,
@@ -1243,7 +1240,6 @@ def preview_ag_sem_cadastro():
 
 @app.route('/preview/ag/google-contato')
 def preview_ag_google_contato():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     class MockUser:
         email = 'carlos@gmail.com'; name = 'Carlos Silva'
@@ -1254,7 +1250,6 @@ def preview_ag_google_contato():
 
 @app.route('/preview/ag/perfil')
 def preview_ag_perfil():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     class MockUser:
         id=9991; name='Carlos Silva'; email='carlos@preview.com'
@@ -1266,7 +1261,6 @@ def preview_ag_perfil():
 
 @app.route('/preview/ag/esqueci')
 def preview_ag_esqueci():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     resp = make_response(render_template('esqueci_senha.html',
         hide_fabs=True, tema_override=tema_override, preview_mode=True))
@@ -1275,7 +1269,6 @@ def preview_ag_esqueci():
 
 @app.route('/preview/ag/register')
 def preview_ag_register():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     resp = make_response(render_template('register.html',
         hide_fabs=True, tema_override=tema_override, preview_mode=True))
@@ -1284,7 +1277,6 @@ def preview_ag_register():
 
 @app.route('/preview/ag/servicos')
 def preview_ag_servicos():
-    from flask import make_response
     tema_override = _build_ag_tema_override(request.args)
     session['user_id']    = 9991
     session['user_name']  = 'Carlos Silva'
@@ -1458,9 +1450,13 @@ def reagendar_agendamento():
     # Verifica disponibilidade no novo horário
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
     capacidade = max(1, len(ativos))
-    ags_slot = Agendamento.query.filter_by(
-        data_hora=nova_dt, status='ativo', tenant_id=ag.tenant_id).all()
-    if len(ags_slot) >= capacidade:
+    ags_slot = Agendamento.query.filter(
+        Agendamento.data_hora == nova_dt,
+        Agendamento.status == 'ativo',
+        Agendamento.tenant_id == ag.tenant_id,
+        Agendamento.id != ag.id,
+    ).count()
+    if ags_slot >= capacidade:
         return jsonify({'erro': 'Horário não disponível'}), 409
     ag.data_hora = nova_dt
     if barbeiro_id is not None:
@@ -1687,18 +1683,18 @@ _SECRET = os.environ.get('SECRET_KEY', 'dev-secret')
 
 def _gerar_token(tenant_id: int, func_id: int = 0) -> str:
     msg = f"{tenant_id}:{func_id}"
-    sig = _hmac.new(_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
-    return _b64.b64encode(f"{msg}:{sig}".encode()).decode()
+    sig = hmac.new(_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    return base64.b64encode(f"{msg}:{sig}".encode()).decode()
 
 def _extrair_tenant_token(token: str):
     """Retorna (tenant_id, func_id) ou (None, None) se inválido."""
     try:
-        decoded = _b64.b64decode(token.encode()).decode()
+        decoded = base64.b64decode(token.encode()).decode()
         parts = decoded.rsplit(':', 1)
         if len(parts) != 2: return None, None
         payload, sig = parts
-        expected = _hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-        if not _hmac.compare_digest(sig, expected): return None, None
+        expected = hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected): return None, None
         tid_str, fid_str = payload.split(':', 1)
         return int(tid_str), int(fid_str)
     except Exception:
@@ -2219,9 +2215,9 @@ def api_horarios_especiais():
         acao       = d.get('acao', '')  # '' | 'cancelar' | 'manter'
 
         if not data: return jsonify({'erro': 'data obrigatória'}), 400
-        if not _re.match(r'^\d{4}-\d{2}-\d{2}$', data):
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', data):
             return jsonify({'erro': 'data inválida, use YYYY-MM-DD'}), 400
-        if not _re.match(r'^\d{2}:\d{2}$', abertura) or not _re.match(r'^\d{2}:\d{2}$', fechamento):
+        if not re.match(r'^\d{2}:\d{2}$', abertura) or not re.match(r'^\d{2}:\d{2}$', fechamento):
             return jsonify({'erro': 'horário inválido, use HH:MM'}), 400
         if abertura >= fechamento:
             return jsonify({'erro': 'abertura deve ser antes do fechamento'}), 400
@@ -3909,7 +3905,6 @@ def gestao_calendario():
 
 @app.route('/personalizar')
 def personalizar():
-    from flask import make_response
     resp = make_response(render_template('personalizar.html'))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     return resp
