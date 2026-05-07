@@ -64,6 +64,8 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = not app.debug
+_cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
+app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not app.debug else None
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
