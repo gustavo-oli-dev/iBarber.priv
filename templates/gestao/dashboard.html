@@ -250,7 +250,7 @@ function filtrarDia(data) {
 }
 
 function passou(isoStr) {
-  return new Date(isoStr) < new Date();
+  return new Date(isoStr).getTime() + 15 * 60 * 1000 < Date.now();
 }
 
 function formatarHora(isoStr) {
