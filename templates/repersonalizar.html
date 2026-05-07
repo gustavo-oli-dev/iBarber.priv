@@ -339,7 +339,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
     <p class="login-sub">Entre com o e-mail e senha da sua barbearia para editar o tema.</p>
     <div class="fg">
       <label>E-mail</label>
-      <input type="email" id="l-email" placeholder="email@exemplo.com" onkeydown="if(event.key==='Enter')entrar()">
+      <input type="email" id="l-email" placeholder="email@exemplo.com" autocapitalize="none" autocorrect="off" oninput="this.value=this.value.toLowerCase()" onkeydown="if(event.key==='Enter')entrar()">
     </div>
     <div class="fg">
       <label>Senha</label>

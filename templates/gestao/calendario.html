@@ -257,9 +257,42 @@ function abrirDia(iso) {
   }
 
   document.getElementById('diaConteudo').innerHTML =
-    `<div class="dia-titulo">${titulo}</div>${itens}`;
+    `<div class="dia-titulo">${titulo}</div>
+     <div id="escalaDia" style="margin-bottom:1rem;"></div>
+     ${itens}`;
   document.getElementById('diaOverlay').classList.add('open');
   document.getElementById('diaPanel').classList.add('open');
+  carregarEscala(iso);
+}
+
+let _escalaIso = '';
+async function carregarEscala(iso) {
+  _escalaIso = iso;
+  const box = document.getElementById('escalaDia');
+  if (!box) return;
+  try {
+    const r = await fetch(`/api/escala/${iso}`, {headers:{'Authorization':'Bearer '+TOKEN}});
+    const lista = await r.json();
+    if (!Array.isArray(lista) || !lista.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <div style="font-size:.68rem;font-weight:700;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;margin-bottom:.5rem;">Barbeiros neste dia</div>
+      ${lista.map(f => `
+        <label style="display:flex;align-items:center;gap:.6rem;padding:.35rem 0;cursor:pointer;">
+          <input type="checkbox" data-fid="${f.id}" ${f.trabalhando?'checked':''} onchange="salvarEscala()" style="accent-color:var(--gold);width:16px;height:16px;">
+          <span style="font-size:.85rem;">${f.nome}</span>
+        </label>`).join('')}`;
+  } catch(e) { box.innerHTML = ''; }
+}
+
+async function salvarEscala() {
+  const iso = _escalaIso;
+  const checks = document.querySelectorAll('#escalaDia input[type=checkbox]');
+  const trabalhando = [...checks].filter(c=>c.checked).map(c=>parseInt(c.dataset.fid));
+  await fetch(`/api/escala/${iso}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({trabalhando})
+  });
 }
 
 function fecharDia() {

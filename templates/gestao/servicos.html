@@ -61,12 +61,14 @@ let categorias = [];
 let servicos = [];
 
 async function carregar() {
-  const [rC, rS] = await Promise.all([
-    fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
-    fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}}),
-  ]);
-  categorias = await rC.json();
-  servicos = await rS.json();
+  try {
+    const [rC, rS] = await Promise.all([
+      fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
+      fetch('/api/servicos',   {headers:{'Authorization':'Bearer '+TOKEN}}),
+    ]);
+    const dC = await rC.json(); categorias = Array.isArray(dC) ? dC : [];
+    const dS = await rS.json(); servicos   = Array.isArray(dS) ? dS : [];
+  } catch(e) { categorias = []; servicos = []; }
   render();
 }
 
@@ -80,8 +82,8 @@ function render() {
   }
   const semCat = servicos.filter(s => !s.categoria_id || !categorias.find(c=>c.id===s.categoria_id));
   let html = '';
-  categorias.filter(c=>c.ativo).forEach(cat => {
-    const lista = servicos.filter(s=>s.categoria_id===cat.id && s.ativo);
+  categorias.forEach(cat => {
+    const lista = servicos.filter(s=>s.categoria_id===cat.id);
     html += `<div style="margin-bottom:1.25rem;">
       <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;">
         <div class="g-section-title" style="margin:0">${cat.nome}</div>

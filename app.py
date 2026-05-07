@@ -2106,6 +2106,31 @@ def api_config_publica():
     sd = _get_setting('dias_agenda', _api_tid())
     return jsonify({'dias_agenda': int(sd.value) if sd and sd.value else 20})
 
+@app.route('/api/horarios/conflitos', methods=['POST'])
+def api_horarios_conflitos():
+    """Verifica agendamentos futuros que ficam fora do novo horário semanal."""
+    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    _tid = _api_tid()
+    novos = request.get_json(silent=True) or {}
+    DOW_MAP = {'Monday':'seg','Tuesday':'ter','Wednesday':'qua','Thursday':'qui',
+               'Friday':'sex','Saturday':'sab','Sunday':'dom'}
+    hoje = datetime.utcnow()
+    futuros = Agendamento.query.filter(
+        Agendamento.tenant_id == _tid,
+        Agendamento.status == 'ativo',
+        Agendamento.data_hora > hoje
+    ).order_by(Agendamento.data_hora).all()
+    conflitos = []
+    for ag in futuros:
+        dia_key = DOW_MAP.get(ag.data_hora.strftime('%A'), '')
+        cfg = novos.get(dia_key, {})
+        hora = ag.data_hora.strftime('%H:%M')
+        if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
+            user = db.session.get(User, ag.user_id)
+            conflitos.append({'id': ag.id, 'nome': user.name if user else 'Cliente',
+                              'hora': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
+    return jsonify({'conflitos': conflitos})
+
 @app.route('/api/dias-fechados/conflitos', methods=['GET'])
 def api_dias_fechados_conflitos():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
@@ -3749,6 +3774,25 @@ def gestao_horarios():
         _upsert_setting('horario_funcionamento', json.dumps(horarios, ensure_ascii=False), _tid)
         _upsert_setting('intervalo_minutos', request.form.get('slot_minutos', '40'), _tid)
         _upsert_setting('dias_agenda', request.form.get('dias_agenda', '20'), _tid)
+        # Cancelar agendamentos conflitantes se solicitado
+        if request.form.get('_confirmar') == 'cancelar':
+            DOW_MAP = {'Monday':'seg','Tuesday':'ter','Wednesday':'qua','Thursday':'qui',
+                       'Friday':'sex','Saturday':'sab','Sunday':'dom'}
+            futuros = Agendamento.query.filter(
+                Agendamento.tenant_id == _tid, Agendamento.status == 'ativo',
+                Agendamento.data_hora > datetime.utcnow()
+            ).all()
+            conflitos = []
+            for ag in futuros:
+                dia_key = DOW_MAP.get(ag.data_hora.strftime('%A'), '')
+                cfg = horarios.get(dia_key, {})
+                hora = ag.data_hora.strftime('%H:%M')
+                if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
+                    user = db.session.get(User, ag.user_id)
+                    conflitos.append({'ag': ag, 'user': user, 'nome': user.name if user else 'Cliente',
+                                      'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
+            if conflitos:
+                _cancelar_conflitos(conflitos, tenant.nome, 'Mudança de horário de funcionamento')
         db.session.commit()
         flash('Horários salvos.', 'success')
         return redirect(url_for('gestao_horarios'))
@@ -3784,19 +3828,19 @@ def gestao_contato():
         tenant.whatsapp = whatsapp
         tenant.maps_url = maps_url
         tenant.contato  = contato
-        # Texto dos botões FAB — só atualiza se preenchido
+        # Botões FAB — mostrar=True se texto preenchido, False se vazio
         wpp_texto  = request.form.get('wpp_texto', '').strip()
         maps_texto = request.form.get('maps_texto', '').strip()
-        if wpp_texto:
-            try: wpp_cfg = json.loads(tenant.fab_wpp or '{}')
-            except: wpp_cfg = {}
-            wpp_cfg['texto'] = wpp_texto
-            tenant.fab_wpp = json.dumps(wpp_cfg)
-        if maps_texto:
-            try: maps_cfg = json.loads(tenant.fab_maps or '{}')
-            except: maps_cfg = {}
-            maps_cfg['texto'] = maps_texto
-            tenant.fab_maps = json.dumps(maps_cfg)
+        try: wpp_cfg = json.loads(tenant.fab_wpp or '{}')
+        except: wpp_cfg = {}
+        wpp_cfg['texto']   = wpp_texto or 'Chame no Zap'
+        wpp_cfg['mostrar'] = bool(wpp_texto)
+        tenant.fab_wpp = json.dumps(wpp_cfg)
+        try: maps_cfg = json.loads(tenant.fab_maps or '{}')
+        except: maps_cfg = {}
+        maps_cfg['texto']   = maps_texto or 'Como chegar'
+        maps_cfg['mostrar'] = bool(maps_texto)
+        tenant.fab_maps = json.dumps(maps_cfg)
         db.session.commit()
         flash('Contato atualizado.', 'success')
         return redirect(url_for('gestao_contato'))

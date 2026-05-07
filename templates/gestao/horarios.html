@@ -53,8 +53,23 @@
         <input class="g-input" type="number" name="dias_agenda" min="1" max="90" value="{{ config_geral.get('dias_agenda',20) }}" />
       </div>
     </div>
-    <button class="g-btn g-btn-primary" type="submit">Salvar horários</button>
+    <button type="button" class="g-btn g-btn-primary" onclick="verificarESalvarHorarios()">Salvar horários</button>
+    <input type="hidden" name="_confirmar" id="confirmarHorarios" value="">
   </form>
+</div>
+
+<!-- Modal: conflito horário semanal -->
+<div id="modalConflitoHorario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;width:100%;max-width:440px;">
+    <div class="g-section-title" style="margin-bottom:.35rem;">⚠️ Agendamentos afetados</div>
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem;">Os agendamentos abaixo ficam fora do novo horário. O que deseja fazer?</p>
+    <div id="listaConflitoHorario" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:180px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.35rem;"></div>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+      <button type="button" class="g-btn g-btn-outline" onclick="document.getElementById('modalConflitoHorario').style.display='none'">Cancelar</button>
+      <button type="button" class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarSalvarHorario('manter')">Salvar sem cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarSalvarHorario('cancelar')">Cancelar agendamentos</button>
+    </div>
+  </div>
 </div>
 
 <!-- Tab 2: Dias fechados -->
@@ -171,6 +186,47 @@
 const TOKEN = "{{ token }}";
 let diasFechados = {{ dias_fechados|tojson }};
 let especiais = {{ especiais_json|safe }};
+
+// ── Verificação de conflitos ao salvar horário semanal ──
+async function verificarESalvarHorarios() {
+  const form = document.querySelector('#tab-horarios form');
+  const DIAS = ['seg','ter','qua','qui','sex','sab','dom'];
+  const novos = {};
+  DIAS.forEach(k => {
+    const aberto = form.querySelector(`[name="aberto_${k}"]`)?.checked || false;
+    novos[k] = {
+      aberto,
+      abertura:  form.querySelector(`[name="abertura_${k}"]`)?.value  || '08:00',
+      fechamento:form.querySelector(`[name="fechamento_${k}"]`)?.value || '18:00',
+    };
+  });
+  try {
+    const r = await fetch('/api/horarios/conflitos', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+      body: JSON.stringify(novos)
+    });
+    const d = await r.json();
+    if (d.conflitos && d.conflitos.length > 0) {
+      document.getElementById('listaConflitoHorario').innerHTML = d.conflitos.map(c =>
+        `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text);">${c.nome}</span>
+          <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
+        </div>`
+      ).join('');
+      document.getElementById('modalConflitoHorario').style.display = 'flex';
+      return;
+    }
+  } catch(e) {}
+  form.submit();
+}
+
+function confirmarSalvarHorario(acao) {
+  document.getElementById('modalConflitoHorario').style.display = 'none';
+  const form = document.querySelector('#tab-horarios form');
+  document.getElementById('confirmarHorarios').value = acao;
+  form.submit();
+}
 
 function setTab(id, el) {
   ['horarios','fechados','especiais'].forEach(t => {
