@@ -465,8 +465,8 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       <button class="hub-card" onclick="hubMostrar('link')">
         <div class="hub-card-icon" style="background:rgba(201,169,110,.12)">🔗</div>
         <div class="hub-card-body">
-          <div class="hub-card-title">Credenciais &amp; Link</div>
-          <div class="hub-card-desc">Ver o link do seu site, e-mail e dados de acesso</div>
+          <div class="hub-card-title">Credenciais &amp; Links</div>
+          <div class="hub-card-desc">Site de agendamento, painel de gestão, app e dados de acesso</div>
         </div>
         <span class="hub-card-arrow">›</span>
       </button>
@@ -675,18 +675,34 @@ function hubMostrar(panel) {
   document.getElementById('hub-main').style.display = 'none';
   document.querySelectorAll('.hub-sub-panel').forEach(el => el.classList.remove('show'));
   if(panel === 'link') {
-    const host = location.origin;
-    const link = `${host}/${tenantSlug}`;
+    const host    = location.origin;
+    const linkAg  = `${host}/${tenantSlug}`;
+    const linkGt  = `${host}/gestao/login`;
+    const linkApp = `${host}/gestao/login`;
     document.getElementById('hub-link-rows').innerHTML = `
       <div class="hub-info-row">
-        <span class="hub-info-label">Link do site</span>
-        <span class="hub-info-val">
-          <a class="hub-link-btn" href="${link}" target="_blank">🌐 Abrir site</a>
-          <button class="hub-copy-btn" onclick="copiarTexto('${link}',this)" style="margin-top:4px">📋 Copiar</button>
+        <span class="hub-info-label">Site de agendamento</span>
+        <span class="hub-info-val" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <a class="hub-link-btn" href="${linkAg}" target="_blank">🌐 Abrir site</a>
+          <button class="hub-copy-btn" onclick="copiarTexto('${linkAg}',this)">📋 Copiar link</button>
         </span>
       </div>
       <div class="hub-info-row">
-        <span class="hub-info-label">E-mail</span>
+        <span class="hub-info-label">Painel de Gestão</span>
+        <span class="hub-info-val" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <a class="hub-link-btn" href="${linkGt}" target="_blank">⚙️ Abrir gestão</a>
+          <button class="hub-copy-btn" onclick="copiarTexto('${linkGt}',this)">📋 Copiar link</button>
+        </span>
+      </div>
+      <div class="hub-info-row">
+        <span class="hub-info-label">App iBarber</span>
+        <span class="hub-info-val" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <a class="hub-link-btn" href="${linkApp}" target="_blank" style="background:rgba(100,160,255,.1);border-color:rgba(100,160,255,.4);color:#64a0ff;">📱 Acessar app</a>
+          <button class="hub-copy-btn" onclick="copiarTexto('${linkApp}',this)">📋 Copiar link</button>
+        </span>
+      </div>
+      <div class="hub-info-row">
+        <span class="hub-info-label">E-mail de acesso</span>
         <span class="hub-info-val">${tenantEmail}</span>
       </div>
       <div class="hub-info-row">
