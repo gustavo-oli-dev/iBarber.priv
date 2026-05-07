@@ -262,12 +262,9 @@ async function carregarServicos() {
       fetch('/api/servicos',   {headers:{'Authorization':'Bearer '+TOKEN}}),
     ]);
     const dC = await rC.json(); categoriasLista = Array.isArray(dC) ? dC : [];
-    servicosLista = Array.isArray(await rS.json()) ? await rS.json() : [];
-    // re-fetch servicos pois json() só pode ser chamado uma vez
-    const rS2 = await fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}});
-    const dS = await rS2.json(); servicosLista = Array.isArray(dS) ? dS : [];
+    const dS = await rS.json(); servicosLista   = Array.isArray(dS) ? dS : [];
     renderCategorias();
-  } catch(e) {}
+  } catch(e) { console.error('Erro ao carregar serviços', e); }
 }
 
 function renderCategorias() {
