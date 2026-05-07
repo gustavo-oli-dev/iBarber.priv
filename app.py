@@ -735,12 +735,11 @@ def auth_google():
     tenant = get_tenant_atual()
     tid    = tenant.id if tenant else 0
     host   = request.host
-    nonce  = secrets.token_urlsafe(16)
-    # Encode tenant + host inside signed state — sem depender de sessão cross-domínio
-    payload = f"{nonce}|{tid}|{host}"
-    sig     = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
-    state   = base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
-    session['oauth_nonce'] = nonce
+    nonce  = secrets.token_hex(16)
+    # state = "nonce-tid-host-sig" (sem base64, sem padding issues)
+    payload = f"{nonce}-{tid}-{host}"
+    sig     = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:20]
+    state   = f"{payload}-{sig}"
     params = urlencode({
         'client_id': GOOGLE_CLIENT_ID,
         'redirect_uri': GOOGLE_REDIRECT_URI,
@@ -758,14 +757,15 @@ def auth_google_callback():
     tid_from_state = 0
     oauth_host = ''
     try:
-        decoded  = base64.urlsafe_b64decode(state.encode()).decode()
-        parts    = decoded.rsplit('|', 1)
-        payload, sig = parts[0], parts[1]
-        expected = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
+        # format: "nonce-tid-host-sig" onde sig tem 20 chars hex
+        sig      = state[-20:]
+        payload  = state[:-21]  # remove "-sig"
+        expected = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:20]
         if not hmac.compare_digest(sig, expected):
             raise ValueError('sig inválida')
-        nonce, tid_str, oauth_host = payload.split('|', 2)
-        tid_from_state = int(tid_str)
+        parts = payload.split('-', 2)   # nonce(32 hex) - tid - host
+        tid_from_state = int(parts[1])
+        oauth_host     = parts[2]
     except Exception:
         flash('Erro de segurança no login. Tente novamente.', 'error')
         return redirect(url_for('index'))
