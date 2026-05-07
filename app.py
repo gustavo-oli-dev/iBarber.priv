@@ -4059,9 +4059,36 @@ def api_repersonalizar_auth():
         'tenant_id': tenant.id,
         'slug': tenant.slug,
         'nome': tenant.nome,
+        'email': tenant.email,
+        'whatsapp': tenant.whatsapp or '',
         'tema': tema,
         'editacoes': tenant.tema_editacoes or 0,
     })
+
+@app.route('/api/repersonalizar/credenciais', methods=['POST'])
+def api_repersonalizar_credenciais():
+    d = request.get_json(force=True) or {}
+    tenant = db.session.get(Tenant, d.get('tenant_id'))
+    if not tenant or not tenant.assinatura_ativa:
+        return jsonify({'erro': 'Não autorizado'}), 403
+    nome = (d.get('nome') or '').strip()
+    email = (d.get('email') or '').strip().lower()
+    senha = (d.get('senha') or '').strip()
+    whatsapp = (d.get('whatsapp') or '').strip()
+    if nome:
+        tenant.nome = nome
+    if email and email != tenant.email:
+        if Tenant.query.filter_by(email=email).first():
+            return jsonify({'erro': 'E-mail já cadastrado'}), 400
+        tenant.email = email
+    if senha:
+        if len(senha) < 6:
+            return jsonify({'erro': 'Senha deve ter pelo menos 6 caracteres'}), 400
+        tenant.password = generate_password_hash(senha)
+    if whatsapp is not None:
+        tenant.whatsapp = whatsapp or None
+    db.session.commit()
+    return jsonify({'ok': True})
 
 @app.route('/api/repersonalizar/salvar', methods=['POST'])
 def api_repersonalizar_salvar():

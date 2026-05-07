@@ -148,6 +148,106 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .login-footer a:hover{text-decoration:underline}
 .glow-login{position:absolute;top:-150px;left:50%;transform:translateX(-50%);width:400px;height:300px;background:radial-gradient(ellipse,rgba(201,169,110,.08) 0%,transparent 70%);pointer-events:none}
 
+/* ── HUB OVERLAY ── */
+.hub-overlay{
+  position:fixed;inset:0;z-index:490;
+  background:rgba(0,0,0,0.97);backdrop-filter:blur(20px);
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .4s,visibility .4s;
+}
+.hub-overlay.hide{opacity:0;visibility:hidden;pointer-events:none}
+.hub-box{
+  width:100%;max-width:500px;
+  background:rgba(255,255,255,0.02);border:1px solid var(--border);
+  border-radius:22px;padding:2.5rem 2rem;
+  position:relative;
+}
+.hub-logo{font-size:.88rem;font-weight:800;letter-spacing:.1em;color:var(--text);margin-bottom:.5rem}
+.hub-logo span{color:var(--gold)}
+.hub-bem-vindo{font-family:'Playfair Display',serif;font-size:1.5rem;font-weight:700;margin-bottom:.3rem;color:var(--text)}
+.hub-sub{font-size:.82rem;color:var(--muted);margin-bottom:2rem;line-height:1.5}
+.hub-cards{display:flex;flex-direction:column;gap:.75rem}
+.hub-card{
+  display:flex;align-items:center;gap:1.1rem;
+  padding:1.1rem 1.25rem;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--border);
+  border-radius:14px;cursor:pointer;
+  transition:border-color .2s,background .2s;
+  text-align:left;width:100%;
+}
+.hub-card:hover{border-color:var(--gold);background:rgba(201,169,110,.05)}
+.hub-card-icon{
+  width:42px;height:42px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;flex-shrink:0;
+}
+.hub-card-body{flex:1}
+.hub-card-title{font-size:.92rem;font-weight:600;color:var(--text);margin-bottom:.15rem}
+.hub-card-desc{font-size:.76rem;color:var(--muted);line-height:1.4}
+.hub-card-arrow{color:var(--muted);font-size:1.2rem;flex-shrink:0}
+.hub-card.primary{border-color:rgba(201,169,110,.4);background:rgba(201,169,110,.06)}
+.hub-card.primary:hover{border-color:var(--gold);background:rgba(201,169,110,.12)}
+
+/* ── HUB SUB-PAINEL (info / editar) ── */
+.hub-sub-panel{display:none}
+.hub-sub-panel.show{display:block}
+.hub-main-cards{display:block}
+.hub-main-cards.hide{display:none}
+.hub-back{
+  display:flex;align-items:center;gap:.4rem;
+  background:none;border:none;color:var(--muted);font-size:.8rem;cursor:pointer;
+  margin-bottom:1.25rem;padding:0;font-family:'Inter',sans-serif;
+  transition:color .2s;
+}
+.hub-back:hover{color:var(--text)}
+.hub-info-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:.75rem 0;border-bottom:1px solid var(--border);font-size:.85rem;
+}
+.hub-info-row:last-child{border-bottom:none}
+.hub-info-label{color:var(--muted)}
+.hub-info-val{color:var(--text);font-weight:500;text-align:right;max-width:260px;word-break:break-all}
+.hub-link-btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.4);
+  color:var(--gold);padding:5px 12px;border-radius:8px;
+  font-size:.8rem;font-weight:600;text-decoration:none;cursor:pointer;
+  transition:background .2s;
+}
+.hub-link-btn:hover{background:rgba(201,169,110,.18)}
+.hub-copy-btn{
+  display:inline-flex;align-items:center;gap:.35rem;
+  background:none;border:1px solid var(--border);color:var(--muted);
+  padding:4px 10px;border-radius:7px;font-size:.75rem;cursor:pointer;
+  font-family:'Inter',sans-serif;transition:color .2s,border-color .2s;
+}
+.hub-copy-btn:hover{color:var(--text);border-color:var(--muted)}
+.hub-section-title{font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:1rem}
+.hub-edit-form{display:flex;flex-direction:column;gap:.85rem}
+.hub-field{display:flex;flex-direction:column;gap:.3rem}
+.hub-field label{font-size:.75rem;color:var(--muted);font-weight:500}
+.hub-field input{
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);
+  color:var(--text);padding:10px 12px;border-radius:9px;font-size:.88rem;
+  width:100%;outline:none;transition:border-color .2s;font-family:'Inter',sans-serif;
+}
+.hub-field input:focus{border-color:var(--gold)}
+.hub-field input::placeholder{color:#444}
+.hub-field input.invalid{border-color:#f87171}
+.hub-field-hint{font-size:.7rem;color:var(--muted);margin-top:.2rem}
+.hub-field-err{font-size:.7rem;color:#f87171;display:none;margin-top:.2rem}
+.hub-btn-salvar{
+  width:100%;padding:11px;background:var(--gold);color:#000;
+  border:1px solid var(--gold);border-radius:9px;font-size:.9rem;
+  font-weight:800;cursor:pointer;transition:background .2s,transform .15s;margin-top:.25rem;
+  font-family:'Inter',sans-serif;
+}
+.hub-btn-salvar:hover{background:var(--gold2);transform:translateY(-1px)}
+.hub-btn-salvar:disabled{opacity:.4;cursor:default;transform:none}
+.hub-success{font-size:.8rem;color:#6fcf6f;display:none;text-align:center;margin-top:.5rem}
+.hub-err{font-size:.78rem;color:#f87171;display:none;text-align:center;margin-top:.5rem}
+
 /* ── PAYMENT MODAL ── */
 .pay-modal{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.88);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center}
 .pay-modal.show{display:flex}
@@ -335,21 +435,100 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
   <div class="glow-login"></div>
   <div class="login-box">
     <div class="login-logo"><span>✦</span> iBarber</div>
-    <h1 class="login-title">Personalizar meu site</h1>
-    <p class="login-sub">Entre com o e-mail e senha da sua barbearia para editar o tema.</p>
+    <h1 class="login-title">Acessar minha barbearia</h1>
+    <p class="login-sub">Entre com o e-mail e senha da sua barbearia.</p>
     <div class="fg">
       <label>E-mail</label>
-      <input type="email" id="l-email" placeholder="email@exemplo.com" autocapitalize="none" autocorrect="off" oninput="this.value=this.value.toLowerCase()" onkeydown="if(event.key==='Enter')entrar()">
+      <input type="email" id="l-email" placeholder="email@exemplo.com" autocapitalize="none" autocorrect="off" oninput="clearErr();this.value=this.value.toLowerCase()" onkeydown="if(event.key==='Enter')entrar()">
     </div>
     <div class="fg">
       <label>Senha</label>
-      <input type="password" id="l-senha" placeholder="Sua senha" onkeydown="if(event.key==='Enter')entrar()">
+      <input type="password" id="l-senha" placeholder="Sua senha" oninput="clearErr()" onkeydown="if(event.key==='Enter')entrar()">
     </div>
     <div class="err-login" id="err-login"></div>
-    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar e personalizar</button>
+    <button class="btn-login" id="btn-login" onclick="entrar()">Entrar</button>
     <div class="login-footer">
       Ainda não tem conta? <a href="/personalizar">Criar minha barbearia</a>
     </div>
+  </div>
+</div>
+
+<!-- ── HUB OVERLAY ── -->
+<div class="hub-overlay hide" id="hub-overlay">
+  <div class="hub-box">
+    <div class="hub-logo"><span>✦</span> iBarber</div>
+    <h1 class="hub-bem-vindo">Olá, <span id="hub-nome">...</span></h1>
+    <p class="hub-sub">O que deseja fazer?</p>
+
+    <!-- Cards principais -->
+    <div id="hub-main" class="hub-cards">
+      <button class="hub-card" onclick="hubMostrar('link')">
+        <div class="hub-card-icon" style="background:rgba(201,169,110,.12)">🔗</div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Credenciais &amp; Link</div>
+          <div class="hub-card-desc">Ver o link do seu site, e-mail e dados de acesso</div>
+        </div>
+        <span class="hub-card-arrow">›</span>
+      </button>
+
+      <button class="hub-card" onclick="hubMostrar('editar')">
+        <div class="hub-card-icon" style="background:rgba(100,160,255,.08)">✏️</div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Editar credenciais</div>
+          <div class="hub-card-desc">Alterar nome da barbearia, e-mail, senha ou WhatsApp</div>
+        </div>
+        <span class="hub-card-arrow">›</span>
+      </button>
+
+      <button class="hub-card primary" onclick="hubAbrirEditor()">
+        <div class="hub-card-icon" style="background:rgba(201,169,110,.15)">🎨</div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Personalizar tema</div>
+          <div class="hub-card-desc">Cores, fontes, geometria — edite a aparência do seu site</div>
+        </div>
+        <span class="hub-card-arrow" style="color:var(--gold)">›</span>
+      </button>
+    </div>
+
+    <!-- Sub-painel: Link & Credenciais -->
+    <div id="hub-panel-link" class="hub-sub-panel">
+      <button class="hub-back" onclick="hubVoltar()">‹ Voltar</button>
+      <div class="hub-section-title">Credenciais &amp; Link</div>
+      <div id="hub-link-rows"></div>
+    </div>
+
+    <!-- Sub-painel: Editar credenciais -->
+    <div id="hub-panel-editar" class="hub-sub-panel">
+      <button class="hub-back" onclick="hubVoltar()">‹ Voltar</button>
+      <div class="hub-section-title">Editar credenciais</div>
+      <div class="hub-edit-form">
+        <div class="hub-field">
+          <label>Nome da barbearia</label>
+          <input type="text" id="e-nome" placeholder="Ex: Barbearia do João" oninput="clearHubErr()">
+        </div>
+        <div class="hub-field">
+          <label>E-mail de acesso</label>
+          <input type="email" id="e-email" placeholder="email@exemplo.com" autocapitalize="none" autocorrect="off" oninput="clearHubErr();this.value=this.value.toLowerCase()">
+        </div>
+        <div class="hub-field">
+          <label>WhatsApp</label>
+          <input type="tel" id="e-wpp" placeholder="(00) 00000-0000" oninput="clearHubErr()">
+        </div>
+        <div class="hub-field">
+          <label>Nova senha</label>
+          <input type="password" id="e-senha1" placeholder="Deixe em branco para não alterar" oninput="validarSenhas()">
+        </div>
+        <div class="hub-field">
+          <label>Confirmar nova senha</label>
+          <input type="password" id="e-senha2" placeholder="Repita a nova senha" oninput="validarSenhas()">
+          <div class="hub-field-err" id="e-senha-err">As senhas não coincidem</div>
+        </div>
+        <div class="hub-err" id="hub-edit-err"></div>
+        <div class="hub-success" id="hub-edit-ok">✓ Dados atualizados com sucesso!</div>
+        <button class="hub-btn-salvar" id="hub-btn-salvar" onclick="salvarCredenciais()">Salvar alterações</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -420,13 +599,20 @@ let viewMode     = 'desk';
 let editMode     = 'global';
 let tenantId     = null;
 let tenantSlug   = '';
+let tenantEmail  = '';
+let tenantNome   = '';
+let tenantWpp    = '';
 let editacoesAtuais = 0;
 let mpPayUrl     = null;
 let pixCodeStr   = null;
 let payTabAtiva  = 'pix';
 let pollInterval = null;
+let _tenantData  = null;
 
 function cur() { return T[siteMode]; }
+function clearErr() {
+  const e = document.getElementById('err-login'); if(e) e.style.display='none';
+}
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 async function entrar() {
@@ -434,6 +620,11 @@ async function entrar() {
   const senha = document.getElementById('l-senha').value;
   const errEl = document.getElementById('err-login');
   errEl.style.display = 'none';
+
+  if(!email || !senha) {
+    errEl.textContent = 'Preencha e-mail e senha.';
+    errEl.style.display = 'block'; return;
+  }
 
   const btn = document.getElementById('btn-login');
   btn.disabled = true; btn.textContent = 'Entrando...';
@@ -446,34 +637,147 @@ async function entrar() {
     const d = await r.json();
     if(!d.ok) {
       errEl.textContent = d.erro || 'Erro ao entrar';
-      errEl.style.display = 'block';
-      return;
+      errEl.style.display = 'block'; return;
     }
+    _tenantData     = d;
     tenantId        = d.tenant_id;
     tenantSlug      = d.slug;
+    tenantEmail     = d.email || email;
+    tenantNome      = d.nome || '';
+    tenantWpp       = d.whatsapp || '';
     editacoesAtuais = d.editacoes || 0;
     document.getElementById('tb-nome').textContent = d.nome;
 
-    // Load tenant theme (suporta formato antigo {fundo:...} e novo {ag:{...}, gt:{...}})
     if(d.tema && Object.keys(d.tema).length) {
       if(d.tema.ag) { Object.assign(T.ag, d.tema.ag); Object.assign(T.gt, d.tema.gt || d.tema.ag); }
       else { Object.assign(T.ag, d.tema); Object.assign(T.gt, d.tema); }
     }
     syncPickers();
-    // Inicializa iframes com o tema carregado
     document.getElementById('iframe-ag-desk').src = buildAgUrl();
     document.getElementById('iframe-ag-mob').src  = buildAgUrl();
     showHideIframes();
     updateUrlBar();
 
-    // Show editor
+    // Mostrar hub em vez do editor diretamente
     document.getElementById('login-overlay').classList.add('hide');
+    document.getElementById('hub-overlay').classList.remove('hide');
+    document.getElementById('hub-nome').textContent = d.nome;
   } catch(e) {
     errEl.textContent = 'Erro de conexão.';
     errEl.style.display = 'block';
   } finally {
-    btn.disabled = false; btn.textContent = 'Entrar e personalizar';
+    btn.disabled = false; btn.textContent = 'Entrar';
   }
+}
+
+// ── Hub ───────────────────────────────────────────────────────────────────────
+function hubMostrar(panel) {
+  document.getElementById('hub-main').style.display = 'none';
+  document.querySelectorAll('.hub-sub-panel').forEach(el => el.classList.remove('show'));
+  if(panel === 'link') {
+    const host = location.origin;
+    const link = `${host}/${tenantSlug}`;
+    document.getElementById('hub-link-rows').innerHTML = `
+      <div class="hub-info-row">
+        <span class="hub-info-label">Link do site</span>
+        <span class="hub-info-val">
+          <a class="hub-link-btn" href="${link}" target="_blank">🌐 Abrir site</a>
+          <button class="hub-copy-btn" onclick="copiarTexto('${link}',this)" style="margin-top:4px">📋 Copiar</button>
+        </span>
+      </div>
+      <div class="hub-info-row">
+        <span class="hub-info-label">E-mail</span>
+        <span class="hub-info-val">${tenantEmail}</span>
+      </div>
+      <div class="hub-info-row">
+        <span class="hub-info-label">WhatsApp</span>
+        <span class="hub-info-val">${tenantWpp || '—'}</span>
+      </div>
+      <div class="hub-info-row">
+        <span class="hub-info-label">Personalizações</span>
+        <span class="hub-info-val">${editacoesAtuais} edição(ões) de tema</span>
+      </div>`;
+    document.getElementById('hub-panel-link').classList.add('show');
+  } else if(panel === 'editar') {
+    document.getElementById('e-nome').value   = tenantNome;
+    document.getElementById('e-email').value  = tenantEmail;
+    document.getElementById('e-wpp').value    = tenantWpp;
+    document.getElementById('e-senha1').value = '';
+    document.getElementById('e-senha2').value = '';
+    document.getElementById('hub-edit-err').style.display = 'none';
+    document.getElementById('hub-edit-ok').style.display  = 'none';
+    document.getElementById('e-senha-err').style.display  = 'none';
+    document.getElementById('hub-panel-editar').classList.add('show');
+  }
+}
+
+function hubVoltar() {
+  document.querySelectorAll('.hub-sub-panel').forEach(el => el.classList.remove('show'));
+  document.getElementById('hub-main').style.display = 'flex';
+}
+
+function hubAbrirEditor() {
+  document.getElementById('hub-overlay').classList.add('hide');
+}
+
+function validarSenhas() {
+  const s1 = document.getElementById('e-senha1').value;
+  const s2 = document.getElementById('e-senha2').value;
+  const err = document.getElementById('e-senha-err');
+  if(s1 && s2 && s1 !== s2) { err.style.display='block'; return false; }
+  err.style.display='none'; return true;
+}
+
+function clearHubErr() {
+  document.getElementById('hub-edit-err').style.display = 'none';
+  document.getElementById('hub-edit-ok').style.display  = 'none';
+}
+
+async function salvarCredenciais() {
+  if(!validarSenhas()) return;
+  const nome   = document.getElementById('e-nome').value.trim();
+  const email  = document.getElementById('e-email').value.trim().toLowerCase();
+  const wpp    = document.getElementById('e-wpp').value.trim();
+  const senha1 = document.getElementById('e-senha1').value;
+  const senha2 = document.getElementById('e-senha2').value;
+  if(senha1 && senha1 !== senha2) return;
+  const payload = {tenant_id: tenantId, nome, email, whatsapp: wpp};
+  if(senha1) payload.senha = senha1;
+  const btn = document.getElementById('hub-btn-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const r = await fetch('/api/repersonalizar/credenciais', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(d.ok) {
+      tenantNome  = nome  || tenantNome;
+      tenantEmail = email || tenantEmail;
+      tenantWpp   = wpp;
+      document.getElementById('hub-nome').textContent = tenantNome;
+      document.getElementById('tb-nome').textContent  = tenantNome;
+      document.getElementById('hub-edit-ok').style.display = 'block';
+      document.getElementById('e-senha1').value = '';
+      document.getElementById('e-senha2').value = '';
+    } else {
+      const errEl = document.getElementById('hub-edit-err');
+      errEl.textContent = d.erro || 'Erro ao salvar.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    const errEl = document.getElementById('hub-edit-err');
+    errEl.textContent = 'Erro de conexão.'; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Salvar alterações';
+  }
+}
+
+function copiarTexto(texto, btn) {
+  navigator.clipboard.writeText(texto).then(() => {
+    const orig = btn.textContent; btn.textContent = '✓ Copiado!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
 }
 
 // ── Theme helpers ─────────────────────────────────────────────────────────────
