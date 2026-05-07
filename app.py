@@ -734,6 +734,7 @@ def auth_google():
         return redirect(url_for('index'))
     state = secrets.token_urlsafe(16)
     session['oauth_state'] = state
+    session['oauth_host']  = request.host
     params = urlencode({
         'client_id': GOOGLE_CLIENT_ID,
         'redirect_uri': GOOGLE_REDIRECT_URI,
@@ -791,15 +792,17 @@ def auth_google_callback():
             )
             db.session.add(user)
             db.session.commit()
-    _ptid = session.get('path_tenant_id')
+    _ptid      = session.get('path_tenant_id')
+    _oauth_host = session.get('oauth_host', '')
     session.clear()
     session['user_id']    = user.id
     session['user_name']  = user.name
     session['user_email'] = user.email
     if _ptid: session['path_tenant_id'] = _ptid
+    _base = f"https://{_oauth_host}" if _oauth_host and _oauth_host != request.host else ''
     if not user.contact:
-        return redirect(url_for('google_contato'))
-    return redirect(url_for('servicos'))
+        return redirect(f"{_base}{url_for('google_contato')}")
+    return redirect(f"{_base}{url_for('servicos')}")
 
 @app.route('/auth/google/contato', methods=['GET', 'POST'])
 def google_contato():
