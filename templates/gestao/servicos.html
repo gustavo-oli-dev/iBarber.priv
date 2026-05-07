@@ -149,7 +149,7 @@ async function deletarCategoria() {
 function populateCatSelect(selectedId) {
   const sel = document.getElementById('sCat');
   sel.innerHTML = '<option value="">— Sem categoria —</option>' +
-    categorias.filter(c=>c.ativo).map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nome}</option>`).join('');
+    categorias.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nome}</option>`).join('');
 }
 function abrirModalServico() {
   document.getElementById('servicoId').value = '';
