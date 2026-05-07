@@ -695,6 +695,7 @@ def api_auth_lembretes():
 
 @app.route('/servicos')
 def servicos():
+    print(f"[SERVICOS] user_id={session.get('user_id')} path_tid={session.get('path_tenant_id')}")
     if 'user_id' not in session:
         return redirect(url_for('index'))
     agendamento_info = None
@@ -797,6 +798,7 @@ def auth_google_callback():
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
     tid = tid_from_state or session.get('path_tenant_id') or _api_tid()
+    print(f"[GOOGLE_OK] tid={tid} email={email} host={oauth_host}")
     user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
         user = User.query.filter_by(email=email, tenant_id=tid).first()
@@ -819,6 +821,7 @@ def auth_google_callback():
     session['user_email']    = user.email
     session['path_tenant_id'] = tid
     _base = f"https://{oauth_host}" if oauth_host and oauth_host != request.host else ''
+    print(f"[GOOGLE_REDIRECT] user_id={user.id} contact={user.contact} base={_base} tid_session={session.get('path_tenant_id')}")
     if not user.contact:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")

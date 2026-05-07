@@ -18,7 +18,7 @@
     <input type="hidden" id="catId">
     <div class="g-form-group" style="margin-bottom:.75rem;">
       <label class="g-label">Nome *</label>
-      <input id="catNome" class="g-input" placeholder="Ex: Cortes" required data-validate="nome" />
+      <input id="catNome" class="g-input" placeholder="Ex: Cortes" required minlength="2" />
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button class="g-btn g-btn-outline" onclick="fecharModalCat()">Cancelar</button>
@@ -36,7 +36,7 @@
     <div class="g-form-row">
       <div class="g-form-group">
         <label class="g-label">Nome *</label>
-        <input id="sNome" class="g-input" placeholder="Ex: Corte degradê" required data-validate="nome" />
+        <input id="sNome" class="g-input" placeholder="Ex: Corte degradê" required minlength="2" />
       </div>
       <div class="g-form-group">
         <label class="g-label">Categoria</label>
@@ -133,7 +133,7 @@ async function salvarCategoria() {
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify({nome})});
   if (r.ok) { fecharModalCat(); await carregar(); }
-  else alert('Erro ao salvar categoria');
+  else { const d = await r.json().catch(()=>({})); alert('Erro ao salvar categoria: ' + (d.erro || r.status)); }
 }
 async function deletarCategoria() {
   const id = document.getElementById('catId').value;
@@ -183,7 +183,7 @@ async function salvarServico() {
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify(body)});
   if (r.ok) { fecharModalServico(); await carregar(); }
-  else alert('Erro ao salvar serviço');
+  else { const d = await r.json().catch(()=>({})); alert('Erro ao salvar serviço: ' + (d.erro || r.status)); }
 }
 async function deletarServico() {
   const id = document.getElementById('servicoId').value;
