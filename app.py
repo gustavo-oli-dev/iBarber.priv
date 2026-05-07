@@ -565,6 +565,7 @@ def serve_admin_web(path):
 def index():
     tenant = get_tenant_atual()
     if tenant:
+        session['path_tenant_id'] = tenant.id
         session.pop('is_preview', None)
         user = db.session.get(User, session['user_id']) if 'user_id' in session else None
         auto_rapido = bool(not user and request.args.get('agendar'))
@@ -597,7 +598,7 @@ def login_rapido():
         observation=alergia or None,
         receber_lembretes=False,
         guest=True,
-        tenant_id=session.get('path_tenant_id'),
+        tenant_id=session.get('path_tenant_id') or _api_tid(),
     )
     db.session.add(user)
     db.session.commit()
@@ -614,7 +615,7 @@ def api_auth_telefone():
     tel  = ''.join(c for c in data.get('telefone', '') if c.isdigit())
     if len(tel) < 10:
         return jsonify({'erro': 'Telefone inválido'}), 400
-    tid  = session.get('path_tenant_id')
+    tid  = session.get('path_tenant_id') or _api_tid()
     user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if user:
         _ptid = session.get('path_tenant_id')
@@ -636,7 +637,7 @@ def api_auth_criar_telefone():
     lembretes = bool(data.get('lembretes')) and bool(email_opt)
     if not nome or len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
-    tid = session.get('path_tenant_id')
+    tid = session.get('path_tenant_id') or _api_tid()
     existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if existing:
         _ptid = session.get('path_tenant_id')
@@ -771,7 +772,7 @@ def auth_google_callback():
     if not google_id or not email:
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
-    tid  = session.get('path_tenant_id')
+    tid  = session.get('path_tenant_id') or _api_tid()
     user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
         user = User.query.filter_by(email=email, tenant_id=tid).first()
@@ -1227,7 +1228,7 @@ def confirmar_pedido():
     total = _sf(data.get('total', 0))
 
     pedido = Pedido(user_id=session['user_id'], total=total,
-                    tenant_id=session.get('path_tenant_id') or session.get('tenant_id'))
+                    tenant_id=session.get('path_tenant_id') or session.get('tenant_id') or _api_tid())
     db.session.add(pedido)
     db.session.flush()
     for item in itens:
@@ -1289,7 +1290,7 @@ def agendar():
 
     ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
                      data_hora=data_hora, funcionario_id=funcionario_id,
-                     tenant_id=session.get('path_tenant_id') or session.get('tenant_id'))
+                     tenant_id=session.get('path_tenant_id') or session.get('tenant_id') or _api_tid())
     db.session.add(ag)
     db.session.commit()
 
