@@ -4054,6 +4054,7 @@ def api_repersonalizar_auth():
     if not tenant.assinatura_ativa:
         return jsonify({'erro': 'Conta sem assinatura ativa'}), 403
     tema = json.loads(tenant.tema) if tenant.tema else {}
+    session['reperson_tid'] = tenant.id
     return jsonify({
         'ok': True,
         'tenant_id': tenant.id,
@@ -4068,7 +4069,10 @@ def api_repersonalizar_auth():
 @app.route('/api/repersonalizar/credenciais', methods=['POST'])
 def api_repersonalizar_credenciais():
     d = request.get_json(force=True) or {}
-    tenant = db.session.get(Tenant, d.get('tenant_id'))
+    tid_req = d.get('tenant_id')
+    if not tid_req or session.get('reperson_tid') != tid_req:
+        return jsonify({'erro': 'Sessão inválida'}), 403
+    tenant = db.session.get(Tenant, tid_req)
     if not tenant or not tenant.assinatura_ativa:
         return jsonify({'erro': 'Não autorizado'}), 403
     nome = (d.get('nome') or '').strip()
@@ -4093,7 +4097,10 @@ def api_repersonalizar_credenciais():
 @app.route('/api/repersonalizar/salvar', methods=['POST'])
 def api_repersonalizar_salvar():
     d = request.get_json(force=True) or {}
-    tenant = db.session.get(Tenant, d.get('tenant_id'))
+    tid_req = d.get('tenant_id')
+    if not tid_req or session.get('reperson_tid') != tid_req:
+        return jsonify({'erro': 'Sessão inválida'}), 403
+    tenant = db.session.get(Tenant, tid_req)
     if not tenant:
         return jsonify({'erro': 'Tenant não encontrado'}), 404
     if not tenant.assinatura_ativa:
@@ -4119,7 +4126,10 @@ def api_repersonalizar_status():
 @app.route('/api/pagamento/criar-tema', methods=['POST'])
 def api_pagamento_criar_tema():
     d = request.get_json(force=True) or {}
-    tenant = db.session.get(Tenant, d.get('tenant_id'))
+    tid_req = d.get('tenant_id')
+    if not tid_req or session.get('reperson_tid') != tid_req:
+        return jsonify({'erro': 'Sessão inválida'}), 403
+    tenant = db.session.get(Tenant, tid_req)
     if not tenant:
         return jsonify({'erro': 'tenant não encontrado'}), 404
     mp_token = get_mp_token()
