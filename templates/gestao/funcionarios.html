@@ -3,7 +3,7 @@
 {% block content %}
 <div class="g-page-header">
   <h1 class="g-page-title">Funcionários</h1>
-  <button class="g-btn g-btn-primary" onclick="abrirModal()">+ Adicionar</button>
+  <button type="button" class="g-btn g-btn-primary" onclick="abrirModal()">+ Adicionar</button>
 </div>
 
 <!-- Gestor como Barbeiro -->
@@ -85,9 +85,9 @@
     <div class="g-section-title" style="margin:.75rem 0 .5rem;">Permissões</div>
     <div id="permsBox" class="perm-chips"></div>
     <div style="display:flex;gap:.75rem;margin-top:1.25rem;">
-      <button class="g-btn g-btn-outline" onclick="fecharModal()">Cancelar</button>
-      <button class="g-btn g-btn-primary" id="btnSalvar" onclick="salvarFuncionario()">Salvar</button>
-      <button id="btnDesativar" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="desativarFuncionario()">Desativar</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" id="btnSalvar" onclick="salvarFuncionario()">Salvar</button>
+      <button type="button" id="btnDesativar" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="desativarFuncionario()">Desativar</button>
     </div>
   </div>
 </div>
@@ -100,9 +100,9 @@
     <p id="conflitoBarbeiroMsg" style="font-size:.83rem;color:var(--text-muted);margin-bottom:.9rem;"></p>
     <div id="listaConflitoBarbeiro" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:200px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.4rem;"></div>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
-      <button class="g-btn g-btn-outline" onclick="fecharConflitoBarbeiro()">Voltar</button>
-      <button class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarBarbeiro(false)">Desativar sem cancelar</button>
-      <button class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarBarbeiro(true)">Cancelar e avisar clientes</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="fecharConflitoBarbeiro()">Voltar</button>
+      <button type="button" class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarBarbeiro(false)">Desativar sem cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarBarbeiro(true)">Cancelar e avisar clientes</button>
     </div>
   </div>
 </div>

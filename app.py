@@ -298,7 +298,7 @@ class Categoria(db.Model):
     icone     = db.Column(db.String(10),  default='✦')
     ordem     = db.Column(db.Integer,     default=0)
     ativo     = db.Column(db.Boolean,     default=True)
-    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True, default=1)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     servicos  = db.relationship('Servico', backref='cat_ref', lazy=True,
                                 foreign_keys='Servico.categoria_id')
 
@@ -311,7 +311,7 @@ class Servico(db.Model):
     ativo        = db.Column(db.Boolean, default=True)
     ordem        = db.Column(db.Integer, default=0)
     criado_em    = db.Column(db.DateTime, default=datetime.utcnow)
-    tenant_id    = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True, default=1)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
 class HorarioEspecial(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
@@ -695,7 +695,6 @@ def api_auth_lembretes():
 
 @app.route('/servicos')
 def servicos():
-    print(f"[SERVICOS] user_id={session.get('user_id')} path_tid={session.get('path_tenant_id')}")
     if 'user_id' not in session:
         return redirect(url_for('index'))
     agendamento_info = None
@@ -767,10 +766,7 @@ def auth_google_callback():
         parts = payload.split('-', 2)   # nonce(32 hex) - tid - host
         tid_from_state = int(parts[1])
         oauth_host     = parts[2]
-    except Exception as _e:
-        import traceback
-        print(f"[GOOGLE_OAUTH_ERRO] state='{state}' erro={_e}")
-        traceback.print_exc()
+    except Exception:
         flash('Erro de segurança no login. Tente novamente.', 'error')
         return redirect(url_for('index'))
     code = request.args.get('code')
@@ -798,7 +794,6 @@ def auth_google_callback():
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
     tid = tid_from_state or session.get('path_tenant_id') or _api_tid()
-    print(f"[GOOGLE_OK] tid={tid} email={email} host={oauth_host}")
     user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
         user = User.query.filter_by(email=email, tenant_id=tid).first()
@@ -821,7 +816,6 @@ def auth_google_callback():
     session['user_email']    = user.email
     session['path_tenant_id'] = tid
     _base = f"https://{oauth_host}" if oauth_host and oauth_host != request.host else ''
-    print(f"[GOOGLE_REDIRECT] user_id={user.id} contact={user.contact} base={_base} tid_session={session.get('path_tenant_id')}")
     if not user.contact:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")
@@ -1814,6 +1808,8 @@ def api_tenant_config_put():
 @app.route('/api/categorias', methods=['GET'])
 def api_categorias_listar():
     try:
+        if session.get('is_preview'):
+            return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
         tid = session.get('tenant_id') or session.get('path_tenant_id')
         if not tid:
             t = _get_tenant_para_api()
@@ -1821,11 +1817,9 @@ def api_categorias_listar():
         if not tid:
             t = get_tenant_atual()
             tid = t.id if t else None
-        if not tid and session.get('is_preview'):
-            return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
-        q = Categoria.query.filter_by(ativo=True)
-        if tid: q = q.filter_by(tenant_id=tid)
-        cats = q.order_by(Categoria.ordem).all()
+        if not tid:
+            return jsonify([])
+        cats = Categoria.query.filter_by(ativo=True, tenant_id=tid).order_by(Categoria.ordem).all()
         return jsonify([{'id': c.id, 'nome': c.nome, 'icone': c.icone, 'ordem': c.ordem} for c in cats])
     except Exception:
         return jsonify([])
@@ -1864,7 +1858,8 @@ def api_categoria_detalhe(cid):
 @app.route('/api/servicos', methods=['GET'])
 def api_servicos_listar():
     try:
-        q = Servico.query.filter_by(ativo=True)
+        if session.get('is_preview'):
+            return jsonify(_PREVIEW_SVCS)
         tid = session.get('tenant_id') or session.get('path_tenant_id')
         if not tid:
             t = _get_tenant_para_api()
@@ -1872,10 +1867,9 @@ def api_servicos_listar():
         if not tid:
             t = get_tenant_atual()
             tid = t.id if t else None
-        if not tid and session.get('is_preview'):
-            return jsonify(_PREVIEW_SVCS)
-        if tid: q = q.filter_by(tenant_id=tid)
-        svs = q.order_by(Servico.categoria_id, Servico.ordem).all()
+        if not tid:
+            return jsonify([])
+        svs = Servico.query.filter_by(ativo=True, tenant_id=tid).order_by(Servico.categoria_id, Servico.ordem).all()
         return jsonify([{
             'id': s.id, 'nome': s.nome,
             'categoria_id': s.categoria_id,
@@ -3270,8 +3264,8 @@ def api_funcionarios_criar():
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
     email_func = d.get('email', '').strip().lower()
-    if email_func and Funcionario.query.filter_by(email=email_func).first():
-        return jsonify({'erro': 'E-mail já cadastrado'}), 400
+    if email_func and Funcionario.query.filter_by(email=email_func, tenant_id=tid).first():
+        return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
     perms = d.get('permissoes', {})
     f = Funcionario(
         nome=d.get('nome', '').strip(),

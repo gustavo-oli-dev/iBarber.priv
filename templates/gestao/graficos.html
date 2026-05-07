@@ -46,7 +46,7 @@ canvas.gr    { display: block; }
 {% block content %}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem;">
   <h1 class="g-page-title" style="margin:0;">Gráficos</h1>
-  <button class="g-btn g-btn-outline" onclick="abrirExport()" style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;">
+  <button type="button" class="g-btn g-btn-outline" onclick="abrirExport()" style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     Exportar planilha
   </button>
@@ -86,8 +86,8 @@ canvas.gr    { display: block; }
     </div>
 
     <div style="display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.25rem;">
-      <button class="g-btn g-btn-outline" onclick="fecharExport()">Cancelar</button>
-      <button class="g-btn g-btn-primary" onclick="confirmarExport()">Baixar CSV</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="fecharExport()">Cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" onclick="confirmarExport()">Baixar CSV</button>
     </div>
   </div>
 </div>

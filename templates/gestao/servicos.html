@@ -4,8 +4,8 @@
 <div class="g-page-header">
   <h1 class="g-page-title">Serviços</h1>
   <div class="g-page-header-actions">
-    <button class="g-btn g-btn-outline" onclick="abrirModalCat()">+ Categoria</button>
-    <button class="g-btn g-btn-primary" onclick="abrirModalServico()">+ Serviço</button>
+    <button type="button" class="g-btn g-btn-outline" onclick="abrirModalCat()">+ Categoria</button>
+    <button type="button" class="g-btn g-btn-primary" onclick="abrirModalServico()">+ Serviço</button>
   </div>
 </div>
 
@@ -21,9 +21,9 @@
       <input id="catNome" class="g-input" placeholder="Ex: Cortes" required minlength="2" />
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
-      <button class="g-btn g-btn-outline" onclick="fecharModalCat()">Cancelar</button>
-      <button class="g-btn g-btn-primary" onclick="salvarCategoria()">Salvar</button>
-      <button id="btnDelCat" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarCategoria()">Excluir</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="fecharModalCat()">Cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" onclick="salvarCategoria()">Salvar</button>
+      <button type="button" id="btnDelCat" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarCategoria()">Excluir</button>
     </div>
   </div>
 </div>
@@ -48,9 +48,9 @@
       <input id="sPreco" class="g-input" type="text" inputmode="decimal" placeholder="0,00" data-mask="moeda" data-validate="moeda" min="0" />
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
-      <button class="g-btn g-btn-outline" onclick="fecharModalServico()">Cancelar</button>
-      <button class="g-btn g-btn-primary" onclick="salvarServico()">Salvar</button>
-      <button id="btnDelServico" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarServico()">Excluir</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="fecharModalServico()">Cancelar</button>
+      <button type="button" class="g-btn g-btn-primary" onclick="salvarServico()">Salvar</button>
+      <button type="button" id="btnDelServico" class="g-btn g-btn-outline" style="color:var(--error);margin-left:auto;display:none;" onclick="deletarServico()">Excluir</button>
     </div>
   </div>
 </div>
