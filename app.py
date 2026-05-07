@@ -732,9 +732,15 @@ def auth_google():
     if not GOOGLE_CLIENT_ID:
         flash('Login com Google não está configurado.', 'error')
         return redirect(url_for('index'))
-    state = secrets.token_urlsafe(16)
-    session['oauth_state'] = state
-    session['oauth_host']  = request.host
+    tenant = get_tenant_atual()
+    tid    = tenant.id if tenant else 0
+    host   = request.host
+    nonce  = secrets.token_urlsafe(16)
+    # Encode tenant + host inside signed state — sem depender de sessão cross-domínio
+    payload = f"{nonce}|{tid}|{host}"
+    sig     = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
+    state   = base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+    session['oauth_nonce'] = nonce
     params = urlencode({
         'client_id': GOOGLE_CLIENT_ID,
         'redirect_uri': GOOGLE_REDIRECT_URI,
@@ -748,7 +754,19 @@ def auth_google():
 
 @app.route('/auth/google/callback')
 def auth_google_callback():
-    if request.args.get('state') != session.pop('oauth_state', None):
+    state = request.args.get('state', '')
+    tid_from_state = 0
+    oauth_host = ''
+    try:
+        decoded  = base64.urlsafe_b64decode(state.encode()).decode()
+        parts    = decoded.rsplit('|', 1)
+        payload, sig = parts[0], parts[1]
+        expected = hmac.new(app.secret_key.encode(), payload.encode(), hashlib.sha256).hexdigest()[:24]
+        if not hmac.compare_digest(sig, expected):
+            raise ValueError('sig inválida')
+        nonce, tid_str, oauth_host = payload.split('|', 2)
+        tid_from_state = int(tid_str)
+    except Exception:
         flash('Erro de segurança no login. Tente novamente.', 'error')
         return redirect(url_for('index'))
     code = request.args.get('code')
@@ -775,7 +793,7 @@ def auth_google_callback():
     if not google_id or not email:
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
-    tid  = session.get('path_tenant_id') or _api_tid()
+    tid = tid_from_state or session.get('path_tenant_id') or _api_tid()
     user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
         user = User.query.filter_by(email=email, tenant_id=tid).first()
@@ -792,14 +810,12 @@ def auth_google_callback():
             )
             db.session.add(user)
             db.session.commit()
-    _ptid      = session.get('path_tenant_id')
-    _oauth_host = session.get('oauth_host', '')
     session.clear()
-    session['user_id']    = user.id
-    session['user_name']  = user.name
-    session['user_email'] = user.email
-    if _ptid: session['path_tenant_id'] = _ptid
-    _base = f"https://{_oauth_host}" if _oauth_host and _oauth_host != request.host else ''
+    session['user_id']       = user.id
+    session['user_name']     = user.name
+    session['user_email']    = user.email
+    session['path_tenant_id'] = tid
+    _base = f"https://{oauth_host}" if oauth_host and oauth_host != request.host else ''
     if not user.contact:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")
