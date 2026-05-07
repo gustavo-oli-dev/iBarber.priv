@@ -173,6 +173,46 @@
   .detalhe-row { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
   .detalhe-row-label { color: var(--text-muted); }
   .detalhe-actions { display: flex; gap: 0.75rem; margin-top: 1.25rem; flex-wrap: wrap; }
+
+  /* ── Modal confirmar cancelamento ───────────── */
+  .confirm-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72); z-index: 500;
+    align-items: center; justify-content: center;
+  }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    width: 340px; max-width: calc(100vw - 2rem);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    animation: slideUp .18s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity:0; } to { transform: translateY(0); opacity:1; } }
+  .confirm-title {
+    font-size: 1rem; font-weight: 700; color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+  .confirm-sub {
+    font-size: 0.78rem; color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+  }
+  .confirm-info {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .75rem 1rem;
+    margin-bottom: 1.25rem;
+    font-size: .84rem;
+    line-height: 1.7;
+  }
+  .confirm-info strong { color: var(--text); }
+  .confirm-info span { color: var(--text-muted); }
+  .confirm-btns { display: flex; gap: .75rem; }
+  .confirm-btns button { flex: 1; }
 </style>
 {% endblock %}
 
@@ -209,6 +249,19 @@
 <div class="detalhe-panel" id="detPanel">
   <button class="detalhe-close" onclick="fecharDetalhe()">×</button>
   <div id="detContent"></div>
+</div>
+
+<!-- Modal confirmar cancelamento -->
+<div class="confirm-overlay" id="confirmOverlay" onclick="if(event.target===this)fecharConfirmCancelar()">
+  <div class="confirm-box">
+    <div class="confirm-title">Deseja realmente cancelar?</div>
+    <div class="confirm-sub">Esta ação não pode ser desfeita. O agendamento será marcado como cancelado.</div>
+    <div class="confirm-info" id="confirmInfo"></div>
+    <div class="confirm-btns">
+      <button class="g-btn g-btn-outline" onclick="fecharConfirmCancelar()">Voltar</button>
+      <button class="g-btn" style="background:var(--error);color:#fff;border-color:var(--error);" id="confirmCancelarBtn">Cancelar agendamento</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -334,10 +387,7 @@ function abrirDetalhe(idx) {
       ` : ''}
       ${!p ? `
         <button class="g-btn g-btn-outline" style="font-size:.8rem;" onclick="abrirReagendar(${ag.id})">Reagendar</button>
-        <form method="POST" action="/gestao/agendamentos/${ag.id}/status" style="display:inline">
-          <input type="hidden" name="status" value="cancelado" />
-          <button class="g-btn g-btn-outline" style="color:var(--error); font-size:0.8rem;" onclick="return confirm('Cancelar agendamento?')">Cancelar</button>
-        </form>
+        <button class="g-btn g-btn-outline" style="color:var(--error);font-size:.8rem;" onclick="abrirConfirmCancelar(${ag.id},'${(ag.usuario||'').replace(/'/g,"\\'")}','${ag.data_hora}','${(ag.servico||'').replace(/'/g,"\\'")}','${(ag.barbeiro||'Gestor').replace(/'/g,"\\'")}')">Cancelar</button>
       ` : ''}
     </div>
   `;
@@ -349,6 +399,48 @@ function abrirDetalhe(idx) {
 function fecharDetalhe() {
   document.getElementById('detOverlay').classList.remove('open');
   document.getElementById('detPanel').classList.remove('open');
+}
+
+let _cancelarAgId = null;
+
+function abrirConfirmCancelar(agId, nome, dataHora, servico, barbeiro) {
+  _cancelarAgId = agId;
+  document.getElementById('confirmInfo').innerHTML =
+    `<div><span>Cliente: </span><strong>${nome || '—'}</strong></div>` +
+    `<div><span>Horário: </span><strong>${formatarDataHora(dataHora)}</strong></div>` +
+    `<div><span>Serviço: </span><strong>${servico || '—'}</strong></div>` +
+    `<div><span>Barbeiro: </span><strong>${barbeiro || 'Gestor'}</strong></div>`;
+  document.getElementById('confirmOverlay').classList.add('open');
+  document.getElementById('confirmCancelarBtn').onclick = executarCancelar;
+}
+
+function fecharConfirmCancelar() {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  _cancelarAgId = null;
+}
+
+async function executarCancelar() {
+  if (!_cancelarAgId) return;
+  const btn = document.getElementById('confirmCancelarBtn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelando...';
+  const r = await fetch(`/api/agendamentos/${_cancelarAgId}/status`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({status:'cancelado'})
+  });
+  if (r.ok) {
+    const ag = AGENDAMENTOS.find(a => a.id === _cancelarAgId);
+    if (ag) ag.status = 'cancelado';
+    fecharConfirmCancelar();
+    fecharDetalhe();
+    renderLista();
+    renderStats();
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Cancelar agendamento';
+    alert('Erro ao cancelar. Tente novamente.');
+  }
 }
 
 async function marcarNaoCompareceu(agId, idx, btn) {

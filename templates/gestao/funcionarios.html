@@ -32,6 +32,17 @@
   </div>
 </div>
 
+<!-- Escala por Dia -->
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
+  <div class="g-section-title" style="margin-bottom:.75rem;">Disponibilidade por Dia</div>
+  <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.9rem;">Selecione uma data e marque quem estará trabalhando naquele dia.</p>
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+    <input type="date" id="escalaDia" class="g-input" style="max-width:180px;" onchange="carregarEscalaDia()" />
+    <span id="escalaStatus" style="font-size:.78rem;color:var(--text-muted);"></span>
+  </div>
+  <div id="escalaLista" style="display:flex;flex-direction:column;gap:.5rem;"></div>
+</div>
+
 <!-- Gráfico de cortes por barbeiro -->
 <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:1.5rem;">
   <div class="g-section-title" style="margin-bottom:.75rem;">Cortes por Barbeiro</div>
@@ -436,6 +447,53 @@ function _setFotoGestor(url) {
     document.getElementById('gestorFotoPlaceholder').style.display = '';
   }
 }
+
+// ── Escala por Dia ──
+function _isoHoje() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+async function carregarEscalaDia() {
+  const data = document.getElementById('escalaDia').value;
+  if (!data) return;
+  const box = document.getElementById('escalaLista');
+  document.getElementById('escalaStatus').textContent = 'Carregando...';
+  try {
+    const r = await fetch(`/api/escala/${data}`, {headers:{'Authorization':'Bearer '+TOKEN}});
+    const lista = await r.json();
+    if (!Array.isArray(lista) || !lista.length) {
+      box.innerHTML = '<p style="color:var(--text-muted);font-size:.8rem;">Nenhum funcionário cadastrado.</p>';
+      document.getElementById('escalaStatus').textContent = '';
+      return;
+    }
+    box.innerHTML = lista.map(f => `
+      <label style="display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem;background:var(--surface2,var(--surface));border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;">
+        <input type="checkbox" data-fid="${f.id}" ${f.trabalhando?'checked':''} onchange="salvarEscalaDia()" style="accent-color:var(--gold);width:16px;height:16px;">
+        <span style="font-size:.875rem;font-weight:500;">${f.nome}</span>
+        ${f.id===0?'<span style="font-size:.7rem;color:var(--text-muted);">(gestor)</span>':''}
+      </label>`).join('');
+    document.getElementById('escalaStatus').textContent = '';
+  } catch(e) { document.getElementById('escalaStatus').textContent = 'Erro ao carregar.'; }
+}
+
+async function salvarEscalaDia() {
+  const data = document.getElementById('escalaDia').value;
+  if (!data) return;
+  const checks = document.querySelectorAll('#escalaLista input[type=checkbox]');
+  const trabalhando = [...checks].filter(c=>c.checked).map(c=>parseInt(c.dataset.fid));
+  document.getElementById('escalaStatus').textContent = 'Salvando...';
+  await fetch(`/api/escala/${data}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({trabalhando})
+  });
+  document.getElementById('escalaStatus').textContent = 'Salvo ✓';
+  setTimeout(() => { document.getElementById('escalaStatus').textContent = ''; }, 2000);
+}
+
+document.getElementById('escalaDia').value = _isoHoje();
+carregarEscalaDia();
 
 carregar();
 </script>
