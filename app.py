@@ -22,7 +22,7 @@ from PIL import Image
 
 load_dotenv()
 
-APP_VERSION = '1.0.0'
+APP_VERSION = '1.2.0'
 
 if not os.environ.get('SECRET_KEY'):
     raise RuntimeError('SECRET_KEY não definida no ambiente')
