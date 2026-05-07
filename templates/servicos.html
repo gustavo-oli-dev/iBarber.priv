@@ -345,6 +345,39 @@ body { overflow: hidden; }
   <h3 class="auth-title" style="margin:0.5rem 0 0.8rem;">Meu agendamento</h3>
   <div id="agConteudo"></div>
 </div>
+<!-- ── Galeria sidebar ── -->
+<style>
+#galeriaPanel {
+  display:none;position:fixed;right:0;top:0;bottom:0;width:380px;max-width:100vw;
+  background:var(--card-bg,#111);border-left:1px solid var(--border);
+  z-index:251;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  transform:translateX(100%);transition:transform .25s ease;
+}
+@media(max-width:600px){
+  #galeriaPanel{
+    top:auto;left:0;right:0;width:100%;border-left:none;
+    border-top:1px solid var(--border);height:75vh;border-radius:16px 16px 0 0;
+    transform:translateY(100%);
+  }
+  #galeriaPanel.aberto{ transform:translateY(0); }
+}
+@media(min-width:601px){
+  #galeriaPanel.aberto{ transform:translateX(0); }
+}
+#galeriaGrid { display:grid;grid-template-columns:repeat(2,1fr);gap:6px;padding:1rem; }
+</style>
+<div id="galeriaOverlay" onclick="fecharGaleria()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:250;"></div>
+<div id="galeriaPanel">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card-bg,#111);z-index:1;">
+    <div>
+      <div id="galeriaTitulo" style="font-size:.95rem;font-weight:700;"></div>
+      <div id="galeriaQtd" style="font-size:.72rem;color:var(--muted,#888);margin-top:2px;"></div>
+    </div>
+    <button onclick="fecharGaleria()" style="background:none;border:none;color:var(--muted,#888);font-size:1.5rem;cursor:pointer;line-height:1;padding:.25rem;">×</button>
+  </div>
+  <div id="galeriaGrid"></div>
+</div>
+
 <div class="lightbox" id="lightbox" style="display:none;">
   <button class="lightbox-fechar" onclick="fecharLightbox()">×</button>
   <button class="lightbox-nav lightbox-nav--prev" onclick="navegarLightbox(-1)">‹</button>
@@ -481,9 +514,10 @@ body { overflow: hidden; }
         const verMais = ac.querySelector('.btn-ver-mais-mini');
         if (verMais) {
           if (fotos.length > 4) {
-            verMais.textContent = `Ver mais ${fotos.length - 4} foto${fotos.length - 4 > 1 ? 's' : ''}`;
+            const nome = btn.dataset.servico || '';
+            verMais.textContent = `Ver todas as fotos (${fotos.length})`;
             verMais.style.display = '';
-            verMais.onclick = (e) => { e.stopPropagation(); abrirLightbox(4, slug); };
+            verMais.onclick = (e) => { e.stopPropagation(); abrirGaleria(slug, nome); };
           } else {
             verMais.style.display = 'none';
           }
@@ -532,9 +566,9 @@ body { overflow: hidden; }
       const verMais = ac.querySelector('.btn-ver-mais-mini');
       if (verMais) {
         if (fotos.length > 4) {
-          verMais.textContent = `Ver mais ${fotos.length - 4} foto${fotos.length - 4 > 1 ? 's' : ''}`;
+          verMais.textContent = `Ver todas as fotos (${fotos.length})`;
           verMais.style.display = '';
-          verMais.onclick = (e) => { e.stopPropagation(); abrirLightbox(4, slug); };
+          verMais.onclick = (e) => { e.stopPropagation(); abrirGaleria(slug, s.nome); };
         } else {
           verMais.style.display = 'none';
         }
@@ -1048,6 +1082,39 @@ body { overflow: hidden; }
     document.querySelectorAll('.fab').forEach(f => f.style.display = '');
     setTimeout(() => { p.style.display = 'none'; }, 300);
   }
+  // ── Galeria sidebar ──────────────────────────────────────
+  function abrirGaleria(slug, nome) {
+    const fotos = fotosCache[slug] || [];
+    document.getElementById('galeriaTitulo').textContent = nome || 'Fotos';
+    document.getElementById('galeriaQtd').textContent = `${fotos.length} foto${fotos.length !== 1 ? 's' : ''}`;
+    const grid = document.getElementById('galeriaGrid');
+    grid.innerHTML = fotos.map((url, i) => `
+      <div onclick="abrirLightbox(${i},'${slug}')" style="
+        aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
+        background:#1a1a1a;position:relative;">
+        <img src="${url}" alt="" loading="lazy" style="
+          width:100%;height:100%;object-fit:cover;display:block;
+          transition:transform .2s;" onmouseover="this.style.transform='scale(1.04)'"
+          onmouseout="this.style.transform='scale(1)'">
+      </div>`).join('');
+    document.getElementById('galeriaOverlay').style.display = 'block';
+    const panel = document.getElementById('galeriaPanel');
+    panel.style.display = 'block';
+    requestAnimationFrame(() => panel.classList.add('aberto'));
+    document.body.style.overflow = 'hidden';
+  }
+  function fecharGaleria() {
+    const panel = document.getElementById('galeriaPanel');
+    panel.classList.remove('aberto');
+    setTimeout(() => {
+      panel.style.display = 'none';
+      document.getElementById('galeriaOverlay').style.display = 'none';
+    }, 260);
+    if (document.getElementById('lightbox').style.display === 'none') {
+      document.body.style.overflow = '';
+    }
+  }
+
   // ── Lightbox ─────────────────────────────────────────────
   function abrirLightbox(indice, galeria) {
     lbGaleria = galeria; lbIndice = indice;
