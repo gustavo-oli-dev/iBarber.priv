@@ -1553,15 +1553,13 @@ def atualizar_forma_pagamento():
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
     ag.forma_pagamento = forma
-    # Remover entrada anterior deste pedido (troca de forma de pagamento)
-    if ag.pedido_id:
+    # Cartão: não criar EntradaMonetaria agora — retorno_pagamento fará isso após confirmação
+    if ag.pedido_id and forma != 'cartao':
         EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
-    # Criar entrada monetária automática
-    if ag.pedido_id:
         pedido = db.session.get(Pedido, ag.pedido_id)
         user   = db.session.get(User, session['user_id'])
         if pedido:
-            _forma_map = {'dinheiro': 'dinheiro', 'pix': 'pix', 'cartao': 'cartao_credito'}
+            _forma_map = {'dinheiro': 'dinheiro', 'pix': 'pix'}
             servicos = ', '.join(i.nome for i in pedido.itens) if pedido.itens else 'Serviço'
             nome_cliente = user.name if user else 'Cliente'
             entrada = EntradaMonetaria(
@@ -2353,9 +2351,19 @@ def criar_pagamento():
         })
 
     else:  # cartao – Checkout Pro
+        _tenant = db.session.get(Tenant, _tid)
+        _slug = _tenant.slug if _tenant else ''
+        _base = request.host_url.rstrip('/')
         payload = {
             'items': [{'title': 'Barbearia – Serviços', 'quantity': 1,
                        'unit_price': round(total, 2), 'currency_id': 'BRL'}],
+            'external_reference': str(pedido_id or ''),
+            'back_urls': {
+                'success': f'{_base}/retorno-pagamento?pedido_id={pedido_id}',
+                'failure': f'{_base}/{_slug}',
+                'pending': f'{_base}/{_slug}',
+            },
+            'auto_return': 'approved',
         }
         r = req_http.post(
             'https://api.mercadopago.com/checkout/preferences',
@@ -2387,16 +2395,63 @@ def verificar_pagamento(mp_payment_id):
         pedido = db.session.get(Pedido, pedido_id)
         if pedido and pedido.status != 'pago':
             pedido.status = 'pago'
-            db.session.add(EntradaMonetaria(
-                descricao=f'Pedido #{pedido_id} — PIX',
-                valor=pedido.total,
-                forma='pix',
-            ))
+            _entrada = EntradaMonetaria.query.filter_by(pedido_id=pedido_id).first()
+            if _entrada:
+                _entrada.forma = 'pix'
+            else:
+                db.session.add(EntradaMonetaria(
+                    descricao=f'Pedido #{pedido_id} — PIX',
+                    valor=pedido.total,
+                    forma='pix',
+                    pedido_id=pedido_id,
+                    tenant_id=pedido.tenant_id,
+                ))
             db.session.commit()
             user = db.session.get(User, pedido.user_id)
             if user:
                 _enviar_comprovante_pagamento(user, pedido)
     return jsonify({'status': status})
+
+@app.route('/retorno-pagamento', methods=['GET'])
+def retorno_pagamento():
+    """Redirect-back URL after Checkout Pro card payment (auto_return=approved)."""
+    pedido_id  = request.args.get('pedido_id', type=int)
+    payment_id = request.args.get('collection_id') or request.args.get('payment_id')
+    status_mp  = request.args.get('status', '')
+    slug = ''
+    if pedido_id:
+        pedido = db.session.get(Pedido, pedido_id)
+        if pedido:
+            _tenant = db.session.get(Tenant, pedido.tenant_id)
+            slug = _tenant.slug if _tenant else ''
+            if status_mp == 'approved' and payment_id and pedido.status != 'pago':
+                mp_token_s = _get_setting('mp_token', pedido.tenant_id)
+                mp_token_v = mp_token_s.value if mp_token_s else ''
+                try:
+                    rv = req_http.get(
+                        f'https://api.mercadopago.com/v1/payments/{payment_id}',
+                        headers={'Authorization': f'Bearer {mp_token_v}'}, timeout=10,
+                    )
+                    if rv.status_code == 200 and rv.json().get('status') == 'approved':
+                        pedido.status = 'pago'
+                        entrada = EntradaMonetaria.query.filter_by(pedido_id=pedido_id).first()
+                        if entrada:
+                            entrada.forma = 'cartao_credito'
+                        else:
+                            db.session.add(EntradaMonetaria(
+                                descricao=f'Pedido #{pedido_id} — Cartão',
+                                valor=pedido.total,
+                                forma='cartao_credito',
+                                pedido_id=pedido_id,
+                                tenant_id=pedido.tenant_id,
+                            ))
+                        db.session.commit()
+                        user = db.session.get(User, pedido.user_id)
+                        if user:
+                            _enviar_comprovante_pagamento(user, pedido)
+                except Exception:
+                    pass
+    return redirect(f'/{slug}' if slug else '/')
 
 @app.route('/api/precos', methods=['GET', 'POST'])
 def api_precos():
