@@ -18,6 +18,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
+from PIL import Image
 
 load_dotenv()
 
@@ -65,6 +66,22 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = not app.debug
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def _processar_imagem(arquivo, max_px=1400, quality=82):
+    """Validate, strip EXIF, resize, return (BytesIO, error_str)."""
+    try:
+        img = Image.open(arquivo)
+        img.verify()
+        arquivo.seek(0)
+        img = Image.open(arquivo)
+    except Exception:
+        return None, 'arquivo de imagem inválido'
+    img = img.convert('RGB')
+    img.thumbnail((max_px, max_px), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=quality, optimize=True)
+    buf.seek(0)
+    return buf, None
 
 MAIL_HOST     = 'smtp.gmail.com'
 MAIL_PORT     = 587
@@ -591,6 +608,7 @@ def login_rapido():
     return redirect(url_for('servicos'))
 
 @app.route('/api/auth/telefone', methods=['POST'])
+@limiter.limit('10 per minute')
 def api_auth_telefone():
     data = request.get_json(force=True) or {}
     tel  = ''.join(c for c in data.get('telefone', '') if c.isdigit())
@@ -599,14 +617,15 @@ def api_auth_telefone():
     tid  = session.get('path_tenant_id')
     user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if user:
+        session.clear()
         session['user_id']    = user.id
         session['user_name']  = user.name
         session['user_email'] = user.email
-        session.pop('is_guest', None)
         return jsonify({'ok': True, 'nome': user.name})
     return jsonify({'novo': True})
 
 @app.route('/api/auth/criar-telefone', methods=['POST'])
+@limiter.limit('10 per minute')
 def api_auth_criar_telefone():
     data      = request.get_json(force=True) or {}
     nome      = data.get('nome', '').strip()
@@ -618,10 +637,10 @@ def api_auth_criar_telefone():
     tid = session.get('path_tenant_id')
     existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if existing:
+        session.clear()
         session['user_id']    = existing.id
         session['user_name']  = existing.name
         session['user_email'] = existing.email
-        session.pop('is_guest', None)
         return jsonify({'ok': True, 'nome': existing.name})
     if email_opt and User.query.filter_by(email=email_opt).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
@@ -637,10 +656,10 @@ def api_auth_criar_telefone():
     )
     db.session.add(user)
     db.session.commit()
+    session.clear()
     session['user_id']    = user.id
     session['user_name']  = nome
     session['user_email'] = email
-    session.pop('is_guest', None)
     return jsonify({'ok': True, 'nome': nome})
 
 @app.route('/api/auth/lembretes', methods=['POST'])
@@ -763,10 +782,10 @@ def auth_google_callback():
             )
             db.session.add(user)
             db.session.commit()
+    session.clear()
     session['user_id']    = user.id
     session['user_name']  = user.name
     session['user_email'] = user.email
-    session.pop('is_guest', None)
     if not user.contact:
         return redirect(url_for('google_contato'))
     return redirect(url_for('servicos'))
@@ -993,11 +1012,11 @@ def _build_ag_tema_override(args):
     gold    = args.get('destaque',   '#C9A96E')
     texto   = args.get('texto',      '#F0ECE4')
     borda   = args.get('borda',      '#2A2A2A')
-    fonte_t = args.get('fonteTitulo','Playfair Display')
-    fonte_c = args.get('fonteCorpo', 'Inter')
+    fonte_t = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteTitulo','Playfair Display'))[:50]
+    fonte_c = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteCorpo', 'Inter'))[:50]
     radius  = args.get('cardRadius', '6')
     estilo  = args.get('btnEstilo',  'arredondado')
-    hero    = args.get('heroUrl',    '')
+    hero    = re.sub(r'["\'\\\r\n<>]', '', args.get('heroUrl', ''))
     btn_r   = '999px' if estilo=='pilula' else ('0px' if estilo=='angular' else f'{radius}px')
     hero_css = (
         f'body{{background-image:url("{hero}");background-size:cover;background-position:center;background-attachment:fixed}}'
@@ -1020,8 +1039,8 @@ def _gt_tema_override_css(args):
     borda      = args.get('borda',      '#222222')
     destaque   = args.get('destaque',   '#C8C8C8')
     texto      = args.get('texto',      '#F2F2F2')
-    fonte_t    = args.get('fonteTitulo','Playfair Display')
-    fonte_c    = args.get('fonteCorpo', 'Inter')
+    fonte_t    = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteTitulo','Playfair Display'))[:50]
+    fonte_c    = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteCorpo', 'Inter'))[:50]
     return (
         f'<style>:root{{'
         f'--bg:{fundo};--surface:{superficie};--surface2:{superficie};'
@@ -1180,7 +1199,10 @@ def preview_demo_login():
     session['user_name'] = 'Cliente Demo'
     session['tenant_id'] = 999
     session['is_preview'] = True
-    return redirect(request.args.get('next', '/servicos'))
+    _next = request.args.get('next', '/servicos')
+    if not _next.startswith('/') or _next.startswith('//'):
+        _next = '/servicos'
+    return redirect(_next)
 
 @app.route('/preview/demo/logout')
 def preview_demo_logout():
@@ -1212,6 +1234,7 @@ def confirmar_pedido():
     return jsonify({'total': total, 'pedido_id': pedido.id})
 
 @app.route('/agendar', methods=['POST'])
+@limiter.limit('5 per minute')
 def agendar():
     if 'user_id' not in session:
         return jsonify({'erro': 'não autenticado'}), 401
@@ -2360,7 +2383,7 @@ def api_usuarios():
                 import time; email = f"{base}.{int(time.time())}@admin.local"
         elif User.query.filter_by(email=email, tenant_id=tid).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
-        senha_temp = generate_password_hash('barber@' + name.split()[0].lower())
+        senha_temp = generate_password_hash(secrets.token_hex(16))
         receber_lembretes = data.get('receber_lembretes', True)
         user = User(name=name, email=email, password=senha_temp,
                     contact=contact, observation=observation,
@@ -2850,6 +2873,7 @@ def api_fotos_listar():
     } for f in fotos])
 
 @app.route('/api/fotos', methods=['POST'])
+@limiter.limit('30 per hour')
 def api_fotos_upload():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
@@ -2858,9 +2882,9 @@ def api_fotos_upload():
     arquivo   = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo enviado'}), 400
-    ext = os.path.splitext(secure_filename(arquivo.filename))[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
-        return jsonify({'erro': 'formato inválido'}), 400
+    buf, err = _processar_imagem(arquivo)
+    if err:
+        return jsonify({'erro': err}), 400
     if servico:
         existente = FotoServico.query.filter_by(servico=servico, tenant_id=tid).first()
         if existente:
@@ -2868,8 +2892,9 @@ def api_fotos_upload():
             if os.path.exists(old):
                 os.remove(old)
             db.session.delete(existente)
-    filename = f"{uuid.uuid4().hex}{ext}"
-    arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
+    filename = f"{uuid.uuid4().hex}.jpg"
+    with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+        fh.write(buf.read())
     foto = FotoServico(categoria=categoria, servico=servico or None, filename=filename, tenant_id=tid)
     db.session.add(foto)
     db.session.commit()
@@ -3170,6 +3195,7 @@ def ping():
     return jsonify({'ok': True, 'app': 'barbearia'})
 
 @app.route('/api/admin/login', methods=['POST'])
+@limiter.limit('10 per minute')
 def admin_login():
     data  = request.get_json(force=True) or {}
     email = data.get('email', '').strip().lower()
@@ -3290,6 +3316,7 @@ def api_gestor_barbeiro_conflitos():
     return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
 @app.route('/api/funcionarios/<int:fid>/foto', methods=['POST', 'DELETE'])
+@limiter.limit('20 per hour', methods=['POST'])
 def api_funcionario_foto(fid):
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
@@ -3306,19 +3333,21 @@ def api_funcionario_foto(fid):
     arquivo = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
-    ext = os.path.splitext(secure_filename(arquivo.filename))[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
-        return jsonify({'erro': 'formato inválido'}), 400
+    buf, err = _processar_imagem(arquivo)
+    if err:
+        return jsonify({'erro': err}), 400
     if f.foto:
         old = os.path.join(UPLOAD_FOLDER, f.foto)
         if os.path.exists(old): os.remove(old)
-    filename = f"func_{fid}_{uuid.uuid4().hex}{ext}"
-    arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
+    filename = f"func_{fid}_{uuid.uuid4().hex}.jpg"
+    with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+        fh.write(buf.read())
     f.foto = filename
     db.session.commit()
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
 
 @app.route('/api/gestor-foto', methods=['POST', 'DELETE'])
+@limiter.limit('20 per hour', methods=['POST'])
 def api_gestor_foto():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
     _tid = _api_tid()
@@ -3333,15 +3362,16 @@ def api_gestor_foto():
     arquivo = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
-    ext = os.path.splitext(secure_filename(arquivo.filename))[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp'):
-        return jsonify({'erro': 'formato inválido'}), 400
+    buf, err = _processar_imagem(arquivo)
+    if err:
+        return jsonify({'erro': err}), 400
     s = _get_setting('gestor_foto', _tid)
     if s and s.value:
         old = os.path.join(UPLOAD_FOLDER, s.value)
         if os.path.exists(old): os.remove(old)
-    filename = f"gestor_{uuid.uuid4().hex}{ext}"
-    arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
+    filename = f"gestor_{uuid.uuid4().hex}.jpg"
+    with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+        fh.write(buf.read())
     _upsert_setting('gestor_foto', filename, _tid)
     db.session.commit()
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
@@ -3393,7 +3423,14 @@ def _gestao_login_required():
 def _gestao_tenant():
     return db.session.get(Tenant, session.get('gestao_tenant_id'))
 
+def _csrf_ok():
+    """Verifica Origin/Referer em form POSTs para prevenir CSRF."""
+    origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
+    host   = request.host  # ex: ibarber.app.br ou slug.ibarber.app.br
+    return not origin or (APP_DOMAIN in origin) or (host in origin)
+
 @app.route('/gestao/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def gestao_login():
     if session.get('gestao_tenant_id'):
         return redirect(url_for('gestao_dashboard'))
@@ -3402,6 +3439,7 @@ def gestao_login():
         senha = request.form.get('senha', '')
         tenant = Tenant.query.filter_by(email=email, ativo=True).first()
         if tenant and check_password_hash(tenant.password, senha):
+            session.clear()
             session['gestao_tenant_id'] = tenant.id
             session['gestao_nome'] = tenant.nome
             return redirect(url_for('gestao_dashboard'))
@@ -3572,6 +3610,8 @@ def gestao_cliente_detalhe(uid):
 def gestao_entradas():
     redir = _gestao_login_required()
     if redir: return redir
+    if request.method == 'POST' and not _csrf_ok():
+        return 'Requisição inválida', 403
     _tid = _gestao_tid()
     if request.method == 'POST':
         desc = request.form.get('descricao', '').strip()
@@ -3635,6 +3675,8 @@ def gestao_servicos():
 def gestao_precos():
     redir = _gestao_login_required()
     if redir: return redir
+    if request.method == 'POST' and not _csrf_ok():
+        return 'Requisição inválida', 403
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).all()
@@ -3661,6 +3703,8 @@ def gestao_fotos():
 def gestao_horarios():
     redir = _gestao_login_required()
     if redir: return redir
+    if request.method == 'POST' and not _csrf_ok():
+        return 'Requisição inválida', 403
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     if request.method == 'POST':
@@ -3701,6 +3745,8 @@ def gestao_horarios():
 def gestao_contato():
     redir = _gestao_login_required()
     if redir: return redir
+    if request.method == 'POST' and not _csrf_ok():
+        return 'Requisição inválida', 403
     tenant = _gestao_tenant()
     if request.method == 'POST':
         whatsapp  = request.form.get('whatsapp', '').strip()
@@ -3813,15 +3859,17 @@ def pagamento():
     return render_template('pagamento.html')
 
 @app.route('/api/personalizar/upload', methods=['POST'])
+@limiter.limit('20 per hour')
 def api_personalizar_upload():
     arquivo = request.files.get('imagem')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
-    ext = os.path.splitext(secure_filename(arquivo.filename))[1].lower()
-    if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
-        return jsonify({'erro': 'formato inválido'}), 400
-    filename = f"pers_{uuid.uuid4().hex}{ext}"
-    arquivo.save(os.path.join(UPLOAD_FOLDER, filename))
+    buf, err = _processar_imagem(arquivo)
+    if err:
+        return jsonify({'erro': err}), 400
+    filename = f"pers_{uuid.uuid4().hex}.jpg"
+    with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+        fh.write(buf.read())
     url = request.host_url.rstrip('/') + f'/static/uploads/{filename}'
     return jsonify({'ok': True, 'url': url})
 
@@ -4501,7 +4549,7 @@ def tenant_site(slug):
 
 @app.errorhandler(413)
 def erro_upload_grande(e):
-    return jsonify({'erro': 'Arquivo muito grande. Máximo 8 MB.'}), 413
+    return jsonify({'erro': 'Arquivo muito grande. Máximo 50 MB.'}), 413
 
 @app.errorhandler(429)
 def erro_rate_limit(e):
