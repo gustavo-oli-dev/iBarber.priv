@@ -51,14 +51,16 @@ let fotos = [];
 let filtroAtivo = 'todos';
 
 async function carregar() {
-  const [rC, rS, rF] = await Promise.all([
-    fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
-    fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}}),
-    fetch('/api/fotos'),
-  ]);
-  categorias = await rC.json();
-  servicos = await rS.json();
-  fotos = await rF.json();
+  try {
+    const [rC, rS, rF] = await Promise.all([
+      fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
+      fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}}),
+      fetch('/api/fotos', {headers:{'Authorization':'Bearer '+TOKEN}}),
+    ]);
+    const dC = await rC.json(); categorias = Array.isArray(dC) ? dC : [];
+    const dS = await rS.json(); servicos   = Array.isArray(dS) ? dS : [];
+    const dF = await rF.json(); fotos      = Array.isArray(dF) ? dF : [];
+  } catch(e) { categorias = []; servicos = []; fotos = []; }
   renderFiltros();
   renderFotos();
 }
@@ -66,7 +68,7 @@ async function carregar() {
 function renderFiltros() {
   const box = document.getElementById('filtrosCat');
   box.innerHTML = `<button class="g-chip g-chip-active" onclick="setFiltro('todos',this)">Todas</button>` +
-    categorias.filter(c=>c.ativo).map(c =>
+    categorias.map(c =>
       `<button class="g-chip" onclick="setFiltro('${c.nome}',this)">${c.nome}</button>`
     ).join('');
 }
@@ -102,11 +104,11 @@ function renderFotos() {
 function populateCats() {
   const sel = document.getElementById('fCat');
   sel.innerHTML = '<option value="outros">Outros</option>' +
-    categorias.filter(c=>c.ativo).map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+    categorias.map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
 }
 function loadServicosPorCat() {
   const cat = document.getElementById('fCat').value;
-  const lista = servicos.filter(s=>s.ativo && categorias.find(c=>c.nome===cat && c.id===s.categoria_id));
+  const lista = servicos.filter(s=>categorias.find(c=>c.nome===cat && c.id===s.categoria_id));
   const sel = document.getElementById('fServico');
   sel.innerHTML = '<option value="">— Nenhum —</option>' +
     lista.map(s=>`<option value="${s.nome}">${s.nome}</option>`).join('');
