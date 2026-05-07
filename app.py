@@ -617,10 +617,12 @@ def api_auth_telefone():
     tid  = session.get('path_tenant_id')
     user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if user:
+        _ptid = session.get('path_tenant_id')
         session.clear()
         session['user_id']    = user.id
         session['user_name']  = user.name
         session['user_email'] = user.email
+        if _ptid: session['path_tenant_id'] = _ptid
         return jsonify({'ok': True, 'nome': user.name})
     return jsonify({'novo': True})
 
@@ -637,10 +639,12 @@ def api_auth_criar_telefone():
     tid = session.get('path_tenant_id')
     existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if existing:
+        _ptid = session.get('path_tenant_id')
         session.clear()
         session['user_id']    = existing.id
         session['user_name']  = existing.name
         session['user_email'] = existing.email
+        if _ptid: session['path_tenant_id'] = _ptid
         return jsonify({'ok': True, 'nome': existing.name})
     if email_opt and User.query.filter_by(email=email_opt).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
@@ -656,10 +660,12 @@ def api_auth_criar_telefone():
     )
     db.session.add(user)
     db.session.commit()
+    _ptid = session.get('path_tenant_id')
     session.clear()
     session['user_id']    = user.id
     session['user_name']  = nome
     session['user_email'] = email
+    if _ptid: session['path_tenant_id'] = _ptid
     return jsonify({'ok': True, 'nome': nome})
 
 @app.route('/api/auth/lembretes', methods=['POST'])
@@ -782,10 +788,12 @@ def auth_google_callback():
             )
             db.session.add(user)
             db.session.commit()
+    _ptid = session.get('path_tenant_id')
     session.clear()
     session['user_id']    = user.id
     session['user_name']  = user.name
     session['user_email'] = user.email
+    if _ptid: session['path_tenant_id'] = _ptid
     if not user.contact:
         return redirect(url_for('google_contato'))
     return redirect(url_for('servicos'))
@@ -1801,11 +1809,10 @@ def api_categorias_criar():
     d = request.get_json() or {}
     nome = d.get('nome', '').strip()
     if not nome: return jsonify({'erro': 'nome obrigatório'}), 400
-    tenant = _get_tenant_para_api()
     cat = Categoria(
         nome=nome, icone=d.get('icone', '✦'),
-        ordem=Categoria.query.count(),
-        tenant_id=tenant.id if tenant else 1,
+        ordem=Categoria.query.filter_by(tenant_id=tid).count(),
+        tenant_id=tid,
     )
     db.session.add(cat); db.session.commit()
     return jsonify({'ok': True, 'id': cat.id, 'nome': cat.nome, 'icone': cat.icone})
