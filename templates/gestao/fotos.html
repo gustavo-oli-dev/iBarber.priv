@@ -15,13 +15,13 @@
       <input id="fFoto" class="g-input" type="file" accept="image/*" />
     </div>
     <div class="g-form-group" style="margin-bottom:.75rem;">
-      <label class="g-label">Categoria</label>
-      <select id="fCat" class="g-input" onchange="loadServicosPorCat()"></select>
+      <label class="g-label">Categoria *</label>
+      <select id="fCat" class="g-input" required onchange="loadServicosPorCat()"></select>
     </div>
     <div class="g-form-group" style="margin-bottom:.75rem;">
-      <label class="g-label">Serviço (opcional)</label>
-      <select id="fServico" class="g-input">
-        <option value="">— Nenhum —</option>
+      <label class="g-label">Serviço *</label>
+      <select id="fServico" class="g-input" required>
+        <option value="">— Selecione —</option>
       </select>
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
@@ -103,7 +103,7 @@ function renderFotos() {
 // ── Modal ──
 function populateCats() {
   const sel = document.getElementById('fCat');
-  sel.innerHTML = '<option value="outros">Outros</option>' +
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
     categorias.map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
 }
 function loadServicosPorCat() {
@@ -126,6 +126,8 @@ async function enviarFoto() {
   const categoria = document.getElementById('fCat').value;
   const servico = document.getElementById('fServico').value;
   if (!arquivo) { alert('Selecione uma imagem'); return; }
+  if (!categoria) { alert('Selecione uma categoria'); return; }
+  if (!servico) { alert('Selecione um serviço'); return; }
   const btn = document.getElementById('btnEnviar');
   btn.disabled = true; btn.textContent = 'Enviando...';
   const fd = new FormData();
