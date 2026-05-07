@@ -478,6 +478,16 @@ body { overflow: hidden; }
             div.style.backgroundPosition = 'center';
           }
         });
+        const verMais = ac.querySelector('.btn-ver-mais-mini');
+        if (verMais) {
+          if (fotos.length > 4) {
+            verMais.textContent = `Ver mais ${fotos.length - 4} foto${fotos.length - 4 > 1 ? 's' : ''}`;
+            verMais.style.display = '';
+            verMais.onclick = (e) => { e.stopPropagation(); abrirLightbox(4, slug); };
+          } else {
+            verMais.style.display = 'none';
+          }
+        }
       });
     } catch(e) { console.error('Erro ao carregar fotos', e); }
   }
@@ -519,6 +529,16 @@ body { overflow: hidden; }
           div.style.backgroundPosition = 'center';
         }
       });
+      const verMais = ac.querySelector('.btn-ver-mais-mini');
+      if (verMais) {
+        if (fotos.length > 4) {
+          verMais.textContent = `Ver mais ${fotos.length - 4} foto${fotos.length - 4 > 1 ? 's' : ''}`;
+          verMais.style.display = '';
+          verMais.onclick = (e) => { e.stopPropagation(); abrirLightbox(4, slug); };
+        } else {
+          verMais.style.display = 'none';
+        }
+      }
     });
   }
   // ── Carrinho ─────────────────────────────────────────────
