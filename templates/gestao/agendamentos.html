@@ -181,10 +181,18 @@
   <div class="data-strip" id="dataStrip"></div>
 
   <!-- Serviços (multi-seleção) -->
-  <div class="mh-section-label" style="margin-bottom:0.6rem;">Serviços <span style="font-weight:400;color:var(--text-muted);font-size:.7rem;">(opcional)</span></div>
+  <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem;">
+    <div class="mh-section-label" style="margin:0;">Serviços <span style="font-weight:400;color:var(--text-muted);font-size:.7rem;">(opcional)</span></div>
+    <button type="button" id="btnVoltarCats" onclick="voltarCategorias()"
+      style="display:none;font-size:.72rem;color:var(--text-muted);background:var(--surface2,var(--surface));
+             border:1px solid var(--border);border-radius:6px;padding:.15rem .55rem;cursor:pointer;line-height:1.6;">
+      ‹ Voltar
+    </button>
+  </div>
   <div style="margin-bottom:1.25rem;">
-    <div id="servicosChips" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;"></div>
-    <div id="totalServicos" style="font-size:.85rem;color:var(--gold);min-height:1.2rem;"></div>
+    <div id="categoriasChips" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;"></div>
+    <div id="servicosChips"   style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;display:none;"></div>
+    <div id="totalServicos"   style="font-size:.85rem;color:var(--gold);min-height:1.2rem;"></div>
   </div>
 
   <!-- Forma pagamento -->
@@ -244,18 +252,64 @@ let clientesFiltrados  = [...CLIENTES];
 let servicosLista      = [];
 
 let servicosSelecionados = []; // [{id, nome, preco}]
+let categoriasLista = [];
+let catSelecionada = null; // id da categoria atual
 
 async function carregarServicos() {
   try {
-    const r = await fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}});
-    servicosLista = await r.json();
-    renderServicosChips();
+    const [rC, rS] = await Promise.all([
+      fetch('/api/categorias', {headers:{'Authorization':'Bearer '+TOKEN}}),
+      fetch('/api/servicos',   {headers:{'Authorization':'Bearer '+TOKEN}}),
+    ]);
+    const dC = await rC.json(); categoriasLista = Array.isArray(dC) ? dC : [];
+    servicosLista = Array.isArray(await rS.json()) ? await rS.json() : [];
+    // re-fetch servicos pois json() só pode ser chamado uma vez
+    const rS2 = await fetch('/api/servicos', {headers:{'Authorization':'Bearer '+TOKEN}});
+    const dS = await rS2.json(); servicosLista = Array.isArray(dS) ? dS : [];
+    renderCategorias();
   } catch(e) {}
 }
 
-function renderServicosChips() {
+function renderCategorias() {
+  catSelecionada = null;
+  document.getElementById('btnVoltarCats').style.display = 'none';
+  document.getElementById('servicosChips').style.display = 'none';
+  const box = document.getElementById('categoriasChips');
+  box.style.display = 'flex';
+
+  // Monta lista de categorias que têm serviços + "Sem categoria"
+  const comCat = categoriasLista.filter(c => servicosLista.some(s => s.categoria_id === c.id));
+  const semCat = servicosLista.filter(s => !s.categoria_id || !categoriasLista.find(c => c.id === s.categoria_id));
+
+  let html = comCat.map(c => `
+    <button type="button" onclick="selecionarCategoria(${c.id})"
+      style="padding:.3rem .75rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s;
+             background:var(--surface);border:1px solid var(--border);color:var(--text-muted);">
+      ${c.icone ? c.icone+' ' : ''}${c.nome}
+    </button>`).join('');
+  if (semCat.length) {
+    html += `<button type="button" onclick="selecionarCategoria(null)"
+      style="padding:.3rem .75rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s;
+             background:var(--surface);border:1px solid var(--border);color:var(--text-muted);">
+      Outros
+    </button>`;
+  }
+  box.innerHTML = html || '<span style="font-size:.8rem;color:var(--text-muted);">Nenhuma categoria cadastrada.</span>';
+  atualizarTotal();
+}
+
+function selecionarCategoria(catId) {
+  catSelecionada = catId;
+  document.getElementById('categoriasChips').style.display = 'none';
+  document.getElementById('btnVoltarCats').style.display = '';
   const box = document.getElementById('servicosChips');
-  box.innerHTML = servicosLista.map(s => {
+  box.style.display = 'flex';
+
+  const lista = catId === null
+    ? servicosLista.filter(s => !s.categoria_id || !categoriasLista.find(c => c.id === s.categoria_id))
+    : servicosLista.filter(s => s.categoria_id === catId);
+
+  box.innerHTML = lista.map(s => {
     const sel = servicosSelecionados.some(x => x.id === s.id);
     return `<button type="button" onclick="toggleServico(${s.id})"
       style="padding:.3rem .75rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s;
@@ -264,7 +318,14 @@ function renderServicosChips() {
              color:${sel?'#000':'var(--text-muted)'};">
       ${s.nome}${s.preco>0?' · R$ '+parseFloat(s.preco).toFixed(2).replace('.',','):''}
     </button>`;
-  }).join('');
+  }).join('') || '<span style="font-size:.8rem;color:var(--text-muted);">Nenhum serviço nesta categoria.</span>';
+}
+
+function voltarCategorias() {
+  renderCategorias();
+}
+
+function atualizarTotal() {
   const total = servicosSelecionados.reduce((s,x)=>s+x.preco,0);
   document.getElementById('totalServicos').textContent =
     servicosSelecionados.length ? `Total: R$ ${total.toFixed(2).replace('.',',')}` : '';
@@ -278,7 +339,11 @@ function toggleServico(id) {
     const sv = servicosLista.find(s=>s.id===id);
     if (sv) servicosSelecionados.push({id:sv.id, nome:sv.nome, preco:parseFloat(sv.preco||0)});
   }
-  renderServicosChips();
+  // Re-render chips da categoria atual mantendo seleção
+  if (catSelecionada !== undefined && document.getElementById('servicosChips').style.display !== 'none') {
+    selecionarCategoria(catSelecionada);
+  }
+  atualizarTotal();
 }
 
 // ── Cliente ─────────────────────────────────────────
