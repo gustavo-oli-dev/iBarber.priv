@@ -766,7 +766,10 @@ def auth_google_callback():
         parts = payload.split('-', 2)   # nonce(32 hex) - tid - host
         tid_from_state = int(parts[1])
         oauth_host     = parts[2]
-    except Exception:
+    except Exception as _e:
+        import traceback
+        print(f"[GOOGLE_OAUTH_ERRO] state='{state}' erro={_e}")
+        traceback.print_exc()
         flash('Erro de segurança no login. Tente novamente.', 'error')
         return redirect(url_for('index'))
     code = request.args.get('code')
