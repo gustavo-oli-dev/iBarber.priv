@@ -576,90 +576,164 @@ footer{
 
 <!-- TUTORIAL MERCADO PAGO -->
 <section id="tutorial-mp" style="border-top:1px solid var(--border)">
-  <div style="max-width:860px;margin:0 auto;padding:clamp(4rem,8vw,6rem) clamp(1.5rem,5vw,3rem)">
+<style>
+.tut-wrap{max-width:1060px;margin:0 auto;padding:clamp(4rem,8vw,6rem) clamp(1.5rem,5vw,3rem)}
+.tut-layout{display:grid;grid-template-columns:260px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:420px}
+.tut-sidebar{background:rgba(255,255,255,0.025);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:1.75rem 0}
+.tut-logo{display:flex;align-items:center;gap:.75rem;padding:0 1.5rem 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1rem}
+.tut-logo-icon{width:38px;height:38px;border-radius:10px;background:rgba(201,169,110,.15);border:1px solid rgba(201,169,110,.35);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.tut-logo-label{font-size:.7rem;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase}
+.tut-step-btn{display:flex;align-items:center;gap:.85rem;padding:.9rem 1.5rem;cursor:pointer;border:none;background:none;color:var(--muted);width:100%;text-align:left;transition:background .15s,color .15s;position:relative}
+.tut-step-btn:hover{background:rgba(255,255,255,0.04);color:var(--text)}
+.tut-step-btn.active{background:rgba(201,169,110,.08);color:var(--text)}
+.tut-step-btn.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);border-radius:0 2px 2px 0}
+.tut-step-btn.done .tut-num{background:rgba(100,200,100,.15);border-color:rgba(100,200,100,.4);color:#4caf82}
+.tut-num{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;transition:all .2s}
+.tut-step-btn.active .tut-num{background:var(--gold);border-color:var(--gold);color:#000}
+.tut-step-title{font-size:.82rem;font-weight:500;line-height:1.35}
+.tut-connector{width:2px;height:14px;background:var(--border);margin:0 auto 0 calc(1.5rem + 13px)}
+.tut-content{padding:2.5rem 2.75rem;display:flex;flex-direction:column}
+.tut-panel{display:none;flex:1;flex-direction:column}
+.tut-panel.active{display:flex}
+.tut-panel-tag{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:.6rem}
+.tut-panel h3{font-size:1.15rem;font-weight:700;margin-bottom:.9rem;line-height:1.3}
+.tut-panel p{font-size:.88rem;color:var(--muted);line-height:1.7;margin-bottom:1.1rem}
+.tut-warn{display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;background:rgba(255,193,7,.06);border:1px solid rgba(255,193,7,.2);border-radius:8px;font-size:.8rem;color:#f0c040;margin-bottom:1rem}
+.tut-breadcrumb{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-size:.78rem;margin-bottom:1rem}
+.tut-crumb{padding:.28rem .7rem;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;color:var(--muted)}
+.tut-crumb.last{background:rgba(201,169,110,.12);border-color:rgba(201,169,110,.35);color:var(--gold);font-weight:600}
+.tut-key-card{display:flex;align-items:flex-start;gap:.75rem;padding:.85rem 1rem;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem}
+.tut-key-card:last-child{margin-bottom:0}
+.tut-nav-btns{display:flex;gap:.6rem;margin-top:auto;padding-top:1.75rem}
+.tut-nav-btns button{padding:.55rem 1.1rem;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .2s}
+.tut-nav-btns button.next{background:var(--gold);border-color:var(--gold);color:#000}
+.tut-nav-btns button:hover{opacity:.85}
+@media(max-width:700px){
+  .tut-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .tut-sidebar{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:.75rem 0;border-right:none;border-bottom:1px solid var(--border)}
+  .tut-logo{display:none}
+  .tut-connector{display:none}
+  .tut-step-btn{flex-direction:column;align-items:center;padding:.6rem 1rem;min-width:90px;gap:.4rem;font-size:.7rem}
+  .tut-step-btn.active::before{left:0;right:0;top:auto;bottom:0;width:auto;height:3px;border-radius:2px 2px 0 0}
+  .tut-content{padding:1.5rem}
+}
+</style>
 
-    <!-- Cabeçalho -->
-    <div style="display:flex;align-items:flex-start;gap:1.25rem;margin-bottom:3.5rem">
-      <div style="width:54px;height:54px;border-radius:14px;background:rgba(201,169,110,0.12);border:1px solid rgba(201,169,110,0.35);display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;margin-top:.2rem">✂️</div>
-      <div>
-        <div class="section-label">Tutorial</div>
-        <div class="section-title" style="font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.25;margin-bottom:.75rem">Como conectar o Mercado Pago</div>
-        <p class="section-sub" style="margin:0">Para aceitar PIX e cartão no seu site, conecte sua conta do Mercado Pago. Leva menos de 5 minutos.</p>
-      </div>
+  <div class="tut-wrap">
+    <div style="text-align:center;margin-bottom:2.5rem">
+      <div class="section-label">Tutorial</div>
+      <div class="section-title">Como conectar o Mercado Pago</div>
+      <p class="section-sub">Para aceitar PIX e cartão no seu site, siga os 3 passos abaixo.</p>
     </div>
 
-    <!-- Timeline de passos -->
-    <div style="position:relative">
-      <!-- linha vertical -->
-      <div style="position:absolute;left:19px;top:32px;width:2px;height:calc(100% - 64px);background:linear-gradient(to bottom,rgba(201,169,110,.6),rgba(201,169,110,.05));border-radius:2px"></div>
+    <div class="tut-layout">
 
-      <!-- Passo 1 -->
-      <div style="display:flex;gap:1.5rem;margin-bottom:2.25rem;align-items:flex-start">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--gold);color:#000;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1;box-shadow:0 0 0 6px var(--bg)">1</div>
-        <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.75rem">
-          <h3 style="font-size:1rem;font-weight:700;margin-bottom:.5rem">Acesse o Mercado Pago pelo navegador</h3>
-          <p style="font-size:.875rem;color:var(--muted);line-height:1.65;margin-bottom:.85rem">Entre em <strong style="color:var(--text)">mercadopago.com.br</strong> pelo navegador do celular ou computador. Se estiver no celular, ative o <strong style="color:var(--text)">Modo Desktop</strong> (ícone de três pontinhos → "Site para computador").</p>
-          <div style="display:flex;align-items:center;gap:.6rem;padding:.65rem 1rem;background:rgba(255,193,7,0.06);border:1px solid rgba(255,193,7,0.2);border-radius:8px;font-size:.8rem;color:#f0c040">
+      <!-- SIDEBAR -->
+      <div class="tut-sidebar">
+        <div class="tut-logo">
+          <div class="tut-logo-icon">✂️</div>
+          <div class="tut-logo-label">Passo a passo</div>
+        </div>
+
+        <button class="tut-step-btn active" onclick="tutIr(1)">
+          <div class="tut-num">1</div>
+          <div class="tut-step-title">Acessar o<br>Mercado Pago</div>
+        </button>
+        <div class="tut-connector"></div>
+        <button class="tut-step-btn" onclick="tutIr(2)">
+          <div class="tut-num">2</div>
+          <div class="tut-step-title">Encontrar<br>Suas integrações</div>
+        </button>
+        <div class="tut-connector"></div>
+        <button class="tut-step-btn" onclick="tutIr(3)">
+          <div class="tut-num">3</div>
+          <div class="tut-step-title">Copiar as<br>credenciais</div>
+        </button>
+      </div>
+
+      <!-- CONTEÚDO -->
+      <div class="tut-content">
+
+        <!-- Passo 1 -->
+        <div class="tut-panel active" id="tut-p1">
+          <div class="tut-panel-tag">Passo 1 de 3</div>
+          <h3>Acesse o Mercado Pago pelo navegador</h3>
+          <p>Entre em <strong style="color:var(--text)">mercadopago.com.br</strong> pelo navegador do celular ou computador. Se estiver no celular, ative o <strong style="color:var(--text)">Modo Desktop</strong> antes de continuar.</p>
+          <p style="font-size:.82rem;color:var(--muted)">No Chrome mobile: toque nos <strong style="color:var(--text)">três pontinhos (⋮)</strong> no canto superior direito e marque <strong style="color:var(--text)">"Site para computador"</strong>. No Safari: toque em <strong style="color:var(--text)">aA</strong> na barra de endereço → "Solicitar site para desktop".</p>
+          <div class="tut-warn">
             <span>⚠️</span>
-            <span>No app do Mercado Pago essa opção <strong>não aparece</strong> — use o navegador.</span>
+            <span>No <strong>app</strong> do Mercado Pago essa opção não aparece — obrigatoriamente use o navegador.</span>
+          </div>
+          <div class="tut-nav-btns">
+            <button class="next" onclick="tutIr(2)">Próximo →</button>
           </div>
         </div>
-      </div>
 
-      <!-- Passo 2 -->
-      <div style="display:flex;gap:1.5rem;margin-bottom:2.25rem;align-items:flex-start">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--gold);color:#000;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1;box-shadow:0 0 0 6px var(--bg)">2</div>
-        <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.75rem">
-          <h3 style="font-size:1rem;font-weight:700;margin-bottom:.5rem">Vá em Cartões → Suas integrações</h3>
-          <p style="font-size:.875rem;color:var(--muted);line-height:1.65;margin-bottom:1rem">No menu lateral, em <strong style="color:var(--text)">Outros recursos</strong>, clique em <strong style="color:var(--text)">Cartões</strong>. Depois acesse <strong style="color:var(--text)">Configuração</strong> e então <strong style="color:var(--text)">Suas integrações</strong>.</p>
-          <!-- Breadcrumb visual -->
-          <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;font-size:.8rem;margin-bottom:1rem">
-            <span style="padding:.3rem .75rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:20px;color:var(--muted)">Outros recursos</span>
+        <!-- Passo 2 -->
+        <div class="tut-panel" id="tut-p2">
+          <div class="tut-panel-tag">Passo 2 de 3</div>
+          <h3>Vá em Cartões → Suas integrações</h3>
+          <p>No menu lateral do Mercado Pago, role até <strong style="color:var(--text)">Outros recursos</strong> e clique em <strong style="color:var(--text)">Cartões</strong>. Em seguida, acesse <strong style="color:var(--text)">Configuração</strong> e localize <strong style="color:var(--text)">Suas integrações</strong>.</p>
+          <div class="tut-breadcrumb">
+            <span class="tut-crumb">Outros recursos</span>
             <span style="color:var(--muted2)">›</span>
-            <span style="padding:.3rem .75rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:20px;color:var(--muted)">Cartões</span>
+            <span class="tut-crumb">Cartões</span>
             <span style="color:var(--muted2)">›</span>
-            <span style="padding:.3rem .75rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:20px;color:var(--muted)">Configuração</span>
+            <span class="tut-crumb">Configuração</span>
             <span style="color:var(--muted2)">›</span>
-            <span style="padding:.3rem .75rem;background:rgba(201,169,110,.15);border:1px solid rgba(201,169,110,.35);border-radius:20px;color:var(--gold);font-weight:600">Suas integrações</span>
+            <span class="tut-crumb last">Suas integrações</span>
           </div>
-          <p style="font-size:.8rem;color:var(--muted);line-height:1.6">Clique em <strong style="color:var(--text)">Criar integração</strong> (ou use uma existente). Dê um nome como "iBarber" para identificar facilmente.</p>
+          <p style="font-size:.82rem;color:var(--muted)">Clique em <strong style="color:var(--text)">Criar integração</strong> (ou use uma existente). Dê um nome como <strong style="color:var(--text)">"iBarber"</strong> para identificar facilmente no futuro.</p>
+          <div class="tut-nav-btns">
+            <button onclick="tutIr(1)">← Voltar</button>
+            <button class="next" onclick="tutIr(3)">Próximo →</button>
+          </div>
         </div>
-      </div>
 
-      <!-- Passo 3 -->
-      <div style="display:flex;gap:1.5rem;align-items:flex-start">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--gold);color:#000;font-weight:800;font-size:.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1;box-shadow:0 0 0 6px var(--bg)">3</div>
-        <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.75rem">
-          <h3 style="font-size:1rem;font-weight:700;margin-bottom:.5rem">Copie as credenciais e cole no iBarber</h3>
-          <p style="font-size:.875rem;color:var(--muted);line-height:1.65;margin-bottom:1rem">Dentro da integração você vai encontrar duas chaves. Copie as duas e cole no painel de gestão do iBarber em <strong style="color:var(--text)">Personalizar → Pagamentos</strong>.</p>
-          <div style="display:flex;flex-direction:column;gap:.6rem">
-            <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.85rem 1rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
-              <span style="font-size:1.1rem;margin-top:.1rem">🔑</span>
-              <div>
-                <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.2rem">Public Key</div>
-                <div style="font-size:.78rem;color:var(--muted)">Usada no frontend para exibir o formulário de pagamento. Começa com <code style="color:var(--gold);background:rgba(201,169,110,.08);padding:1px 5px;border-radius:4px">APP_USR-</code></div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:flex-start;gap:.75rem;padding:.85rem 1rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px">
-              <span style="font-size:1.1rem;margin-top:.1rem">🛡️</span>
-              <div>
-                <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.2rem">Access Token</div>
-                <div style="font-size:.78rem;color:var(--muted)">Chave secreta usada pelo servidor para criar cobranças. <strong style="color:#f07070">Nunca compartilhe</strong> essa chave com ninguém.</div>
-              </div>
+        <!-- Passo 3 -->
+        <div class="tut-panel" id="tut-p3">
+          <div class="tut-panel-tag">Passo 3 de 3</div>
+          <h3>Copie as credenciais e cole no iBarber</h3>
+          <p>Dentro da integração você vai encontrar duas chaves. Copie as duas e cole no painel de gestão do iBarber em <strong style="color:var(--text)">Personalizar → Pagamentos</strong>.</p>
+          <div class="tut-key-card">
+            <span style="font-size:1.1rem;margin-top:.1rem">🔑</span>
+            <div>
+              <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.25rem">Public Key</div>
+              <div style="font-size:.78rem;color:var(--muted)">Usada para exibir o formulário de pagamento. Começa com <code style="color:var(--gold);background:rgba(201,169,110,.08);padding:1px 5px;border-radius:4px">APP_USR-</code></div>
             </div>
           </div>
+          <div class="tut-key-card">
+            <span style="font-size:1.1rem;margin-top:.1rem">🛡️</span>
+            <div>
+              <div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.25rem">Access Token</div>
+              <div style="font-size:.78rem;color:var(--muted)">Chave secreta usada para criar cobranças. <strong style="color:#f07070">Nunca compartilhe</strong> essa chave com ninguém.</div>
+            </div>
+          </div>
+          <div style="margin-top:1rem;display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;background:rgba(100,200,100,.06);border:1px solid rgba(100,200,100,.2);border-radius:8px;font-size:.8rem;color:#4caf82">
+            <span>✅</span>
+            <span>Pronto! Após salvar, seu site passa a aceitar PIX e cartão automaticamente.</span>
+          </div>
+          <div class="tut-nav-btns">
+            <button onclick="tutIr(2)">← Voltar</button>
+          </div>
         </div>
+
       </div>
-
-    </div><!-- /timeline -->
-
-    <!-- Nota final -->
-    <div style="margin-top:2.5rem;display:flex;align-items:center;gap:.75rem;padding:1rem 1.25rem;background:rgba(201,169,110,0.05);border:1px solid rgba(201,169,110,0.2);border-radius:10px">
-      <span style="font-size:1.2rem;flex-shrink:0">✅</span>
-      <p style="font-size:.82rem;color:var(--muted);line-height:1.6">Pronto! Após salvar as credenciais, o seu site começa a aceitar PIX e cartão automaticamente. As cobranças caem diretamente na sua conta do Mercado Pago.</p>
-    </div>
-
+    </div><!-- /tut-layout -->
   </div>
+
+  <script>
+  function tutIr(n){
+    document.querySelectorAll('.tut-panel').forEach(function(p){p.classList.remove('active')});
+    document.querySelectorAll('.tut-step-btn').forEach(function(b,i){
+      b.classList.remove('active');
+      if(i<n-1) b.classList.add('done'); else b.classList.remove('done');
+      if(i===n-1) b.classList.add('active');
+    });
+    var panel = document.getElementById('tut-p'+n);
+    if(panel) panel.classList.add('active');
+  }
+  </script>
 </section>
 
 <!-- PRICING -->
