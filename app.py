@@ -2994,13 +2994,6 @@ def api_fotos_upload():
     buf, err = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
-    if servico:
-        existente = FotoServico.query.filter_by(servico=servico, tenant_id=tid).first()
-        if existente:
-            old = os.path.join(UPLOAD_FOLDER, existente.filename)
-            if os.path.exists(old):
-                os.remove(old)
-            db.session.delete(existente)
     filename = f"{uuid.uuid4().hex}.jpg"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
