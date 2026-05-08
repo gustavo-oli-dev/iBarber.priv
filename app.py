@@ -3248,6 +3248,7 @@ def admin_login():
     return jsonify({'ok': True, 'token': token, 'nome': tenant.nome, 'tipo': 'admin'})
 
 @app.route('/api/funcionarios/login', methods=['POST'])
+@limiter.limit('5 per minute')
 def api_funcionarios_login():
     data  = request.get_json(force=True) or {}
     email = data.get('email', '').strip().lower()
@@ -4053,6 +4054,7 @@ def repersonalizar():
     return render_template('repersonalizar.html')
 
 @app.route('/api/repersonalizar/auth', methods=['POST'])
+@limiter.limit('5 per minute')
 def api_repersonalizar_auth():
     d = request.get_json(force=True) or {}
     email = d.get('email', '').strip().lower()
@@ -4192,6 +4194,7 @@ def pendente():
     return render_template('falha.html', hide_fabs=True)
 
 @app.route('/api/cadastro', methods=['POST'])
+@limiter.limit('10 per hour')
 def api_cadastro():
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
