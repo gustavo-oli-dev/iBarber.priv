@@ -268,8 +268,20 @@ body { overflow: hidden; }
     </button>
     <p id="pgIndispPix" style="display:none;color:var(--text-muted);font-size:0.78rem;text-align:center;margin:-0.3rem 0 0;">Essa forma não está disponível no momento.</p>
   </div>
+  <!-- Política de cancelamento -->
+  <div id="pgPolitica" style="margin-top:1.1rem;padding:.75rem 1rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;text-align:left;">
+    <p style="font-size:.72rem;color:#888;line-height:1.65;margin:0;">
+      ⚠️ Em caso de cancelamento ou não comparecimento, <strong style="color:#aaa">entre em contato conosco com antecedência</strong>.
+      Faltas ou cancelamentos sem aviso prévio resultarão na <strong style="color:#aaa">retenção do valor pela barbearia</strong>.
+      Para contestações, entre em contato diretamente com a gente.
+    </p>
+  </div>
   <div id="pgSucesso" style="display:none;width:100%;margin-top:1rem;">
     <div class="pg-sucesso-label">✦ Agendamento concluído</div>
+    <p style="font-size:.72rem;color:#888;line-height:1.65;margin-top:.85rem;text-align:left;padding:.65rem .9rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;">
+      ⚠️ Lembre-se: em caso de cancelamento, avise com antecedência.
+      Faltas sem aviso resultam na retenção do valor. Dúvidas? Entre em contato com a barbearia.
+    </p>
   </div>
 </div>
 <div class="qr-overlay" id="qrOverlay" onclick="fecharQr()"></div>
@@ -866,6 +878,7 @@ body { overflow: hidden; }
   function abrirPagamento() {
     document.getElementById('pgSucesso').style.display   = 'none';
     document.getElementById('pgOpcoes').style.display    = 'flex';
+    document.getElementById('pgPolitica').style.display  = 'block';
     document.querySelectorAll('.pagamento-btn').forEach(b => b.classList.remove('selecionado-pg'));
     document.getElementById('pgTotalTexto').textContent =
       'R$ ' + pedidoAtual.total.toFixed(2).replace('.', ',');
@@ -880,10 +893,11 @@ body { overflow: hidden; }
     document.body.style.overflow = 'hidden';
   }
   function fecharPagamento() {
-    document.getElementById('pgOverlay').style.display = 'none';
-    document.getElementById('pgModal').style.display   = 'none';
-    document.getElementById('pgSucesso').style.display = 'none';
-    document.getElementById('pgOpcoes').style.display  = 'flex';
+    document.getElementById('pgOverlay').style.display  = 'none';
+    document.getElementById('pgModal').style.display    = 'none';
+    document.getElementById('pgSucesso').style.display  = 'none';
+    document.getElementById('pgOpcoes').style.display   = 'flex';
+    document.getElementById('pgPolitica').style.display = 'block';
     document.body.style.overflow = '';
   }
   let _pollInterval = null;
@@ -955,6 +969,7 @@ body { overflow: hidden; }
     // dinheiro
     _salvarFormaPagamento('dinheiro');
     document.getElementById('pgOpcoes').style.display  = 'none';
+    document.getElementById('pgPolitica').style.display = 'none';
     document.getElementById('pgSucesso').style.display = 'block';
     carrinho = [];
     atualizarCarrinho();
