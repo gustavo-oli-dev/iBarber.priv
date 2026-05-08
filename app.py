@@ -183,7 +183,7 @@ class Assinatura(db.Model):
 class User(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(100), nullable=False)
-    email          = db.Column(db.String(120), unique=True, nullable=False)
+    email          = db.Column(db.String(120), nullable=False)
     password       = db.Column(db.String(200), nullable=False)
     contact            = db.Column(db.String(20),  nullable=True)
     observation        = db.Column(db.Text,        nullable=True)
@@ -194,6 +194,7 @@ class User(db.Model):
     tenant_id          = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     pedidos        = db.relationship('Pedido', backref='usuario', lazy=True,
                                      cascade='all, delete-orphan')
+    __table_args__ = (db.UniqueConstraint('email', 'tenant_id', name='uq_user_email_tenant'),)
 
 class Pedido(db.Model):
     id        = db.Column(db.Integer, primary_key=True)
