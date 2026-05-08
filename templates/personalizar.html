@@ -1048,6 +1048,35 @@ function setEditMode(mode) {
   }
   const mss = document.getElementById('mob-screen-select');
   if(mss) mss.style.display = mode==='single' ? 'block' : 'none';
+
+  if(mode === 'single') {
+    // Limpa identidade/fotos dos dois sites, mantendo cores, tipografia e geometria
+    ['ag','gt'].forEach(function(s) {
+      T[s].heroUrl     = '';
+      T[s].logoUrl     = '';
+      T[s].nomeDisplay = '';
+      T[s].tagline     = '';
+      T[s].ctaTexto    = '';
+    });
+    // Limpa inputs de identidade
+    ['id-nome','id-tagline','id-cta'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if(el) el.value = '';
+    });
+    // Limpa thumbs de logo e hero
+    ['logo','hero'].forEach(function(tipo) {
+      var thumb = document.getElementById('thumb-' + tipo);
+      var rm    = document.getElementById('rm-' + tipo);
+      var lbl   = document.getElementById('lbl-' + tipo);
+      if(thumb) { thumb.src = ''; thumb.style.display = 'none'; }
+      if(rm)    rm.style.display = 'none';
+      if(lbl)   lbl.textContent = 'Escolher imagem';
+    });
+    reloadAgIframes();
+    reloadAgThumbs();
+    reloadGtIframes();
+  }
+
   syncPickers();
 }
 
