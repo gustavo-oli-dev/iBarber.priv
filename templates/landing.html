@@ -609,13 +609,17 @@ footer{
 .tut-nav-btns button.next{background:var(--gold);border-color:var(--gold);color:#000}
 .tut-nav-btns button:hover{opacity:.85}
 @media(max-width:700px){
-  .tut-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-  .tut-sidebar{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:.75rem 0;border-right:none;border-bottom:1px solid var(--border)}
+  .tut-layout{grid-template-columns:1fr;border-radius:12px}
+  .tut-sidebar{flex-direction:row;align-items:center;justify-content:center;padding:1.25rem 1rem;border-right:none;border-bottom:1px solid var(--border);gap:0}
   .tut-logo{display:none}
-  .tut-connector{display:none}
-  .tut-step-btn{flex-direction:column;align-items:center;padding:.6rem 1rem;min-width:90px;gap:.4rem;font-size:.7rem}
-  .tut-step-btn.active::before{left:0;right:0;top:auto;bottom:0;width:auto;height:3px;border-radius:2px 2px 0 0}
-  .tut-content{padding:1.5rem}
+  .tut-connector{width:100%;flex:1;height:2px;background:var(--border);margin:0;max-width:48px}
+  .tut-step-btn{flex-direction:column;align-items:center;padding:0;gap:.4rem;width:auto;flex:none;background:none !important}
+  .tut-step-btn.active::before{display:none}
+  .tut-step-title{font-size:.68rem;font-weight:600;color:var(--muted);text-align:center;line-height:1.25;max-width:68px}
+  .tut-step-btn.active .tut-step-title{color:var(--gold)}
+  .tut-step-btn.done .tut-step-title{color:#4caf82}
+  .tut-content{padding:1.5rem 1.25rem}
+  .tut-nav-btns{padding-top:1.25rem}
 }
 </style>
 
