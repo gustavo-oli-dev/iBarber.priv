@@ -858,7 +858,7 @@ def api_perfil_update():
         user.contact = tel
     elif campo == 'email':
         email = valor.lower()
-        if not email or '@' not in email or '.' not in email.split('@')[-1]:
+        if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'erro': 'E-mail inválido'}), 400
         conflito = User.query.filter(User.email == email, User.id != user.id).first()
         if conflito:
@@ -1325,8 +1325,11 @@ def agendar():
 def cancelar_agendamento(ag_id):
     if 'user_id' not in session:
         return jsonify({'erro': 'não autenticado'}), 401
+    tid_cliente = session.get('path_tenant_id')
     ag = db.session.get(Agendamento, ag_id)
     if not ag or ag.user_id != session['user_id']:
+        return jsonify({'erro': 'não encontrado'}), 404
+    if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
     diferenca = (ag.data_hora - datetime.utcnow()).total_seconds()
     if diferenca < 3600:  # menos de 1h
@@ -1372,8 +1375,11 @@ def reagendar_agendamento():
     barbeiro_id  = data.get('barbeiro_id')
     if not ag_id or not nova_dh_str:
         return jsonify({'erro': 'dados inválidos'}), 400
+    tid_cliente = session.get('path_tenant_id')
     ag = db.session.get(Agendamento, ag_id)
     if not ag or ag.user_id != session['user_id']:
+        return jsonify({'erro': 'não encontrado'}), 404
+    if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
     if ag.status != 'ativo':
         return jsonify({'erro': 'agendamento não está ativo'}), 400
@@ -4086,6 +4092,8 @@ def api_repersonalizar_credenciais():
     if nome:
         tenant.nome = nome
     if email and email != tenant.email:
+        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+            return jsonify({'erro': 'E-mail inválido'}), 400
         if Tenant.query.filter_by(email=email).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
         tenant.email = email
