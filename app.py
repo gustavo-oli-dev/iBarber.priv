@@ -2251,6 +2251,9 @@ def api_agendamento_status(ag_id):
         pedido = db.session.get(Pedido, ag.pedido_id)
         if pedido:
             pedido.status = status
+        # Pagar no local não recebido: remove registro financeiro
+        if ag.forma_pagamento == 'dinheiro':
+            EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
     db.session.commit()
     return jsonify({'ok': True, 'status': ag.status})
 
