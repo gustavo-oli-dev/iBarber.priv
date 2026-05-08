@@ -4082,6 +4082,7 @@ def api_repersonalizar_credenciais():
     email = (d.get('email') or '').strip().lower()
     senha = (d.get('senha') or '').strip()
     whatsapp = (d.get('whatsapp') or '').strip()
+    slug_novo = (d.get('slug') or '').strip().lower()
     if nome:
         tenant.nome = nome
     if email and email != tenant.email:
@@ -4094,8 +4095,14 @@ def api_repersonalizar_credenciais():
         tenant.password = generate_password_hash(senha)
     if whatsapp is not None:
         tenant.whatsapp = whatsapp or None
+    if slug_novo and slug_novo != tenant.slug:
+        if not re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug_novo):
+            return jsonify({'erro': 'Link inválido: use letras minúsculas, números e hífens (3–30 chars, sem hífens nas pontas)'}), 400
+        if Tenant.query.filter(Tenant.slug == slug_novo, Tenant.id != tenant.id).first():
+            return jsonify({'erro': 'Esse link já está em uso. Escolha outro.'}), 400
+        tenant.slug = slug_novo
     db.session.commit()
-    return jsonify({'ok': True})
+    return jsonify({'ok': True, 'slug': tenant.slug})
 
 @app.route('/api/repersonalizar/salvar', methods=['POST'])
 def api_repersonalizar_salvar():

@@ -18,7 +18,23 @@
 }
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px}
 body{display:flex;flex-direction:column}
-@media(max-width:767px){.tb-sep{display:none}}
+/* ── MOBILE ── */
+@media(max-width:767px){
+  html,body{overflow-x:hidden;overflow-y:auto;height:auto}
+  body{display:block}
+  .topbar{padding:0 .75rem;max-width:100vw}
+  .tb-sep,.tb-title{display:none}
+  .topbar-right .btn-salvar{font-size:.75rem;padding:6px 14px}
+  .main{display:block;overflow:visible}
+  .panel{width:100vw;max-width:100vw;border-right:none;overflow:visible}
+  .canvas{display:none}
+  #mob-barra{display:flex}
+  .hub-box{max-width:100%;border-radius:16px 16px 0 0;min-height:auto;padding:1.5rem 1.25rem;margin:auto 0 0}
+  .hub-overlay{align-items:flex-end;padding:0}
+}
+@media(min-width:768px){
+  #mob-barra{display:none}
+}
 
 /* ── TOPBAR ── */
 .topbar{
@@ -384,7 +400,30 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
         </div>
       </div>
     </div>
+
+    <!-- Barra mobile -->
+    <div id="mob-barra" style="padding:1rem;border-top:1px solid var(--border);display:none;flex-direction:column;gap:.5rem">
+      <button onclick="abrirPreviewMobile()"
+        style="padding:12px;background:var(--surface);border:1.5px solid var(--gold);color:var(--gold);border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer;width:100%">
+        👁 Preview
+      </button>
+      <button class="btn-salvar" onclick="salvarTema()" style="width:100%;padding:12px;font-size:.85rem">Salvar tema</button>
+    </div>
   </aside>
+
+  <!-- Preview mobile overlay -->
+  <div id="mob-prev-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:#000;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-bottom:1px solid var(--border);background:#000;flex-shrink:0">
+      <div class="toggle-group" style="flex:1;margin-right:.75rem">
+        <button class="tg-btn active" id="mp-site-ag" onclick="mpSetSite('ag')">Agendamento</button>
+        <button class="tg-btn" id="mp-site-gt" onclick="mpSetSite('gt')">Gestão</button>
+      </div>
+      <button onclick="fecharPreviewMobile()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:1.2rem;cursor:pointer;width:34px;height:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+    <div style="flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:1rem;background:#111">
+      <iframe id="iframe-mob-prev" src="" style="width:100%;height:100%;border:none;border-radius:12px;background:#000"></iframe>
+    </div>
+  </div>
 
   <!-- CANVAS -->
   <div class="canvas">
@@ -513,6 +552,18 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
         <div class="hub-field">
           <label>WhatsApp</label>
           <input type="tel" id="e-wpp" placeholder="(00) 00000-0000" oninput="clearHubErr()">
+        </div>
+        <div class="hub-field">
+          <label>Link exclusivo</label>
+          <div style="display:flex;align-items:center;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:9px;overflow:hidden;transition:border-color .2s" id="slug-wrap">
+            <span style="padding:10px 8px 10px 12px;font-size:.8rem;color:var(--muted);white-space:nowrap;flex-shrink:0">ibarber.app.br/</span>
+            <input type="text" id="e-slug" placeholder="minha-barbearia"
+              style="background:transparent;border:none;color:var(--text);padding:10px 12px 10px 0;font-size:.88rem;width:100%;outline:none;font-family:'Inter',sans-serif"
+              oninput="clearHubErr();this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"
+              onfocus="document.getElementById('slug-wrap').style.borderColor='var(--gold)'"
+              onblur="document.getElementById('slug-wrap').style.borderColor='var(--border)'">
+          </div>
+          <div class="hub-field-hint">Letras minúsculas, números e hífens · 3 a 30 caracteres</div>
         </div>
         <div class="hub-field">
           <label>Nova senha</label>
@@ -648,10 +699,9 @@ async function entrar() {
     editacoesAtuais = d.editacoes || 0;
     document.getElementById('tb-nome').textContent = d.nome;
 
-    if(d.tema && Object.keys(d.tema).length) {
-      if(d.tema.ag) { Object.assign(T.ag, d.tema.ag); Object.assign(T.gt, d.tema.gt || d.tema.ag); }
-      else { Object.assign(T.ag, d.tema); Object.assign(T.gt, d.tema); }
-    }
+    // Inicia sempre com DEFAULT — tenant parte do zero para personalizar
+    T.ag = {...DEFAULT};
+    T.gt = {...DEFAULT};
     syncPickers();
     document.getElementById('iframe-ag-desk').src = buildAgUrl();
     document.getElementById('iframe-ag-mob').src  = buildAgUrl();
@@ -718,6 +768,7 @@ function hubMostrar(panel) {
     document.getElementById('e-nome').value   = tenantNome;
     document.getElementById('e-email').value  = tenantEmail;
     document.getElementById('e-wpp').value    = tenantWpp;
+    document.getElementById('e-slug').value   = tenantSlug;
     document.getElementById('e-senha1').value = '';
     document.getElementById('e-senha2').value = '';
     document.getElementById('hub-edit-err').style.display = 'none';
@@ -734,6 +785,25 @@ function hubVoltar() {
 
 function hubAbrirEditor() {
   document.getElementById('hub-overlay').classList.add('hide');
+}
+
+let _mpSite = 'ag';
+function abrirPreviewMobile() {
+  const ov = document.getElementById('mob-prev-overlay');
+  ov.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  mpSetSite(_mpSite);
+}
+function fecharPreviewMobile() {
+  document.getElementById('mob-prev-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function mpSetSite(s) {
+  _mpSite = s;
+  document.getElementById('mp-site-ag').classList.toggle('active', s === 'ag');
+  document.getElementById('mp-site-gt').classList.toggle('active', s === 'gt');
+  const url = s === 'ag' ? buildAgUrl() : buildGtUrl('dashboard');
+  document.getElementById('iframe-mob-prev').src = url;
 }
 
 function validarSenhas() {
@@ -757,7 +827,8 @@ async function salvarCredenciais() {
   const senha1 = document.getElementById('e-senha1').value;
   const senha2 = document.getElementById('e-senha2').value;
   if(senha1 && senha1 !== senha2) return;
-  const payload = {tenant_id: tenantId, nome, email, whatsapp: wpp};
+  const slugVal = document.getElementById('e-slug').value.trim().toLowerCase();
+  const payload = {tenant_id: tenantId, nome, email, whatsapp: wpp, slug: slugVal};
   if(senha1) payload.senha = senha1;
   const btn = document.getElementById('hub-btn-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
@@ -771,8 +842,10 @@ async function salvarCredenciais() {
       tenantNome  = nome  || tenantNome;
       tenantEmail = email || tenantEmail;
       tenantWpp   = wpp;
+      if(d.slug) tenantSlug = d.slug;
       document.getElementById('hub-nome').textContent = tenantNome;
       document.getElementById('tb-nome').textContent  = tenantNome;
+      updateUrlBar();
       document.getElementById('hub-edit-ok').style.display = 'block';
       document.getElementById('e-senha1').value = '';
       document.getElementById('e-senha2').value = '';
