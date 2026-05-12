@@ -4386,10 +4386,51 @@ def api_admin_excluir(tid):
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
-    # Remove assinaturas, serviços e categorias do tenant
-    Assinatura.query.filter_by(tenant_id=tid).delete()
+
+    # 1. LembreteEnviado (FK → agendamento)
+    ag_ids = [a.id for a in Agendamento.query.filter_by(tenant_id=tid).with_entities(Agendamento.id)]
+    if ag_ids:
+        LembreteEnviado.query.filter(LembreteEnviado.agendamento_id.in_(ag_ids)).delete(synchronize_session=False)
+
+    # 2. ListaEspera
+    ListaEspera.query.filter_by(tenant_id=tid).delete()
+
+    # 3. Agendamentos
+    Agendamento.query.filter_by(tenant_id=tid).delete()
+
+    # 4. EntradaMonetaria
+    EntradaMonetaria.query.filter_by(tenant_id=tid).delete()
+
+    # 5. PedidoItem (via pedidos do tenant)
+    pedido_ids = [p.id for p in Pedido.query.filter_by(tenant_id=tid).with_entities(Pedido.id)]
+    if pedido_ids:
+        PedidoItem.query.filter(PedidoItem.pedido_id.in_(pedido_ids)).delete(synchronize_session=False)
+
+    # 6. Pedidos
+    Pedido.query.filter_by(tenant_id=tid).delete()
+
+    # 7. FuncionarioAusencia (FK → funcionario)
+    func_ids = [f.id for f in Funcionario.query.filter_by(tenant_id=tid).with_entities(Funcionario.id)]
+    if func_ids:
+        FuncionarioAusencia.query.filter(FuncionarioAusencia.funcionario_id.in_(func_ids)).delete(synchronize_session=False)
+
+    # 8. Funcionarios
+    Funcionario.query.filter_by(tenant_id=tid).delete()
+
+    # 9. Usuários
+    User.query.filter_by(tenant_id=tid).delete()
+
+    # 10. Fotos, horários, serviços, categorias, assinaturas
+    FotoServico.query.filter_by(tenant_id=tid).delete()
+    HorarioEspecial.query.filter_by(tenant_id=tid).delete()
     Servico.query.filter_by(tenant_id=tid).delete()
     Categoria.query.filter_by(tenant_id=tid).delete()
+    Assinatura.query.filter_by(tenant_id=tid).delete()
+
+    # 11. Settings com prefixo do tenant
+    Setting.query.filter(Setting.key.like(f'{tid}:%')).delete(synchronize_session=False)
+
+    # 12. Tenant
     db.session.delete(t)
     db.session.commit()
     return jsonify({'ok': True})
