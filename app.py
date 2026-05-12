@@ -3932,8 +3932,7 @@ def api_personalizar_upload():
     filename = f"pers_{uuid.uuid4().hex}.jpg"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
-    url = request.host_url.rstrip('/') + f'/static/uploads/{filename}'
-    return jsonify({'ok': True, 'url': url})
+    return jsonify({'ok': True, 'url': f'/static/uploads/{filename}'})
 
 def _criar_dns_cloudflare(slug):
     if not CF_TOKEN or not CF_ZONE_ID:
