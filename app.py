@@ -3344,9 +3344,14 @@ def api_funcionarios_criar():
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
     email_func = d.get('email', '').strip().lower() or None
-    # Só bloqueia se o email já pertence a um funcionário ATIVO do mesmo tenant
-    if email_func and Funcionario.query.filter_by(email=email_func, tenant_id=tid, ativo=True).first():
-        return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
+    if email_func:
+        # Bloqueia se é o email do próprio gestor (causaria login como dono)
+        tenant_obj = db.session.get(Tenant, tid)
+        if tenant_obj and tenant_obj.email.lower() == email_func:
+            return jsonify({'erro': 'Este e-mail pertence ao gestor — use outro e-mail para o funcionário'}), 400
+        # Bloqueia se já existe funcionário ATIVO com esse email
+        if Funcionario.query.filter_by(email=email_func, tenant_id=tid, ativo=True).first():
+            return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
     perms = d.get('permissoes', {})
     f = Funcionario(
         nome=d.get('nome', '').strip(),
