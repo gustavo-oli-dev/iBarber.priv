@@ -866,11 +866,18 @@ body { overflow: hidden; }
     const _durTotal = carrinho.reduce((s, i) => s + (i.duracao || 30), 0) || 30;
     const body = { pedido_id: pedidoAtual.id, data_hora: dataHoraISO, duracao_total: _durTotal };
     if (calBarbeiroSel !== null) body.funcionario_id = calBarbeiroSel;
-    await fetch('/agendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
+    let res, data;
+    try {
+      res  = await fetch('/agendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      data = await res.json();
+    } catch(e) {
+      alert('Erro de conexão. Tente novamente.');
+      return;
+    }
+    if (!res.ok) {
+      alert(data.erro || 'Erro ao agendar. Tente novamente.');
+      return;
+    }
     fecharCal();
     abrirPagamento();
   }
@@ -999,7 +1006,7 @@ body { overflow: hidden; }
           document.getElementById('qrCopiaCola').style.display = 'none';
           carrinho = [];
           atualizarCarrinho();
-          setTimeout(() => fecharQr(), 2500);
+          setTimeout(() => { fecharQr(); window.location.reload(); }, 2500);
         }
       } catch(_) {}
     }, 4000);
