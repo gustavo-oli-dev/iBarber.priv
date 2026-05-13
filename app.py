@@ -4693,6 +4693,9 @@ def tenant_site(slug):
     session['path_tenant_id'] = tenant.id
     session.pop('is_preview', None)
     session.pop('tenant_id', None)
+    if request.args.get('p') == '1':
+        tema_override = _build_ag_tema_override(request.args)
+        return render_template('index.html', user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True)
     user = None
     if 'user_id' in session:
         user = db.session.get(User, session['user_id'])

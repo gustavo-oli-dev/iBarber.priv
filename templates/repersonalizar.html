@@ -872,7 +872,8 @@ function copiarTexto(texto, btn) {
 // ── Theme helpers ─────────────────────────────────────────────────────────────
 function buildAgUrl() {
   const t = T.ag;
-  return '/?' + new URLSearchParams({
+  const base = tenantSlug ? '/' + tenantSlug : '/';
+  return base + '?' + new URLSearchParams({
     p:'1', fundo:t.fundo, superficie:t.superficie, destaque:t.destaque,
     texto:t.texto, borda:t.borda, fonteTitulo:t.fonteTitulo,
     fonteCorpo:t.fonteCorpo, cardRadius:t.cardRadius, btnEstilo:t.btnEstilo
