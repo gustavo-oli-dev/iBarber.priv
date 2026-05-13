@@ -458,6 +458,10 @@ with app.app_context():
         db.session.rollback()
 
 
+def _agora_brt():
+    """Retorna datetime atual em BRT (UTC-3). Brasil sem horário de verão desde 2019."""
+    return datetime.utcnow() - timedelta(hours=3)
+
 def _sf(val, default=0.0):
     """Converte para float com segurança; retorna default se inválido."""
     try:
@@ -727,7 +731,7 @@ def servicos():
     agendamento_info = None
     ag = (Agendamento.query
           .filter_by(user_id=session['user_id'], status='ativo')
-          .filter(Agendamento.data_hora > datetime.utcnow())
+          .filter(Agendamento.data_hora > _agora_brt())
           .order_by(Agendamento.data_hora.asc())
           .first())
     if ag:
@@ -999,11 +1003,10 @@ def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
 
 def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
     """Retorna agendamentos futuros ativos filtrados por data e/ou funcionario_id."""
-    now = datetime.utcnow()
     q = Agendamento.query.filter(
         Agendamento.tenant_id == tenant_id,
         Agendamento.status == 'ativo',
-        Agendamento.data_hora > now
+        Agendamento.data_hora > _agora_brt()
     )
     if data:
         q = q.filter(db.func.date(Agendamento.data_hora) == data)
@@ -1302,11 +1305,11 @@ def agendar():
         data_hora = datetime.fromisoformat(data_hora_str)
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
-    if data_hora <= datetime.utcnow():
+    if data_hora <= _agora_brt():
         return jsonify({'erro': 'Data inválida. Escolha uma data futura.'}), 400
     existente = (Agendamento.query
                  .filter_by(user_id=session['user_id'], status='ativo')
-                 .filter(Agendamento.data_hora > datetime.utcnow())
+                 .filter(Agendamento.data_hora > _agora_brt())
                  .first())
     if existente:
         return jsonify({'erro': 'Você já possui um agendamento marcado.'}), 400
@@ -1374,7 +1377,7 @@ def cancelar_agendamento(ag_id):
         return jsonify({'erro': 'não encontrado'}), 404
     if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
-    diferenca = (ag.data_hora - datetime.utcnow()).total_seconds()
+    diferenca = (ag.data_hora - _agora_brt()).total_seconds()
     if diferenca < 3600:  # menos de 1h
         return jsonify({'erro': 'Cancelamento não permitido com menos de 1h de antecedência.'}), 400
     ag.status = 'cancelado'
@@ -1426,7 +1429,7 @@ def reagendar_agendamento():
         return jsonify({'erro': 'não encontrado'}), 404
     if ag.status != 'ativo':
         return jsonify({'erro': 'agendamento não está ativo'}), 400
-    if (ag.data_hora - datetime.utcnow()).total_seconds() < 3600:
+    if (ag.data_hora - _agora_brt()).total_seconds() < 3600:
         return jsonify({'erro': 'Reagendamento não permitido com menos de 1h de antecedência.'}), 400
     try:
         nova_dt = datetime.fromisoformat(nova_dh_str)
@@ -1597,7 +1600,7 @@ def atualizar_forma_pagamento():
         return jsonify({'erro': 'forma inválida'}), 400
     ag = (Agendamento.query
           .filter_by(user_id=session['user_id'], status='ativo')
-          .filter(Agendamento.data_hora > datetime.utcnow())
+          .filter(Agendamento.data_hora > _agora_brt())
           .first())
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
@@ -2007,6 +2010,13 @@ def api_horarios_disponiveis():
     duracao_solicitada = int(request.args.get('duracao', duracao))
     _fech_min = int(fechamento_str[:2]) * 60 + int(fechamento_str[3:])
 
+    # Hora atual em BRT (UTC-3) — Brasil não tem horário de verão desde 2019
+    agora_brt = datetime.utcnow() - timedelta(hours=3)
+
+    # Data passada: não há slots disponíveis
+    if data_obj < agora_brt.date():
+        return jsonify({'disponiveis': [], 'tomados': [], 'fechado': False})
+
     inicio = datetime.combine(data_obj, datetime.min.time())
     fim    = inicio + timedelta(days=1)
     agendados = (Agendamento.query
@@ -2018,7 +2028,6 @@ def api_horarios_disponiveis():
     ativos     = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
 
-    # Monta lista de (inicio_min, fim_min, contagem) para cada slot ocupado
     def _slot_min(s): return int(s[:2]) * 60 + int(s[3:])
     def _ag_min(ag):  return ag.data_hora.hour * 60 + ag.data_hora.minute
     def _ag_dur(ag):  return ag.duracao_total or duracao
@@ -2030,19 +2039,19 @@ def api_horarios_disponiveis():
         s_min  = _slot_min(s)
         s_fim  = s_min + duracao_solicitada
         if s_fim > _fech_min:
-            return False  # serviço ultrapassaria o horário de fechamento
+            return False
         conflitos = sum(
             1 for ag in agendados
             if _ag_min(ag) < s_fim and _ag_min(ag) + _ag_dur(ag) > s_min
         )
         return conflitos < capacidade
 
-    agora = datetime.utcnow()
-    if data_obj == agora.date():
+    # Hoje: filtra slots já passados comparando com hora BRT atual
+    if data_obj == agora_brt.date():
         disponiveis = [
             s for s in todos_slots
             if _slot_disponivel(s) and
-               datetime.combine(data_obj, datetime.strptime(s, '%H:%M').time()) > agora
+               datetime.combine(data_obj, datetime.strptime(s, '%H:%M').time()) > agora_brt
         ]
     else:
         disponiveis = [s for s in todos_slots if _slot_disponivel(s)]
