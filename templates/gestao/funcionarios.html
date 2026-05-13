@@ -365,6 +365,7 @@ async function _executarDesativarFunc(id, cancelar) {
     body: JSON.stringify({cancelar})
   });
   if (r.ok) { fecharModal(); await carregar(); }
+  else { const d = await r.json().catch(()=>({})); alert(d.erro||'Erro ao desativar funcionário'); }
   else alert('Erro ao desativar');
 }
 

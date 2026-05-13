@@ -325,13 +325,14 @@ class HorarioEspecial(db.Model):
 class Funcionario(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     nome          = db.Column(db.String(100), nullable=False)
-    email         = db.Column(db.String(120), unique=True, nullable=False)
+    email         = db.Column(db.String(120), nullable=False)
     password      = db.Column(db.String(200), nullable=False)
     telefone      = db.Column(db.String(20),  nullable=True)
     foto          = db.Column(db.String(200),  nullable=True)
     ativo         = db.Column(db.Boolean, default=True)
     criado_em     = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id     = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
+    __table_args__ = (db.UniqueConstraint('email', 'tenant_id', name='uq_func_email_tenant'),)
     perm_agendamentos = db.Column(db.Boolean, default=True)
     perm_calendario   = db.Column(db.Boolean, default=True)
     perm_marcar       = db.Column(db.Boolean, default=False)
@@ -3269,7 +3270,7 @@ def api_funcionarios_login():
 def api_funcionarios_listar():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    funs = Funcionario.query.filter_by(tenant_id=tid).order_by(Funcionario.nome).all()
+    funs = Funcionario.query.filter_by(tenant_id=tid, ativo=True).order_by(Funcionario.nome).all()
     return jsonify([f.to_dict() for f in funs])
 
 @app.route('/api/funcionarios', methods=['POST'])
