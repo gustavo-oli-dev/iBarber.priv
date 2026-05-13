@@ -66,6 +66,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = not app.debug
 _cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
 app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not app.debug else None
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -3573,6 +3574,7 @@ def gestao_login():
         tenant = Tenant.query.filter_by(email=email, ativo=True).first()
         if tenant and check_password_hash(tenant.password, senha):
             session.clear()
+            session.permanent = True
             session['gestao_tenant_id'] = tenant.id
             session['gestao_nome'] = tenant.nome
             return redirect(url_for('gestao_dashboard'))
@@ -3582,6 +3584,7 @@ def gestao_login():
             t = db.session.get(Tenant, func.tenant_id)
             if t and t.ativo:
                 session.clear()
+                session.permanent = True
                 session['gestao_tenant_id'] = func.tenant_id
                 session['gestao_func_id']   = func.id
                 session['gestao_nome']      = func.nome
