@@ -328,7 +328,7 @@ class HorarioEspecial(db.Model):
 class Funcionario(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     nome          = db.Column(db.String(100), nullable=False)
-    email         = db.Column(db.String(120), nullable=False)
+    email         = db.Column(db.String(120), nullable=True)
     password      = db.Column(db.String(200), nullable=False)
     telefone      = db.Column(db.String(20),  nullable=True)
     foto          = db.Column(db.String(200),  nullable=True)
@@ -346,8 +346,11 @@ class Funcionario(db.Model):
     perm_entradas     = db.Column(db.Boolean, default=False)
     perm_fotos        = db.Column(db.Boolean, default=False)
     def to_dict(self):
+        email = self.email or ''
+        if email.startswith('_deleted_'):
+            email = ''
         return {
-            'id': self.id, 'nome': self.nome, 'email': self.email,
+            'id': self.id, 'nome': self.nome, 'email': email,
             'telefone': self.telefone, 'ativo': self.ativo,
             'foto_url': f'/static/uploads/{self.foto}' if self.foto else None,
             'permissoes': {
@@ -434,6 +437,14 @@ with app.app_context():
         with db.engine.connect() as _conn:
             _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
+    # Torna funcionario.email nullable para permitir múltiplos barbeiros sem email
+    # e para que emails de registros deletados possam ser reutilizados via NULL
+    try:
+        with db.engine.connect() as _conn:
+            _conn.execute(db.text('ALTER TABLE funcionario MODIFY COLUMN email VARCHAR(120) NULL'))
+            _conn.commit()
+    except Exception:
+        pass  # SQLite (dev) não suporta MODIFY COLUMN — sem problema
 
 
 def _sf(val, default=0.0):
@@ -3321,8 +3332,9 @@ def api_funcionarios_criar():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
-    email_func = d.get('email', '').strip().lower()
-    if email_func and Funcionario.query.filter_by(email=email_func, tenant_id=tid).first():
+    email_func = d.get('email', '').strip().lower() or None
+    # Só bloqueia se o email já pertence a um funcionário ATIVO do mesmo tenant
+    if email_func and Funcionario.query.filter_by(email=email_func, tenant_id=tid, ativo=True).first():
         return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
     perms = d.get('permissoes', {})
     f = Funcionario(
@@ -3342,7 +3354,11 @@ def api_funcionarios_criar():
         perm_fotos=perms.get('fotos', False),
     )
     db.session.add(f)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
     return jsonify({'ok': True, 'id': f.id})
 
 @app.route('/api/funcionarios/<int:fid>', methods=['PUT', 'DELETE'])
@@ -3359,6 +3375,9 @@ def api_funcionario_detalhe(fid):
             conflitos = _conflitos_agendamentos_futuros(tid, funcionario_id=fid)
             _cancelar_conflitos(conflitos, tenant.nome if tenant else 'Barbearia',
                                 f'Barbeiro {f.nome} não está mais disponível')
+        # Libera o slot único no banco: email deletado não bloqueia re-cadastro
+        if f.email and not f.email.startswith('_deleted_'):
+            f.email = f'_deleted_{f.id}_{f.email}'
         f.ativo = False
         db.session.commit()
         return jsonify({'ok': True})
