@@ -438,13 +438,24 @@ with app.app_context():
             _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
     # Torna funcionario.email nullable para permitir múltiplos barbeiros sem email
-    # e para que emails de registros deletados possam ser reutilizados via NULL
     try:
         with db.engine.connect() as _conn:
             _conn.execute(db.text('ALTER TABLE funcionario MODIFY COLUMN email VARCHAR(120) NULL'))
             _conn.commit()
     except Exception:
         pass  # SQLite (dev) não suporta MODIFY COLUMN — sem problema
+    # Mangle emails de funcionários inativos legados que ainda bloqueiam o unique constraint
+    try:
+        inativos = Funcionario.query.filter_by(ativo=False).all()
+        changed = False
+        for f in inativos:
+            if f.email and not f.email.startswith('_deleted_'):
+                f.email = f'_deleted_{f.id}_{f.email}'
+                changed = True
+        if changed:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _sf(val, default=0.0):
