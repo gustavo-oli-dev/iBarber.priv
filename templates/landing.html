@@ -317,6 +317,7 @@ footer{
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
   .nav-links{display:none}
+  .btn-renovar{display:none}
   .features-grid{grid-template-columns:1fr}
   .mockup-sidebar{display:none}
   .mockup-content{grid-template-columns:1fr 1fr}
@@ -357,7 +358,10 @@ footer{
     <a class="nav-link" href="#como-funciona">Como funciona</a>
     <a class="nav-link" href="#planos">Planos</a>
   </div>
-  <a href="/personalizar" class="btn-nav">Começar agora</a>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <a href="/repersonalizar" class="btn-nav btn-renovar" style="background:transparent;border:1px solid var(--gold);color:var(--gold);padding:9px 18px">Renovar plano</a>
+    <a href="/personalizar" class="btn-nav">Começar agora</a>
+  </div>
 </nav>
 
 <!-- HERO -->
