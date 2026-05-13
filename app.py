@@ -1295,10 +1295,26 @@ def agendar():
 
     ativos = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
-    ags_slot = (Agendamento.query
-                .filter_by(status='ativo', tenant_id=_api_tid())
-                .filter(Agendamento.data_hora == data_hora)
-                .all())
+
+    duracao_total = data.get('duracao_total')
+    _dur_s = _get_setting('intervalo_minutos', _api_tid())
+    _dur_default = int(_dur_s.value) if _dur_s and _dur_s.value else 40
+    _dur_req = int(duracao_total) if duracao_total else _dur_default
+    _data_hora_fim = data_hora + timedelta(minutes=_dur_req)
+
+    # Busca agendamentos que se sobrepõem à janela [data_hora, data_hora_fim)
+    inicio_dia = datetime.combine(data_hora.date(), datetime.min.time())
+    fim_dia    = inicio_dia + timedelta(days=1)
+    ags_dia = (Agendamento.query
+               .filter_by(status='ativo', tenant_id=_api_tid())
+               .filter(Agendamento.data_hora >= inicio_dia,
+                       Agendamento.data_hora < fim_dia)
+               .all())
+    ags_slot = [
+        ag for ag in ags_dia
+        if ag.data_hora < _data_hora_fim and
+           ag.data_hora + timedelta(minutes=ag.duracao_total or _dur_default) > data_hora
+    ]
     if len(ags_slot) >= capacidade:
         return jsonify({'erro': 'Este horário já está cheio. Escolha outro.'}), 400
 
@@ -1312,8 +1328,6 @@ def agendar():
         livres = [f for f in ativos if f['id'] not in ocupados_ids]
         if livres:
             funcionario_id = random.choice(livres)['id']
-
-    duracao_total = data.get('duracao_total')
     ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
                      data_hora=data_hora, funcionario_id=funcionario_id,
                      duracao_total=int(duracao_total) if duracao_total else None,
