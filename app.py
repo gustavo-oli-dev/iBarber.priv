@@ -1958,8 +1958,10 @@ def api_horarios_disponiveis():
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
     # horário especial para esta data sobrepõe o semanal
+    fechamento_str = '18:00'
     he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
     if he:
+        fechamento_str = he.fechamento
         todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
     else:
         config_s = _get_setting('horario_funcionamento', _tid)
@@ -1969,15 +1971,18 @@ def api_horarios_disponiveis():
             dia_cfg = config.get(dia_key, {})
             if not dia_cfg.get('aberto', True):
                 return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
+            fechamento_str = dia_cfg.get('fechamento', '18:00')
             todos_slots = _gerar_slots(dia_cfg.get('abertura', '08:00'),
-                                       dia_cfg.get('fechamento', '18:00'), duracao)
+                                       fechamento_str, duracao)
         else:
             if data_obj.weekday() == 6:
                 return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
+            fechamento_str = '19:00'
             todos_slots = _gerar_slots('08:00', '19:00', duracao) if duracao != 40 \
                           else SLOTS_PADRAO.get(data_obj.weekday(), [])
 
     duracao_solicitada = int(request.args.get('duracao', duracao))
+    _fech_min = int(fechamento_str[:2]) * 60 + int(fechamento_str[3:])
 
     inicio = datetime.combine(data_obj, datetime.min.time())
     fim    = inicio + timedelta(days=1)
@@ -2001,7 +2006,8 @@ def api_horarios_disponiveis():
     def _slot_disponivel(s):
         s_min  = _slot_min(s)
         s_fim  = s_min + duracao_solicitada
-        # conta quantos agendamentos conflitam com a janela [s_min, s_fim)
+        if s_fim > _fech_min:
+            return False  # serviço ultrapassaria o horário de fechamento
         conflitos = sum(
             1 for ag in agendados
             if _ag_min(ag) < s_fim and _ag_min(ag) + _ag_dur(ag) > s_min
