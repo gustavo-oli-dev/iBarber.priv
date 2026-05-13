@@ -864,7 +864,7 @@ def api_perfil_update():
         email = valor.lower()
         if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'erro': 'E-mail inválido'}), 400
-        conflito = User.query.filter(User.email == email, User.id != user.id).first()
+        conflito = User.query.filter(User.email == email, User.id != user.id, User.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já está em uso'}), 400
         user.email = email
@@ -4249,8 +4249,6 @@ def api_cadastro():
         password=generate_password_hash(d.get('senha', '')),
         contato=d.get('contato', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
-        mail_user=(d.get('mail_user') or '').strip() or None,
-        mail_password=(d.get('mail_password') or '').strip() or None,
         ativo=True,
         assinatura_ativa=True,
         trial_expira=datetime.utcnow() + timedelta(days=7),
