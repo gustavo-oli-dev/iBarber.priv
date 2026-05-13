@@ -3509,6 +3509,53 @@ def _gestao_login_required():
 def _gestao_tenant():
     return db.session.get(Tenant, session.get('gestao_tenant_id'))
 
+def _gestao_is_owner():
+    return not session.get('gestao_func_id')
+
+def _gestao_func_obj():
+    fid = session.get('gestao_func_id')
+    return db.session.get(Funcionario, fid) if fid else None
+
+def _gestao_perms():
+    if _gestao_is_owner():
+        return {k: True for k in ['agendamentos','calendario','marcar','clientes',
+                                   'servicos','precos','pedidos','entradas','fotos']}
+    f = _gestao_func_obj()
+    if not f:
+        return {k: False for k in ['agendamentos','calendario','marcar','clientes',
+                                    'servicos','precos','pedidos','entradas','fotos']}
+    return {
+        'agendamentos': bool(f.perm_agendamentos),
+        'calendario':   bool(f.perm_calendario),
+        'marcar':       bool(f.perm_marcar),
+        'clientes':     bool(f.perm_clientes),
+        'servicos':     bool(f.perm_servicos),
+        'precos':       bool(f.perm_precos),
+        'pedidos':      bool(f.perm_pedidos),
+        'entradas':     bool(f.perm_entradas),
+        'fotos':        bool(f.perm_fotos),
+    }
+
+def _gestao_perm_required(perm_name):
+    if _gestao_is_owner():
+        return None
+    if _gestao_perms().get(perm_name):
+        return None
+    flash('Acesso não autorizado.', 'error')
+    return redirect(url_for('gestao_dashboard'))
+
+def _gestao_owner_required():
+    if _gestao_is_owner():
+        return None
+    flash('Acesso restrito ao gestor.', 'error')
+    return redirect(url_for('gestao_dashboard'))
+
+@app.context_processor
+def _gestao_template_ctx():
+    if session.get('gestao_tenant_id'):
+        return {'gestao_is_owner': _gestao_is_owner(), 'gestao_perms': _gestao_perms()}
+    return {}
+
 def _csrf_ok():
     """Verifica Origin/Referer em form POSTs para prevenir CSRF."""
     origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
@@ -3622,6 +3669,8 @@ def gestao_dashboard():
 def gestao_agendamentos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('agendamentos')
+    if perm: return perm
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
     token = _gerar_token(tenant.id, 0)
@@ -3637,6 +3686,8 @@ def gestao_agendamentos():
 def gestao_agendamento_status(ag_id):
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('agendamentos')
+    if perm: return perm
     ag = db.session.get(Agendamento, ag_id)
     if ag and ag.tenant_id == _gestao_tid():
         novo_status = request.form.get('status', 'ativo')
@@ -3668,6 +3719,8 @@ def gestao_agendamento_status(ag_id):
 def gestao_pedidos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('pedidos')
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     pedidos = (Pedido.query
@@ -3686,6 +3739,8 @@ def gestao_pedidos():
 def gestao_clientes():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('clientes')
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
@@ -3699,6 +3754,8 @@ def gestao_clientes():
 def gestao_cliente_detalhe(uid):
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('clientes')
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     return render_template('gestao/cliente_detalhe.html', active='clientes', uid=uid, token=token)
@@ -3707,6 +3764,8 @@ def gestao_cliente_detalhe(uid):
 def gestao_entradas():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('entradas')
+    if perm: return perm
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     _tid = _gestao_tid()
@@ -3746,6 +3805,8 @@ def gestao_entradas():
 def gestao_entrada_deletar(eid):
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('entradas')
+    if perm: return perm
     e = db.session.get(EntradaMonetaria, eid)
     if e and e.tenant_id == _gestao_tid():
         db.session.delete(e)
@@ -3756,6 +3817,8 @@ def gestao_entrada_deletar(eid):
 def gestao_funcionarios():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     return render_template('gestao/funcionarios.html', active='funcionarios', token=token)
@@ -3764,6 +3827,8 @@ def gestao_funcionarios():
 def gestao_servicos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('servicos')
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     return render_template('gestao/servicos.html', active='servicos', token=token)
@@ -3772,6 +3837,8 @@ def gestao_servicos():
 def gestao_precos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('precos')
+    if perm: return perm
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
@@ -3792,6 +3859,8 @@ def gestao_precos():
 def gestao_fotos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('fotos')
+    if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     return render_template('gestao/fotos.html', active='fotos', token=token)
@@ -3800,6 +3869,8 @@ def gestao_fotos():
 def gestao_horarios():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
@@ -3861,6 +3932,8 @@ def gestao_horarios():
 def gestao_contato():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
@@ -3898,6 +3971,8 @@ def gestao_contato():
 def gestao_credenciais():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
     tenant = _gestao_tenant()
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip()
@@ -3934,6 +4009,8 @@ def gestao_credenciais():
 def gestao_graficos():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
     tenant = _gestao_tenant()
     return render_template('gestao/graficos.html',
         active='graficos',
@@ -3943,6 +4020,8 @@ def gestao_graficos():
 def gestao_calendario():
     redir = _gestao_login_required()
     if redir: return redir
+    perm = _gestao_perm_required('calendario')
+    if perm: return perm
     tenant = _gestao_tenant()
     return render_template('gestao/calendario.html',
         active='calendario',

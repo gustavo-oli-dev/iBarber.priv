@@ -392,48 +392,69 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
           Início
         </a>
-<a href="{{ url_for('gestao_agendamentos') }}" class="g-sidebar-link {% if active == 'agendamentos' %}active{% endif %}">
+        {% if gestao_is_owner or gestao_perms.agendamentos %}
+        <a href="{{ url_for('gestao_agendamentos') }}" class="g-sidebar-link {% if active == 'agendamentos' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Marcar Horário
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.calendario %}
         <a href="{{ url_for('gestao_calendario') }}" class="g-sidebar-link {% if active == 'calendario' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><rect x="7" y="14" width="3" height="3" rx=".5"/><rect x="14" y="14" width="3" height="3" rx=".5"/></svg>
           Calendário
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.pedidos %}
         <a href="{{ url_for('gestao_pedidos') }}" class="g-sidebar-link {% if active == 'pedidos' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
           Pedidos
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.clientes %}
         <a href="{{ url_for('gestao_clientes') }}" class="g-sidebar-link {% if active == 'clientes' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
           Clientes
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.entradas %}
         <a href="{{ url_for('gestao_entradas') }}" class="g-sidebar-link {% if active == 'entradas' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
           Entrada Monetária
         </a>
+        {% endif %}
       </div>
 
+      {% if gestao_is_owner or gestao_perms.servicos or gestao_perms.precos or gestao_perms.fotos %}
       <div class="g-sidebar-group">
         <div class="g-sidebar-label">Gestão</div>
+        {% if gestao_is_owner %}
         <a href="{{ url_for('gestao_funcionarios') }}" class="g-sidebar-link {% if active == 'funcionarios' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
           Gestão de Funcionários
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.servicos %}
         <a href="{{ url_for('gestao_servicos') }}" class="g-sidebar-link {% if active == 'servicos' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M2 12h2M20 12h2"/></svg>
           Serviços
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.precos %}
         <a href="{{ url_for('gestao_precos') }}" class="g-sidebar-link {% if active == 'precos' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
           Preços
         </a>
+        {% endif %}
+        {% if gestao_is_owner or gestao_perms.fotos %}
         <a href="{{ url_for('gestao_fotos') }}" class="g-sidebar-link {% if active == 'fotos' %}active{% endif %}">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           Fotos dos Serviços
         </a>
+        {% endif %}
       </div>
+      {% endif %}
 
+      {% if gestao_is_owner %}
       <div class="g-sidebar-group">
         <div class="g-sidebar-label">Análise</div>
         <a href="{{ url_for('gestao_graficos') }}" class="g-sidebar-link {% if active == 'graficos' %}active{% endif %}">
@@ -457,6 +478,7 @@
           Credenciais
         </a>
       </div>
+      {% endif %}
 
       <div style="padding:.75rem 1rem 1.25rem;margin-top:auto;font-size:.68rem;color:var(--text-muted);border-top:1px solid var(--border);">
         iBarber v{{ APP_VERSION }}
