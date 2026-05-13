@@ -3529,12 +3529,23 @@ def gestao_login():
             session['gestao_tenant_id'] = tenant.id
             session['gestao_nome'] = tenant.nome
             return redirect(url_for('gestao_dashboard'))
+        # Tenta login como funcionário
+        func = Funcionario.query.filter_by(email=email, ativo=True).first()
+        if func and func.tenant_id and check_password_hash(func.password, senha):
+            t = db.session.get(Tenant, func.tenant_id)
+            if t and t.ativo:
+                session.clear()
+                session['gestao_tenant_id'] = func.tenant_id
+                session['gestao_func_id']   = func.id
+                session['gestao_nome']      = func.nome
+                return redirect(url_for('gestao_dashboard'))
         flash('E-mail ou senha incorretos.', 'error')
     return render_template('gestao/login.html')
 
 @app.route('/gestao/logout')
 def gestao_logout():
     session.pop('gestao_tenant_id', None)
+    session.pop('gestao_func_id', None)
     session.pop('gestao_nome', None)
     return redirect(url_for('gestao_login'))
 
