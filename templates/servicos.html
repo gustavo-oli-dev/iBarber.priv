@@ -246,6 +246,7 @@ body { overflow: hidden; }
       <span>Total</span>
       <span id="carrinhoTotal">R$ 0,00</span>
     </div>
+    <div id="carrinhoDuracao" style="font-size:.8rem;color:var(--text-muted);text-align:right;margin-bottom:.5rem"></div>
     <button class="btn btn-gold btn-full btn-lg" onclick="confirmarPedido()">Confirmar pedido</button>
   </div>
 </div>
@@ -456,7 +457,7 @@ body { overflow: hidden; }
       _categorias = await resCats.json();
       const servicos = await resSvs.json();
 
-      servicos.forEach(s => { precos[s.nome] = s.preco; });
+      servicos.forEach(s => { precos[s.nome] = s.preco; duracoes[s.nome] = s.duracao || 30; });
 
       // Montar botões de categoria dinamicamente
       const telaInicial = document.getElementById('telaInicial');
@@ -540,6 +541,7 @@ body { overflow: hidden; }
   _carregarServicos();
   let lbGaleria = '', lbIndice = 0;
   let carrinho = [];
+  const duracoes = {};
   // ── Acordeão ────────────────────────────────────────────
   function toggleAcordeao(fotosId, setaId) {
     const fotos   = document.getElementById(fotosId);
@@ -590,7 +592,7 @@ body { overflow: hidden; }
   // ── Carrinho ─────────────────────────────────────────────
   function adicionarAoCarrinho(nome, categoria) {
     if (carrinho.some(i => i.categoria === categoria)) return;
-    carrinho.push({ id: Date.now(), nome, categoria, preco: precos[nome] ?? 0 });
+    carrinho.push({ id: Date.now(), nome, categoria, preco: precos[nome] ?? 0, duracao: duracoes[nome] ?? 30 });
     atualizarCarrinho();
     const fab = document.getElementById('carrinhoFab');
     fab.classList.add('pulsar');
@@ -615,19 +617,25 @@ body { overflow: hidden; }
     } else {
       vazio.style.display  = 'none';
       rodape.style.display = 'block';
-      const total = carrinho.reduce((s, i) => s + i.preco, 0);
+      const total    = carrinho.reduce((s, i) => s + i.preco, 0);
+      const durTotal = carrinho.reduce((s, i) => s + i.duracao, 0);
       document.getElementById('carrinhoTotal').textContent =
         'R$ ' + total.toFixed(2).replace('.', ',');
       carrinho.forEach(item => {
         const li = document.createElement('li');
         li.className = 'carrinho-item';
         li.innerHTML = `
-          <span class="carrinho-item-nome">${item.nome}</span>
+          <div style="flex:1;min-width:0">
+            <span class="carrinho-item-nome">${item.nome}</span>
+            <span style="display:block;font-size:.75rem;color:var(--text-muted)">⏱ ${item.duracao} min</span>
+          </div>
           <span class="carrinho-item-preco">R$ ${item.preco.toFixed(2).replace('.', ',')}</span>
           <button class="carrinho-item-remover" onclick="removerDoCarrinho(${item.id})">×</button>
         `;
         lista.appendChild(li);
       });
+      const durEl = document.getElementById('carrinhoDuracao');
+      if (durEl) durEl.textContent = `⏱ ${durTotal} min no total`;
     }
     _syncSelecaoServicos();
   }
@@ -722,7 +730,8 @@ body { overflow: hidden; }
     document.getElementById('calHorarios').style.display = 'block';
     const dataStr = `${dia.getFullYear()}-${String(dia.getMonth()+1).padStart(2,'0')}-${String(dia.getDate()).padStart(2,'0')}`;
     try {
-      const res  = await fetch(`/api/horarios-disponiveis?data=${dataStr}`);
+      const durTotal = carrinho.reduce((s, i) => s + (i.duracao || 30), 0) || 30;
+      const res  = await fetch(`/api/horarios-disponiveis?data=${dataStr}&duracao=${durTotal}`);
       const data = await res.json();
       grid.innerHTML = '';
       if (data.fechado || (data.disponiveis.length === 0 && (data.tomados||[]).length === 0)) {
@@ -854,7 +863,8 @@ body { overflow: hidden; }
     if (!calDiaSel || !calHoraSel || !pedidoAtual) return;
     const d = new Date(calDiaSel);
     const dataHoraISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${calHoraSel}`;
-    const body = { pedido_id: pedidoAtual.id, data_hora: dataHoraISO };
+    const _durTotal = carrinho.reduce((s, i) => s + (i.duracao || 30), 0) || 30;
+    const body = { pedido_id: pedidoAtual.id, data_hora: dataHoraISO, duracao_total: _durTotal };
     if (calBarbeiroSel !== null) body.funcionario_id = calBarbeiroSel;
     await fetch('/agendar', {
       method: 'POST',

@@ -43,9 +43,15 @@
         <select id="sCat" class="g-input"></select>
       </div>
     </div>
-    <div class="g-form-group" style="margin-top:.75rem;">
-      <label class="g-label">Preço (R$)</label>
-      <input id="sPreco" class="g-input" type="text" inputmode="decimal" placeholder="0,00" data-mask="moeda" data-validate="moeda" min="0" />
+    <div style="display:flex;gap:.75rem;margin-top:.75rem;">
+      <div class="g-form-group" style="flex:1;">
+        <label class="g-label">Preço (R$)</label>
+        <input id="sPreco" class="g-input" type="text" inputmode="decimal" placeholder="0,00" data-mask="moeda" data-validate="moeda" min="0" />
+      </div>
+      <div class="g-form-group" style="width:120px;">
+        <label class="g-label">Duração (min)</label>
+        <input id="sDuracao" class="g-input" type="number" inputmode="numeric" placeholder="30" min="5" max="480" value="30" />
+      </div>
     </div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button type="button" class="g-btn g-btn-outline" onclick="fecharModalServico()">Cancelar</button>
@@ -155,6 +161,7 @@ function abrirModalServico() {
   document.getElementById('servicoId').value = '';
   document.getElementById('sNome').value = '';
   document.getElementById('sPreco').value = '';
+  document.getElementById('sDuracao').value = '30';
   document.getElementById('titServico').textContent = 'Novo Serviço';
   document.getElementById('btnDelServico').style.display = 'none';
   populateCatSelect(null);
@@ -167,6 +174,7 @@ function editarServico(id) {
   document.getElementById('servicoId').value = id;
   document.getElementById('sNome').value = s.nome;
   document.getElementById('sPreco').value = s.preco||0;
+  document.getElementById('sDuracao').value = s.duracao||30;
   document.getElementById('titServico').textContent = 'Editar Serviço';
   document.getElementById('btnDelServico').style.display = '';
   populateCatSelect(s.categoria_id);
@@ -180,7 +188,8 @@ async function salvarServico() {
   const catId = document.getElementById('sCat').value;
   const modalEl = document.getElementById('modalServico').querySelector('div');
   if (!ibForms.validarForm(modalEl)) return;
-  const body = {nome, preco, categoria_id: catId ? parseInt(catId) : null};
+  const duracao = Math.max(5, parseInt(document.getElementById('sDuracao').value) || 30);
+  const body = {nome, preco, duracao, categoria_id: catId ? parseInt(catId) : null};
   const url = id ? `/api/servicos/${id}` : '/api/servicos';
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify(body)});

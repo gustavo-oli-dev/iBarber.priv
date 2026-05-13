@@ -286,6 +286,7 @@ class Agendamento(db.Model):
     data_hora       = db.Column(db.DateTime, nullable=False, index=True)
     status          = db.Column(db.String(20), default='ativo', index=True)  # ativo | cancelado | concluido
     forma_pagamento = db.Column(db.String(20), nullable=True)  # dinheiro | pix | cartao
+    duracao_total   = db.Column(db.Integer, nullable=True)     # minutos (soma dos serviços)
     funcionario_id  = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
     criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
@@ -309,6 +310,7 @@ class Servico(db.Model):
     categoria    = db.Column(db.String(50),  nullable=True)   # legado
     categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
     preco        = db.Column(db.Float,  default=0)
+    duracao      = db.Column(db.Integer, default=30)          # minutos
     ativo        = db.Column(db.Boolean, default=True)
     ordem        = db.Column(db.Integer, default=0)
     criado_em    = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1311,8 +1313,10 @@ def agendar():
         if livres:
             funcionario_id = random.choice(livres)['id']
 
+    duracao_total = data.get('duracao_total')
     ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
                      data_hora=data_hora, funcionario_id=funcionario_id,
+                     duracao_total=int(duracao_total) if duracao_total else None,
                      tenant_id=session.get('path_tenant_id') or session.get('tenant_id') or _api_tid())
     db.session.add(ag)
     db.session.commit()
@@ -1880,7 +1884,8 @@ def api_servicos_listar():
             'id': s.id, 'nome': s.nome,
             'categoria_id': s.categoria_id,
             'categoria_nome': s.cat_ref.nome if s.cat_ref else (s.categoria or ''),
-            'preco': s.preco
+            'preco': s.preco,
+            'duracao': s.duracao or 30
         } for s in svs])
     except Exception:
         return jsonify([])
@@ -1898,8 +1903,9 @@ def api_servicos_criar():
         categoria='',
         categoria_id=cat_id,
         preco=_sf(d.get('preco', 0)),
+        duracao=max(5, int(d.get('duracao', 30))),
         ordem=Servico.query.filter_by(categoria_id=cat_id, ativo=True, tenant_id=tid).count(),
-    tenant_id=tid,
+        tenant_id=tid,
     )
     db.session.add(sv); db.session.commit()
     return jsonify({'ok': True, 'id': sv.id})
@@ -1916,6 +1922,7 @@ def api_servico_detalhe(sid):
     if 'nome'         in d: sv.nome         = d['nome'].strip()
     if 'categoria_id' in d: sv.categoria_id = d['categoria_id']
     if 'preco'        in d: sv.preco        = _sf(d['preco'])
+    if 'duracao'      in d: sv.duracao      = max(5, int(d['duracao']))
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -1956,6 +1963,8 @@ def api_horarios_disponiveis():
             todos_slots = _gerar_slots('08:00', '19:00', duracao) if duracao != 40 \
                           else SLOTS_PADRAO.get(data_obj.weekday(), [])
 
+    duracao_solicitada = int(request.args.get('duracao', duracao))
+
     inicio = datetime.combine(data_obj, datetime.min.time())
     fim    = inicio + timedelta(days=1)
     agendados = (Agendamento.query
@@ -1964,23 +1973,36 @@ def api_horarios_disponiveis():
                          Agendamento.status == 'ativo',
                          Agendamento.tenant_id == _tid)
                  .all())
-    # Capacidade por slot = número de funcionários ativos nessa data (mínimo 1)
-    ativos = _funcionarios_ativos_para_data(data_str)
+    ativos     = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
+
+    # Monta lista de (inicio_min, fim_min, contagem) para cada slot ocupado
+    def _slot_min(s): return int(s[:2]) * 60 + int(s[3:])
+    def _ag_min(ag):  return ag.data_hora.hour * 60 + ag.data_hora.minute
+    def _ag_dur(ag):  return ag.duracao_total or duracao
+
     slot_counts = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
-    tomados = {s for s, c in slot_counts.items() if c >= capacidade}
     todos_tomados = list(slot_counts.keys())
 
-    # Para hoje, remove slots cujo horário já passou
+    def _slot_disponivel(s):
+        s_min  = _slot_min(s)
+        s_fim  = s_min + duracao_solicitada
+        # conta quantos agendamentos conflitam com a janela [s_min, s_fim)
+        conflitos = sum(
+            1 for ag in agendados
+            if _ag_min(ag) < s_fim and _ag_min(ag) + _ag_dur(ag) > s_min
+        )
+        return conflitos < capacidade
+
     agora = datetime.utcnow()
     if data_obj == agora.date():
         disponiveis = [
             s for s in todos_slots
-            if s not in tomados and
+            if _slot_disponivel(s) and
                datetime.combine(data_obj, datetime.strptime(s, '%H:%M').time()) > agora
         ]
     else:
-        disponiveis = [s for s in todos_slots if s not in tomados]
+        disponiveis = [s for s in todos_slots if _slot_disponivel(s)]
 
     return jsonify({'disponiveis': disponiveis, 'tomados': todos_tomados, 'fechado': False})
 
