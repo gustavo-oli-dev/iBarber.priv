@@ -37,6 +37,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 img { display: block; width: 100%; height: 100%; object-fit: cover; }
 a { color: inherit; text-decoration: none; }
@@ -1844,4 +1847,87 @@ img, video, iframe, table { max-width: 100%; }
   .cal-horarios-grid { grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
   .cal-dia-btn { min-width: 44px; padding: 0.35rem 0.4rem; }
   .tel-prefix { font-size: 0.82rem; padding: 0 0.6rem; }
+}
+
+/* ── Antialiasing & Smooth Rendering ──────────────────────── */
+
+/*
+ * GPU compositing elimina serrilhado em bordas arredondadas durante transições.
+ * translateZ(0) promove o elemento a uma camada de composição dedicada;
+ * backface-visibility:hidden evita artefatos de flip durante animações.
+ */
+.btn,
+.btn-hero,
+.servico-btn,
+.btn-add-carrinho,
+.cal-dia-btn,
+.cal-hora-btn,
+.nav-loja-link,
+.nav-dots,
+.fab,
+.carrinho-fab,
+.toggle-track,
+.servico-acordeao,
+.prod-card {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/*
+ * Pré-composição (will-change) só nos elementos que realmente fazem transform no hover.
+ * Usar will-change em todos os botões desperdiça memória de GPU.
+ */
+.prod-card,
+.carrinho-fab,
+.fab {
+  will-change: transform;
+}
+
+/*
+ * isolation:isolate cria stacking context próprio — garante que o clipping
+ * do border-radius se aplique antes de qualquer blend com o fundo.
+ */
+.catalog-grid,
+.catalog-item,
+.auth-card,
+.modal,
+.agendamento-card,
+.carrinho-painel,
+.pw-strength {
+  isolation: isolate;
+}
+
+/*
+ * Focus rings via box-shadow (curvas matemáticas limpas) em vez de outline.
+ * outline renderiza como retângulo em alguns navegadores, ignorando border-radius.
+ */
+.btn:focus-visible,
+.servico-btn:focus-visible,
+.cal-dia-btn:focus-visible,
+.cal-hora-btn:focus-visible,
+.nav-loja-link:focus-visible,
+.nav-dots:focus-visible,
+.toggle-track:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200, 200, 200, 0.22);
+}
+
+/*
+ * Prod-card: garante que a imagem interna não vaze pelo border-radius.
+ * O transform:translateZ(0) já aplicado acima ativa o clipping de GPU,
+ * mas o overflow:hidden explícito é o fallback para navegadores antigos.
+ */
+.prod-card {
+  overflow: hidden;
+}
+
+/*
+ * Garante que imagens dentro de containers arredondados não sangrem.
+ * image-rendering auto = deixa o browser escolher o melhor algoritmo (bilinear/bicúbico).
+ */
+img {
+  image-rendering: auto;
+  -webkit-transform: translateZ(0); /* força camada própria em Safari */
 }
