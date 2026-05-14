@@ -1246,6 +1246,12 @@ main { flex: 1; }
   letter-spacing: 0.04em;
 }
 @media (max-width: 768px) {
+  /* Remove blur pesado da navbar no mobile — causa jank no scroll do Android */
+  .navbar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg);
+  }
   .nav-links { display: none; }
   .nav-toggle { display: flex; }
   .nav-drawer { display: flex; }
