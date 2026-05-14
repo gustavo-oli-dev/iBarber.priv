@@ -85,6 +85,20 @@ main { flex: 1; }
   transition: color var(--transition);
 }
 .nav-link:hover { color: var(--text); }
+.nav-loja-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gold);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-loja-link:hover { background: var(--gold); color: #000; }
 .nav-user {
   font-size: 0.85rem;
   color: var(--text-muted);

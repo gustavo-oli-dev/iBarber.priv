@@ -1,0 +1,328 @@
+{% extends 'gestao/base_gestao.html' %}
+{% block title %}Vitrine{% endblock %}
+
+{% block head %}
+<style>
+  .loja-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+    gap: 1rem; flex-wrap: wrap;
+  }
+  .loja-toggle-info { display: flex; flex-direction: column; gap: .2rem; }
+  .loja-toggle-info strong { font-size: .9rem; color: var(--text); }
+  .loja-toggle-info span { font-size: .78rem; color: var(--text-muted); }
+
+  .produtos-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+  .produto-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: border-color .15s;
+  }
+  .produto-card:hover { border-color: var(--gold-dim); }
+  .produto-img {
+    width: 100%; aspect-ratio: 4/3; object-fit: cover;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 2rem;
+  }
+  .produto-img img { width: 100%; height: 100%; object-fit: cover; }
+  .produto-body { padding: .85rem 1rem; flex: 1; display: flex; flex-direction: column; gap: .35rem; }
+  .produto-nome { font-size: .9rem; font-weight: 600; color: var(--text); }
+  .produto-desc { font-size: .78rem; color: var(--text-muted); line-height: 1.4; }
+  .produto-valor { font-size: 1rem; font-weight: 700; color: var(--gold); margin-top: auto; padding-top: .4rem; }
+  .produto-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .6rem 1rem; border-top: 1px solid var(--border); gap: .5rem;
+  }
+  .estoque-badge {
+    display: inline-flex; align-items: center; gap: .3rem;
+    font-size: .72rem; font-weight: 600; padding: .2rem .6rem;
+    border-radius: 999px; cursor: pointer; border: 1px solid transparent;
+    transition: background .15s, color .15s;
+    font-family: inherit;
+  }
+  .estoque-badge.sim { background: rgba(76,175,130,.15); color: var(--success); border-color: rgba(76,175,130,.3); }
+  .estoque-badge.nao { background: rgba(224,85,85,.12); color: var(--error); border-color: rgba(224,85,85,.25); }
+  .produto-acoes { display: flex; gap: .4rem; }
+  .btn-icon {
+    background: none; border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 6px; width: 32px; height: 32px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; transition: color .15s, border-color .15s;
+    flex-shrink: 0;
+  }
+  .btn-icon:hover { color: var(--text); border-color: var(--gold-dim); }
+  .btn-icon.danger:hover { color: var(--error); border-color: var(--error); }
+
+  .empty-state {
+    text-align: center; padding: 4rem 2rem;
+    color: var(--text-muted); font-size: .9rem;
+  }
+  .empty-state svg { opacity: .25; margin-bottom: 1rem; }
+
+  /* Modal */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.7); z-index: 300;
+    align-items: center; justify-content: center; padding: 1rem;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; width: 100%; max-width: 480px;
+    max-height: 90dvh; overflow-y: auto; padding: 1.5rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .modal-title { font-family: var(--font-serif); font-size: 1.1rem; font-weight: 600; color: var(--text); }
+  .foto-preview {
+    width: 100%; aspect-ratio: 4/3; background: var(--surface2);
+    border: 1px dashed var(--border); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden; position: relative;
+    transition: border-color .15s;
+  }
+  .foto-preview:hover { border-color: var(--gold); }
+  .foto-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .foto-preview-placeholder { text-align: center; color: var(--text-muted); font-size: .82rem; }
+  .foto-preview-placeholder svg { margin-bottom: .4rem; opacity: .4; }
+  .modal-footer { display: flex; gap: .75rem; justify-content: flex-end; margin-top: .5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="g-page-header">
+  <h1 class="g-page-title">Vitrine <span>/ Loja</span></h1>
+  <div class="g-page-header-actions">
+    <button class="g-btn g-btn-primary g-btn-sm" onclick="abrirModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Adicionar produto
+    </button>
+  </div>
+</div>
+
+<!-- Toggle loja ativa -->
+<div class="loja-toggle-row">
+  <div class="loja-toggle-info">
+    <strong>Loja visível para clientes</strong>
+    <span>Quando ativada, o ícone da loja aparece no site de agendamento</span>
+  </div>
+  <label class="toggle-switch" title="Ativar/desativar loja">
+    <input type="checkbox" id="lojaToggle" {% if tenant.loja_ativa %}checked{% endif %}>
+    <span class="toggle-track"></span>
+  </label>
+</div>
+
+<!-- Grid de produtos -->
+<div class="produtos-grid" id="produtosGrid">
+  {% for p in produtos %}
+  <div class="produto-card" id="card-{{ p.id }}">
+    <div class="produto-img">
+      {% if p.foto %}
+        <img src="/static/uploads/{{ p.foto }}" alt="{{ p.nome }}">
+      {% else %}
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      {% endif %}
+    </div>
+    <div class="produto-body">
+      <div class="produto-nome">{{ p.nome }}</div>
+      {% if p.descricao %}<div class="produto-desc">{{ p.descricao }}</div>{% endif %}
+      <div class="produto-valor">R$ {{ '%.2f'|format(p.valor) }}</div>
+    </div>
+    <div class="produto-footer">
+      <button class="estoque-badge {{ 'sim' if p.em_estoque else 'nao' }}"
+              onclick="toggleEstoque({{ p.id }}, this)"
+              title="Clique para alternar estoque">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+        {{ 'Em estoque' if p.em_estoque else 'Esgotado' }}
+      </button>
+      <div class="produto-acoes">
+        <button class="btn-icon btn-editar"
+                data-id="{{ p.id }}"
+                data-nome="{{ p.nome|e }}"
+                data-desc="{{ (p.descricao or '')|e }}"
+                data-valor="{{ p.valor }}"
+                data-foto="{{ ('/static/uploads/' ~ p.foto) if p.foto else '' }}"
+                title="Editar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon danger" onclick="excluirProduto({{ p.id }})" title="Excluir">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state" id="emptyState" style="grid-column:1/-1">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+    <p>Nenhum produto cadastrado.<br>Clique em "Adicionar produto" para começar.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modal adicionar/editar -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <div class="modal-title" id="modalTitulo">Adicionar produto</div>
+
+    <div class="foto-preview" id="fotoPreview" onclick="document.getElementById('inputFoto').click()">
+      <div class="foto-preview-placeholder" id="fotoPlaceholder">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <div>Clique para adicionar foto</div>
+      </div>
+      <img id="fotoImg" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;">
+    </div>
+    <input type="file" id="inputFoto" accept="image/*" style="display:none">
+
+    <div class="g-form-group">
+      <label class="g-label">Nome *</label>
+      <input type="text" class="g-input" id="campNome" placeholder="Ex: Pomada modeladora">
+    </div>
+    <div class="g-form-group">
+      <label class="g-label">Descrição</label>
+      <textarea class="g-input" id="campDesc" rows="3" placeholder="Descreva o produto..." style="resize:vertical;min-height:80px;"></textarea>
+    </div>
+    <div class="g-form-group">
+      <label class="g-label">Valor (R$)</label>
+      <input type="text" class="g-input" id="campValor" placeholder="0,00" inputmode="decimal">
+    </div>
+
+    <div class="modal-footer">
+      <button class="g-btn g-btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="g-btn g-btn-primary" id="btnSalvar" onclick="salvarProduto()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _editId = null;
+
+// Toggle loja ativa
+document.getElementById('lojaToggle').addEventListener('change', async function() {
+  const r = await fetch('/api/gestao/loja/toggle', { method: 'POST' });
+  const d = await r.json();
+  if (!r.ok) { this.checked = !this.checked; alert(d.erro || 'Erro'); }
+});
+
+// Modal
+function abrirModal(id=null) {
+  _editId = id;
+  document.getElementById('modalTitulo').textContent = id ? 'Editar produto' : 'Adicionar produto';
+  document.getElementById('modalBg').classList.add('open');
+}
+function fecharModal() {
+  _editId = null;
+  document.getElementById('modalBg').classList.remove('open');
+  document.getElementById('campNome').value = '';
+  document.getElementById('campDesc').value = '';
+  document.getElementById('campValor').value = '';
+  document.getElementById('inputFoto').value = '';
+  document.getElementById('fotoImg').style.display = 'none';
+  document.getElementById('fotoPlaceholder').style.display = '';
+}
+document.getElementById('modalBg').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+
+// Preview foto
+document.getElementById('inputFoto').addEventListener('change', function() {
+  const f = this.files[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  document.getElementById('fotoImg').src = url;
+  document.getElementById('fotoImg').style.display = 'block';
+  document.getElementById('fotoPlaceholder').style.display = 'none';
+});
+
+// Salvar produto
+async function salvarProduto() {
+  const nome = document.getElementById('campNome').value.trim();
+  if (!nome) { alert('Nome obrigatório'); return; }
+
+  // Normaliza valor: aceita vírgula (BR) ou ponto
+  const valorRaw = document.getElementById('campValor').value.trim().replace(',', '.');
+  const valor = parseFloat(valorRaw) || 0;
+
+  const fd = new FormData();
+  fd.append('nome', nome);
+  fd.append('descricao', document.getElementById('campDesc').value.trim());
+  fd.append('valor', valor);
+  const foto = document.getElementById('inputFoto').files[0];
+  if (foto) fd.append('foto', foto);
+
+  const btn = document.getElementById('btnSalvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const url  = _editId ? `/api/gestao/produtos/${_editId}` : '/api/gestao/produtos';
+  const meth = _editId ? 'PUT' : 'POST';
+
+  try {
+    const r = await fetch(url, { method: meth, body: fd });
+    const d = await r.json();
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+    if (!r.ok) {
+      alert(d.erro || 'Erro ao salvar');
+      if (r.status === 401) location.href = '/gestao/login';
+      return;
+    }
+    fecharModal();
+    location.reload();
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+    alert('Erro de conexão. Tente novamente.');
+    console.error(e);
+  }
+}
+
+// Editar produto
+document.querySelectorAll('.btn-editar').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    const id     = parseInt(this.dataset.id);
+    const nome   = this.dataset.nome;
+    const desc   = this.dataset.desc;
+    const valor  = this.dataset.valor;
+    const foto   = this.dataset.foto;
+    abrirModal(id);
+    document.getElementById('campNome').value  = nome;
+    document.getElementById('campDesc').value  = desc;
+    document.getElementById('campValor').value = valor;
+    if (foto) {
+      document.getElementById('fotoImg').src            = foto;
+      document.getElementById('fotoImg').style.display  = 'block';
+      document.getElementById('fotoPlaceholder').style.display = 'none';
+    }
+  });
+});
+
+// Excluir produto
+async function excluirProduto(id) {
+  if (!confirm('Excluir este produto?')) return;
+  const r = await fetch(`/api/gestao/produtos/${id}`, { method: 'DELETE' });
+  if (r.ok) {
+    document.getElementById(`card-${id}`)?.remove();
+    if (!document.querySelector('.produto-card')) {
+      const g = document.getElementById('produtosGrid');
+      g.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Nenhum produto cadastrado.</p></div>';
+    }
+  }
+}
+
+// Toggle estoque
+async function toggleEstoque(id, btn) {
+  const r = await fetch(`/api/gestao/produtos/${id}/estoque`, { method: 'POST' });
+  const d = await r.json();
+  if (!r.ok) { alert(d.erro || 'Erro'); return; }
+  btn.className = `estoque-badge ${d.em_estoque ? 'sim' : 'nao'}`;
+  btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg> ${d.em_estoque ? 'Em estoque' : 'Esgotado'}`;
+}
+</script>
+{% endblock %}

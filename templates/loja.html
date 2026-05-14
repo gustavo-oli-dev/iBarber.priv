@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Loja — {{ tenant.nome if tenant else 'Barbearia' }}{% endblock %}
+
+{% block content %}
+<style>
+  .loja-header {
+    text-align: center;
+    padding: 2rem clamp(1rem,4vw,2.5rem) 1.25rem;
+    position: relative;
+  }
+  .loja-header h1 {
+    font-family: var(--font-serif);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: .4rem;
+  }
+  .loja-header p {
+    color: var(--text-muted);
+    font-size: .9rem;
+  }
+  .btn-voltar {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    color: var(--text-muted);
+    font-size: .82rem;
+    text-decoration: none;
+    padding: .4rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: color .15s, border-color .15s;
+    position: absolute;
+    left: clamp(1rem, 4vw, 2.5rem);
+    top: 2rem;
+  }
+  .btn-voltar:hover { color: var(--text); border-color: var(--gold-dim); }
+
+  .loja-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(5, 1fr);
+    padding: 0 clamp(1rem, 4vw, 2.5rem) 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1100px) {
+    .loja-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 768px) {
+    /* Header mobile — botão voltar alinhado à esquerda, título centralizado */
+    .loja-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: .9rem 1rem 1rem;
+      text-align: center;
+    }
+    .btn-voltar {
+      position: static;
+      align-self: flex-start;
+      margin-bottom: .6rem;
+      font-size: .78rem;
+      padding: .3rem .65rem;
+    }
+    .loja-header h1 { font-size: 1.4rem; }
+    .loja-header p  { font-size: .8rem; }
+
+    /* Grid 2 colunas com menos espaçamento */
+    .loja-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: .6rem;
+      padding: 0 .75rem 2rem;
+    }
+  }
+
+  .prod-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color .2s, transform .15s;
+  }
+  .prod-card:hover { border-color: var(--gold-dim); transform: translateY(-2px); }
+
+  .prod-foto {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    overflow: hidden;
+  }
+  .prod-foto img { width: 100%; height: 100%; object-fit: cover; }
+  .prod-esgotado-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: grayscale(1);
+    -webkit-backdrop-filter: grayscale(1);
+  }
+  .prod-esgotado-overlay span {
+    background: rgba(0,0,0,.7);
+    color: #aaa;
+    font-size: .85rem;
+    font-weight: 600;
+    padding: .35rem .9rem;
+    border-radius: 999px;
+    border: 1px solid #555;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .prod-card.esgotado .prod-foto img { filter: grayscale(1); }
+
+  .prod-body {
+    padding: .85rem 1rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    flex: 1;
+  }
+  .prod-nome { font-weight: 600; font-size: .92rem; color: var(--text); }
+  .prod-desc {
+    font-size: .78rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .prod-valor {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--gold);
+    margin-top: auto;
+    padding-top: .5rem;
+  }
+
+  @media (max-width: 768px) {
+    .prod-card { border-radius: 8px; }
+    .prod-body { padding: .55rem .65rem .65rem; gap: .2rem; }
+    .prod-nome { font-size: .78rem; }
+    .prod-desc { font-size: .7rem; -webkit-line-clamp: 2; }
+    .prod-valor { font-size: .88rem; padding-top: .3rem; }
+    .prod-esgotado-overlay span { font-size: .65rem; padding: .2rem .5rem; }
+  }
+
+  .loja-empty {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+  }
+  .loja-empty svg { opacity: .25; margin-bottom: 1rem; }
+</style>
+
+<div class="loja-header">
+  <a href="/{{ tenant.slug }}" class="btn-voltar">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Voltar
+  </a>
+  <h1>✦ Loja</h1>
+  <p>Produtos disponíveis em {{ tenant.nome if tenant else 'nossa barbearia' }}</p>
+</div>
+
+<div class="loja-grid">
+  {% for p in produtos %}
+  <div class="prod-card {% if not p.em_estoque %}esgotado{% endif %}">
+    <div class="prod-foto">
+      {% if p.foto %}
+        <img src="/static/uploads/{{ p.foto }}" alt="{{ p.nome }}" loading="lazy">
+      {% else %}
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      {% endif %}
+      {% if not p.em_estoque %}
+        <div class="prod-esgotado-overlay"><span>Esgotado</span></div>
+      {% endif %}
+    </div>
+    <div class="prod-body">
+      <div class="prod-nome">{{ p.nome }}</div>
+      {% if p.descricao %}<div class="prod-desc">{{ p.descricao }}</div>{% endif %}
+      <div class="prod-valor">R$ {{ '%.2f'|format(p.valor) }}</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="loja-empty" style="grid-column:1/-1">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+    <p>Nenhum produto disponível no momento.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

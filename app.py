@@ -63,9 +63,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = not app.debug
+_is_dev = os.environ.get('FLASK_DEBUG', '0') == '1' or os.environ.get('FLASK_ENV') == 'development'
+app.config['SESSION_COOKIE_SECURE'] = not _is_dev
 _cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
-app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not app.debug else None
+app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not _is_dev else None
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -151,6 +152,7 @@ class Tenant(db.Model):
     maps_url         = db.Column(db.String(500), nullable=True)
     fab_wpp          = db.Column(db.Text, nullable=True)   # JSON
     fab_maps         = db.Column(db.Text, nullable=True)   # JSON
+    loja_ativa       = db.Column(db.Boolean, default=False)
     assinaturas      = db.relationship('Assinatura', backref='tenant', lazy=True, order_by='Assinatura.id.desc()')
 
     def em_trial(self):
@@ -385,6 +387,16 @@ class ListaEspera(db.Model):
     criado_em     = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint('tenant_id', 'user_id', 'data'),)
 
+class Produto(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False, index=True)
+    nome       = db.Column(db.String(100), nullable=False)
+    descricao  = db.Column(db.Text, nullable=True)
+    foto       = db.Column(db.String(200), nullable=True)
+    valor      = db.Column(db.Float, default=0)
+    em_estoque = db.Column(db.Boolean, default=True)
+    criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
+
 
 with app.app_context():
     from sqlalchemy import inspect as _inspect
@@ -403,6 +415,7 @@ with app.app_context():
         ('tema_editacoes', 'INTEGER DEFAULT 0'),
         ('tema_pendente',  'TEXT'),
         ('trial_expira',   'DATETIME'),
+        ('loja_ativa',     'BOOLEAN DEFAULT 0'),
     ]:
         if _col not in _tenant_cols:
             with db.engine.connect() as _conn:
@@ -433,10 +446,16 @@ with app.app_context():
             _conn.execute(db.text('ALTER TABLE pedido ADD COLUMN tenant_id INTEGER'))
             _conn.commit()
     _ag_cols = {c['name'] for c in _inspector.get_columns('agendamento')} if 'agendamento' in _existing else set()
-    if 'tenant_id' not in _ag_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE agendamento ADD COLUMN tenant_id INTEGER'))
-            _conn.commit()
+    for _col, _type in [
+        ('tenant_id',      'INTEGER'),
+        ('duracao_total',  'INTEGER'),
+        ('funcionario_id', 'INTEGER'),
+        ('criado_em',      'DATETIME'),
+    ]:
+        if _col not in _ag_cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(db.text(f'ALTER TABLE agendamento ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     # Torna funcionario.email nullable para permitir múltiplos barbeiros sem email
     try:
         with db.engine.connect() as _conn:
@@ -463,9 +482,9 @@ def _agora_brt():
     return datetime.utcnow() - timedelta(hours=3)
 
 def _sf(val, default=0.0):
-    """Converte para float com segurança; retorna default se inválido."""
+    """Converte para float com segurança; aceita vírgula como decimal (padrão BR)."""
     try:
-        return float(val)
+        return float(str(val).replace(',', '.'))
     except (TypeError, ValueError):
         return default
 
@@ -3818,7 +3837,7 @@ def gestao_entradas():
     _tid = _gestao_tid()
     if request.method == 'POST':
         desc = request.form.get('descricao', '').strip()
-        valor = float(request.form.get('valor', 0) or 0)
+        valor = _sf(request.form.get('valor', 0))
         forma = request.form.get('forma', 'dinheiro')
         if desc and valor > 0:
             db.session.add(EntradaMonetaria(descricao=desc, valor=valor, forma=forma, tenant_id=_tid))
@@ -3911,6 +3930,116 @@ def gestao_fotos():
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0)
     return render_template('gestao/fotos.html', active='fotos', token=token)
+
+@app.route('/gestao/loja')
+def gestao_loja():
+    redir = _gestao_login_required()
+    if redir: return redir
+    perm = _gestao_owner_required()
+    if perm: return perm
+    tenant = _gestao_tenant()
+    produtos = Produto.query.filter_by(tenant_id=tenant.id).order_by(Produto.criado_em.desc()).all()
+    return render_template('gestao/loja.html', active='loja', tenant=tenant, produtos=produtos)
+
+@app.route('/api/gestao/loja/toggle', methods=['POST'])
+def api_gestao_loja_toggle():
+    redir = _gestao_login_required()
+    if redir: return jsonify({'erro': 'não autenticado'}), 401
+    if not _gestao_is_owner(): return jsonify({'erro': 'sem permissão'}), 403
+    tenant = _gestao_tenant()
+    tenant.loja_ativa = not getattr(tenant, 'loja_ativa', False)
+    db.session.commit()
+    return jsonify({'loja_ativa': tenant.loja_ativa})
+
+@app.route('/api/gestao/produtos', methods=['POST'])
+@limiter.limit('60 per hour')
+def api_gestao_produto_criar():
+    redir = _gestao_login_required()
+    if redir: return jsonify({'erro': 'não autenticado'}), 401
+    if not _gestao_is_owner(): return jsonify({'erro': 'sem permissão'}), 403
+    tid = _gestao_tid()
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return jsonify({'erro': 'Nome obrigatório'}), 400
+    descricao = request.form.get('descricao', '').strip() or None
+    valor = _sf(request.form.get('valor', 0))
+    p = Produto(tenant_id=tid, nome=nome, descricao=descricao, valor=valor)
+    db.session.add(p)
+    db.session.flush()
+    arquivo = request.files.get('foto')
+    if arquivo and arquivo.filename:
+        buf, err = _processar_imagem(arquivo)
+        if err:
+            db.session.rollback()
+            return jsonify({'erro': err}), 400
+        pasta = os.path.join(UPLOAD_FOLDER, str(tid), 'produtos')
+        os.makedirs(pasta, exist_ok=True)
+        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.jpg"
+        with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+            fh.write(buf.read())
+        p.foto = filename
+    db.session.commit()
+    foto_url = f'/static/uploads/{p.foto}' if p.foto else None
+    return jsonify({'ok': True, 'id': p.id, 'nome': p.nome,
+                    'descricao': p.descricao or '', 'valor': p.valor,
+                    'em_estoque': p.em_estoque, 'foto_url': foto_url})
+
+@app.route('/api/gestao/produtos/<int:pid>', methods=['PUT', 'DELETE'])
+@limiter.limit('120 per hour', methods=['PUT'])
+def api_gestao_produto(pid):
+    redir = _gestao_login_required()
+    if redir: return jsonify({'erro': 'não autenticado'}), 401
+    if not _gestao_is_owner(): return jsonify({'erro': 'sem permissão'}), 403
+    tid = _gestao_tid()
+    p = db.session.get(Produto, pid)
+    if not p or p.tenant_id != tid:
+        return jsonify({'erro': 'não encontrado'}), 404
+    if request.method == 'DELETE':
+        if p.foto:
+            caminho = os.path.join(UPLOAD_FOLDER, p.foto)
+            if os.path.exists(caminho):
+                os.remove(caminho)
+        db.session.delete(p)
+        db.session.commit()
+        return jsonify({'ok': True})
+    nome = request.form.get('nome', '').strip()
+    if not nome:
+        return jsonify({'erro': 'Nome obrigatório'}), 400
+    p.nome = nome
+    p.descricao = request.form.get('descricao', '').strip() or None
+    p.valor = _sf(request.form.get('valor', 0))
+    arquivo = request.files.get('foto')
+    if arquivo and arquivo.filename:
+        buf, err = _processar_imagem(arquivo)
+        if err:
+            return jsonify({'erro': err}), 400
+        if p.foto:
+            old = os.path.join(UPLOAD_FOLDER, p.foto)
+            if os.path.exists(old):
+                os.remove(old)
+        pasta = os.path.join(UPLOAD_FOLDER, str(tid), 'produtos')
+        os.makedirs(pasta, exist_ok=True)
+        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.jpg"
+        with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
+            fh.write(buf.read())
+        p.foto = filename
+    db.session.commit()
+    foto_url = f'/static/uploads/{p.foto}' if p.foto else None
+    return jsonify({'ok': True, 'nome': p.nome, 'descricao': p.descricao or '',
+                    'valor': p.valor, 'foto_url': foto_url})
+
+@app.route('/api/gestao/produtos/<int:pid>/estoque', methods=['POST'])
+def api_gestao_produto_estoque(pid):
+    redir = _gestao_login_required()
+    if redir: return jsonify({'erro': 'não autenticado'}), 401
+    if not _gestao_is_owner(): return jsonify({'erro': 'sem permissão'}), 403
+    tid = _gestao_tid()
+    p = db.session.get(Produto, pid)
+    if not p or p.tenant_id != tid:
+        return jsonify({'erro': 'não encontrado'}), 404
+    p.em_estoque = not p.em_estoque
+    db.session.commit()
+    return jsonify({'em_estoque': p.em_estoque})
 
 @app.route('/gestao/horarios', methods=['GET', 'POST'])
 def gestao_horarios():
@@ -4849,6 +4978,16 @@ def _udp_broadcast():
         except Exception:
             pass
         time.sleep(2)
+
+@app.route('/<slug>/loja')
+def tenant_loja(slug):
+    tenant = get_tenant_by_slug(slug)
+    if not tenant or not tenant.assinatura_ativa or not getattr(tenant, 'loja_ativa', False):
+        return redirect(url_for('tenant_site', slug=slug))
+    session['path_tenant_id'] = tenant.id
+    produtos = Produto.query.filter_by(tenant_id=tenant.id).order_by(Produto.criado_em.desc()).all()
+    return render_template('loja.html', tenant=tenant, produtos=produtos,
+                           preview_mode=False, tema_override=None, hide_fabs=False)
 
 @app.route('/<slug>')
 def tenant_site(slug):
