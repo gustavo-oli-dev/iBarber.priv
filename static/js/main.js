@@ -145,3 +145,14 @@ document.querySelectorAll('form').forEach(form => {
     setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset._origText; }, 8000);
   });
 });
+
+// Navbar transparente no topo do hero — fica sólida após 50px de scroll (mobile)
+(function() {
+  var nav = document.querySelector('.navbar');
+  if (!nav) return;
+  function _navScroll() {
+    nav.classList.toggle('nav-scrolled', window.scrollY > 50);
+  }
+  window.addEventListener('scroll', _navScroll, { passive: true });
+  _navScroll();
+})();

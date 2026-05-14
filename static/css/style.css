@@ -1251,11 +1251,18 @@ main { flex: 1; }
   letter-spacing: 0.04em;
 }
 @media (max-width: 768px) {
-  /* Remove blur pesado da navbar no mobile — causa jank no scroll do Android */
+  /* Mobile: navbar começa transparente para se fundir com o hero.
+   * Fica sólida via .nav-scrolled (adicionado por JS ao scrollar 50px). */
   .navbar {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    background: transparent;
+    border-bottom-color: transparent;
+    transition: background .25s ease, border-color .25s ease;
+  }
+  .navbar.nav-scrolled {
     background: var(--bg);
+    border-bottom-color: var(--border);
   }
   .nav-links { display: none; }
   .nav-toggle { display: flex; }
