@@ -126,10 +126,11 @@
         document.querySelectorAll('.btn,.btn-gold').forEach(el => el.style.borderRadius = br);
       }
       if ('heroUrl' in t) {
-        document.body.style.backgroundImage  = t.heroUrl ? `url('${t.heroUrl}')` : '';
-        document.body.style.backgroundSize   = t.heroUrl ? 'cover' : '';
-        document.body.style.backgroundPosition = t.heroUrl ? 'center' : '';
-        document.body.style.backgroundAttachment = t.heroUrl ? 'fixed' : '';
+        document.body.style.backgroundImage     = t.heroUrl ? `url('${t.heroUrl}')` : '';
+        document.body.style.backgroundSize      = t.heroUrl ? 'cover' : '';
+        document.body.style.backgroundPosition  = t.heroUrl ? 'center' : '';
+        // fixed causa sobreposição no mobile — removido
+        document.body.style.backgroundAttachment = 'scroll';
         const heroEl = document.querySelector('.hero-central');
         if (heroEl) heroEl.style.backgroundImage = t.heroUrl ? `url('${t.heroUrl}')` : '';
       }

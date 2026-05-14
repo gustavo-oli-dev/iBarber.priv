@@ -317,7 +317,7 @@ main { flex: 1; }
   opacity: 0.6;
 }
 .hero-central {
-  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100dvh - var(--nav-h));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1001,7 +1001,7 @@ main { flex: 1; }
 }
 .btn-voltar:hover { color: var(--text); }
 .auth-section {
-  min-height: calc(100vh - var(--nav-h));
+  min-height: calc(100dvh - var(--nav-h));
   display: flex;
   align-items: center;
   justify-content: center;
