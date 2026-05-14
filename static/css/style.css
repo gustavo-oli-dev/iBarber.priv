@@ -322,7 +322,19 @@ main { flex: 1; }
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  position: relative;
+  background-attachment: fixed; /* parallax no desktop */
 }
+/* Overlay escuro sobre a imagem de fundo para integrar ao tema */
+.hero-central::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  z-index: 0;
+  pointer-events: none;
+}
+/* Conteúdo acima do overlay — regra completa em "Hero improvements" abaixo */
 .btn-hero {
   padding: 1.3rem 4rem;
   font-size: 1.25rem;
@@ -1237,6 +1249,7 @@ main { flex: 1; }
   margin-top: 1.4rem;
 }
 .footer {
+  background: var(--bg);
   border-top: 1px solid var(--border);
   padding: 1.5rem clamp(1.5rem, 5vw, 4rem);
   text-align: center;
@@ -1263,6 +1276,10 @@ main { flex: 1; }
   .hero-line { display: none; }
   .catalog-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  /* Mobile: sem parallax (background-attachment:fixed causa bugs no iOS/Android) */
+  .hero-central {
+    background-attachment: scroll;
   }
 }
 @media (max-width: 480px) {
@@ -1559,6 +1576,8 @@ main { animation: pageFadeIn 0.35s ease both; }
   align-items: center;
   gap: 1.2rem;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 .hero-eyebrow {
   font-size: 0.78rem;

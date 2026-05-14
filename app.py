@@ -1098,8 +1098,7 @@ def _build_ag_tema_override(args):
     hero    = re.sub(r'["\'\\\r\n<>]', '', args.get('heroUrl', ''))
     btn_r   = '999px' if estilo=='pilula' else ('0px' if estilo=='angular' else f'{radius}px')
     hero_css = (
-        f'body{{background-image:url("{hero}");background-size:cover;background-position:center;background-attachment:fixed}}'
-        f'.hero-central{{background-image:url("{hero}")!important}}'
+        f'.hero-central{{background-image:url("{hero}");background-size:cover;background-position:center}}'
     ) if hero else ''
     return (
         f'<style>:root{{--bg:{bg};--surface:{surface};--surface2:{surface};--border:{borda};'

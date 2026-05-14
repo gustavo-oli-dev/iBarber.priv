@@ -4,8 +4,10 @@
 {% set _tagline = (preview_identity.tagline  | default('')) or (tema_config.tagline  | default('')) or 'Bem-vindo' %}
 {% set _cta     = (preview_identity.ctaTexto | default('')) or (tema_config.ctaTexto | default('')) or 'Marque seu corte' %}
 {% set _hero    = (preview_identity.heroUrl  | default('')) or (tema_config.heroUrl  | default('')) %}
+{% set _nome    = (preview_identity.nomeDisplay | default('')) or (tema_config.nomeDisplay | default('')) or (tenant.nome | upper if tenant else 'BARBEARIA') %}
 <section class="hero-central"{% if _hero %} style="background-image:url('{{ _hero }}');background-size:cover;background-position:center;"{% endif %}>
   <div class="hero-stack stagger">
+    <h1 class="hero-title">{{ _nome }}</h1>
     <span class="hero-eyebrow">✦ {{ _tagline }}</span>
     {% if not session.get('user_id') %}
       <button class="btn btn-gold btn-hero" id="abrirLoginBtn" onclick="abrirModal()">{{ _cta }}</button>
