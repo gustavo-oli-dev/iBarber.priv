@@ -146,7 +146,9 @@
   }
 
   @media (max-width: 768px) {
-    .prod-card { border-radius: 8px; }
+    /* sem transition de transform no mobile — evita camadas GPU em todos os cards durante scroll */
+    .prod-card { border-radius: 8px; transition: border-color .2s; }
+    .prod-card:hover { transform: none; }
     .prod-body { padding: .55rem .65rem .65rem; gap: .2rem; }
     .prod-nome { font-size: .78rem; }
     .prod-desc { font-size: .7rem; -webkit-line-clamp: 2; }
