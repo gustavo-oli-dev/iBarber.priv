@@ -1284,6 +1284,8 @@ main { flex: 1; }
   .hero-central {
     background-attachment: scroll;
   }
+  /* Loja sai da navbar no mobile — aparece no conteúdo (servicos.html) */
+  .nav-loja-link { display: none !important; }
 }
 @media (max-width: 480px) {
   .catalog-grid {
