@@ -48,28 +48,22 @@
     .loja-grid { grid-template-columns: repeat(4, 1fr); }
   }
   @media (max-width: 768px) {
-    /* Header mobile — botão voltar alinhado à esquerda, título centralizado */
+    /* Header: botão voltar sai do absolute para não sobrepor o título */
     .loja-header {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: .9rem 1rem 1rem;
-      text-align: center;
+      padding: 1rem 1rem 1.25rem;
     }
     .btn-voltar {
       position: static;
       align-self: flex-start;
-      margin-bottom: .6rem;
-      font-size: .78rem;
-      padding: .3rem .65rem;
+      margin-bottom: .5rem;
     }
-    .loja-header h1 { font-size: 1.4rem; }
-    .loja-header p  { font-size: .8rem; }
-
-    /* Grid 2 colunas com menos espaçamento */
+    /* Grid 2 colunas — tudo mais igual ao desktop */
     .loja-grid {
       grid-template-columns: repeat(2, 1fr);
-      gap: .6rem;
+      gap: .75rem;
       padding: 0 .75rem 2rem;
     }
   }
@@ -146,14 +140,10 @@
   }
 
   @media (max-width: 768px) {
-    /* sem transition de transform no mobile — evita camadas GPU em todos os cards durante scroll */
-    .prod-card { border-radius: 8px; transition: border-color .2s; }
+    /* sem transition de transform no mobile — evita camadas GPU durante scroll */
+    .prod-card { transition: border-color .2s; }
     .prod-card:hover { transform: none; }
-    .prod-body { padding: .55rem .65rem .65rem; gap: .2rem; }
-    .prod-nome { font-size: .78rem; }
-    .prod-desc { font-size: .7rem; -webkit-line-clamp: 2; }
-    .prod-valor { font-size: .88rem; padding-top: .3rem; }
-    .prod-esgotado-overlay span { font-size: .65rem; padding: .2rem .5rem; }
+    /* demais estilos (tamanho, padding, fontes) iguais ao desktop */
   }
 
   .loja-empty {
