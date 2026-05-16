@@ -5,7 +5,7 @@
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>✦ Barbearia no ar!</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -38,12 +38,12 @@ h1,h2{font-family:'Playfair Display',serif}
 <body>
 <div class="box">
   <div class="sucesso-box">
-    <div class="sucesso-icon">🎉</div>
-    <h1 class="sucesso-title">✦ Sua barbearia está no ar!</h1>
-    <p class="sucesso-sub">Parabéns! Seu site foi criado com sucesso. Compartilhe os links abaixo com seus clientes.</p>
+    <div class="sucesso-icon">✦</div>
+    <h1 class="sucesso-title">Sua barbearia está no ar</h1>
+    <p class="sucesso-sub">Tudo pronto. Compartilhe o link do site com seus clientes e comece a receber agendamentos agora.</p>
 
     <div class="link-row">
-      <span class="link-row-label">Site</span>
+      <span class="link-row-label">Agendamento</span>
       <a class="link-row-url" id="link-site" href="#" target="_blank"></a>
       <button class="btn-copy" onclick="copiar('link-site', this)">Copiar</button>
     </div>
@@ -54,15 +54,15 @@ h1,h2{font-family:'Playfair Display',serif}
     </div>
 
     <a id="btn-painel" class="btn-painel" href="#" style="margin-top:1.6rem;">
-      Acessar painel de gestão →
+      Abrir painel de gestão
     </a>
 
     <div style="margin-top:1rem;">
       <a href="/static/app/ibarber.apk" download style="display:inline-flex;align-items:center;gap:.5rem;background:none;border:1px solid var(--border);color:var(--muted);padding:.65rem 1.4rem;border-radius:var(--radius);font-size:.82rem;text-decoration:none;transition:border-color .2s,color .2s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Baixar app iBarber (Android)
+        Baixar app Android
       </a>
-      <p class="apk-hint">⚙️ Ao instalar: <em>Configurações → Segurança → Permitir fontes desconhecidas</em></p>
+      <p class="apk-hint">Ao instalar, permita aplicativos de fontes desconhecidas nas configurações do seu celular.</p>
     </div>
   </div>
 </div>

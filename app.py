@@ -869,7 +869,8 @@ def auth_google_callback():
                 if not user:
                     flash('Erro ao criar conta. Tente novamente.', 'error')
                     return redirect(url_for('index'))
-    session.clear()
+    # M1: atribuição direta em vez de session.clear() para preservar path_tenant_id
+    # e outros dados úteis já presentes na sessão antes do callback OAuth
     session['user_id']       = user.id
     session['user_name']     = user.name
     session['user_email']    = user.email
@@ -895,6 +896,9 @@ def google_contato():
             erro = 'Telefone inválido — mínimo 10 dígitos.'
         else:
             user = db.session.get(User, session['user_id'])
+            # H3: garantir que o user pertence ao tenant da sessão atual
+            if user and user.tenant_id != session.get('path_tenant_id'):
+                return redirect(url_for('index'))
             if user:
                 user.contact = tel
                 user.receber_lembretes = request.form.get('lembretes', '1') != '0'
@@ -912,6 +916,9 @@ def api_perfil_update():
     data  = request.get_json(force=True) or {}
     campo = data.get('campo', '').strip()
     valor = data.get('valor', '').strip()
+    _CAMPOS_PERMITIDOS = {'telefone', 'email', 'nome'}  # H1: whitelist — name/contact/receber_lembretes
+    if campo not in _CAMPOS_PERMITIDOS:
+        return jsonify({'erro': 'Campo inválido'}), 400
     user  = db.session.get(User, session['user_id'])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
@@ -1350,6 +1357,9 @@ def agendar():
     _dur_s = _get_setting('intervalo_minutos', _api_tid())
     _dur_default = int(_dur_s.value) if _dur_s and _dur_s.value else 40
     _dur_req = int(duracao_total) if duracao_total else _dur_default
+    # H7: limitar duração máxima a 480 min (8h) para evitar bloqueio malicioso da agenda
+    if _dur_req > 480:
+        return jsonify({'erro': 'duração máxima excedida'}), 400
     _data_hora_fim = data_hora + timedelta(minutes=_dur_req)
 
     # C6: with_for_update() serializa requisições concorrentes para o mesmo dia/tenant
@@ -1402,15 +1412,21 @@ def cancelar_agendamento(ag_id):
         return jsonify({'erro': 'não encontrado'}), 404
     if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
+    # H2: rejeitar agendamentos já passados (diferença negativa enganaria a checagem < 3600)
+    if ag.data_hora <= _agora_brt():
+        return jsonify({'erro': 'Agendamento já ocorreu e não pode ser cancelado.'}), 400
     diferenca = (ag.data_hora - _agora_brt()).total_seconds()
     if diferenca < 3600:  # menos de 1h
         return jsonify({'erro': 'Cancelamento não permitido com menos de 1h de antecedência.'}), 400
     ag.status = 'cancelado'
     if ag.pedido_id:
         pedido = db.session.get(Pedido, ag.pedido_id)
+        # M5: registrar status original antes de cancelar para preservar entradas monetárias de pedidos pagos
+        pedido_ja_pago = pedido and pedido.status == 'pago'
         if pedido:
             pedido.status = 'cancelado'
-        EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
+        if not pedido_ja_pago:
+            EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
     db.session.commit()
     # Email de cancelamento ao cliente
     user = db.session.get(User, ag.user_id)
@@ -1485,6 +1501,10 @@ def reagendar_agendamento():
     if barbeiro_id is not None:
         ag.funcionario_id = barbeiro_id
     db.session.commit()
+    # M4: enviar email de confirmação ao cliente após reagendamento
+    user = db.session.get(User, ag.user_id)
+    if user:
+        _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
 
 @app.route('/api/gestao/reagendar', methods=['POST'])
@@ -1531,6 +1551,10 @@ def api_gestao_reagendar():
     if barbeiro_id is not None:
         ag.funcionario_id = barbeiro_id
     db.session.commit()
+    # M4: enviar email de confirmação ao cliente após reagendamento pela gestão
+    user = db.session.get(User, ag.user_id)
+    if user:
+        _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
 
 @app.route('/api/lista-espera', methods=['POST'])
@@ -1984,11 +2008,14 @@ def api_servicos_criar():
     nome = d.get('nome', '').strip()
     if not nome: return jsonify({'erro': 'nome obrigatório'}), 400
     cat_id = d.get('categoria_id')
+    preco = _sf(d.get('preco', 0))
+    if preco < 0:
+        return jsonify({'erro': 'preco inválido'}), 400
     sv = Servico(
         nome=nome,
         categoria='',
         categoria_id=cat_id,
-        preco=_sf(d.get('preco', 0)),
+        preco=preco,
         duracao=max(5, int(d.get('duracao', 30))),
         ordem=Servico.query.filter_by(categoria_id=cat_id, ativo=True, tenant_id=tid).count(),
         tenant_id=tid,
@@ -2007,7 +2034,11 @@ def api_servico_detalhe(sid):
     d = request.get_json() or {}
     if 'nome'         in d: sv.nome         = d['nome'].strip()
     if 'categoria_id' in d: sv.categoria_id = d['categoria_id']
-    if 'preco'        in d: sv.preco        = _sf(d['preco'])
+    if 'preco'        in d:
+        novo_preco = _sf(d['preco'])
+        if novo_preco < 0:
+            return jsonify({'erro': 'preco inválido'}), 400
+        sv.preco = novo_preco
     if 'duracao'      in d: sv.duracao      = max(5, int(d['duracao']))
     db.session.commit()
     return jsonify({'ok': True})
@@ -2263,6 +2294,9 @@ def api_dias_fechados_conflitos():
     data_val = request.args.get('data', '')
     if not data_val:
         return jsonify({'erro': 'data obrigatória'}), 400
+    # H6: rejeitar datas que não seguem o formato YYYY-MM-DD (previne SQL injection via data maliciosa)
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', data_val):
+        return jsonify({'erro': 'data inválida'}), 400
     conflitos = _conflitos_agendamentos_futuros(_api_tid(), data=data_val)
     return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
@@ -2490,6 +2524,8 @@ def criar_pagamento():
         })
 
     else:  # cartao – Checkout Pro
+        if not pedido_id:
+            return jsonify({'erro': 'pedido_id obrigatório para pagamento com cartão'}), 400
         _tenant = db.session.get(Tenant, _tid)
         _slug = _tenant.slug if _tenant else ''
         _base = request.host_url.rstrip('/')
@@ -2532,6 +2568,8 @@ def verificar_pagamento(mp_payment_id):
     status = r.json().get('status', 'unknown')
     if status == 'approved' and pedido_id:
         pedido = db.session.get(Pedido, pedido_id)
+        if pedido and pedido.tenant_id != _api_tid():
+            return jsonify({'status': 'unknown'}), 403
         if pedido and pedido.status != 'pago':
             pedido.status = 'pago'
             _entrada = EntradaMonetaria.query.filter_by(pedido_id=pedido_id).first()
@@ -2561,6 +2599,8 @@ def retorno_pagamento():
     if pedido_id:
         pedido = db.session.get(Pedido, pedido_id)
         if pedido:
+            if pedido.tenant_id != _api_tid():
+                return redirect('/')
             _tenant = db.session.get(Tenant, pedido.tenant_id)
             slug = _tenant.slug if _tenant else ''
             if status_mp == 'approved' and payment_id and pedido.status != 'pago':
@@ -4000,6 +4040,8 @@ def api_gestao_produto_criar():
         return jsonify({'erro': 'Nome obrigatório'}), 400
     descricao = request.form.get('descricao', '').strip() or None
     valor = _sf(request.form.get('valor', 0))
+    if valor < 0:
+        return jsonify({'erro': 'valor inválido'}), 400
     p = Produto(tenant_id=tid, nome=nome, descricao=descricao, valor=valor)
     db.session.add(p)
     db.session.flush()
@@ -4044,7 +4086,10 @@ def api_gestao_produto(pid):
         return jsonify({'erro': 'Nome obrigatório'}), 400
     p.nome = nome
     p.descricao = request.form.get('descricao', '').strip() or None
-    p.valor = _sf(request.form.get('valor', 0))
+    novo_valor = _sf(request.form.get('valor', 0))
+    if novo_valor < 0:
+        return jsonify({'erro': 'valor inválido'}), 400
+    p.valor = novo_valor
     arquivo = request.files.get('foto')
     if arquivo and arquivo.filename:
         buf, err = _processar_imagem(arquivo)
@@ -4954,6 +4999,9 @@ def api_pagamento_webhook():
     if payment.get('status') == 'approved':
         meta = payment.get('metadata', {})
         tenant_id = meta.get('tenant_id')
+        if not tenant_id:
+            print(f'[WEBHOOK] payment {payment_id} sem tenant_id no metadata')
+            return '', 200
         tipo = meta.get('tipo', 'assinatura')
         tenant = db.session.get(Tenant, tenant_id)
         if tenant:

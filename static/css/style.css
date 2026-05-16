@@ -21,6 +21,9 @@ html, body {
   --error:     #e05555;
   --success:   #4caf82;
   --radius:    8px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
   --nav-h:     60px;
   --font-serif: 'Playfair Display', Georgia, serif;
   --font-sans:  'Inter', system-ui, sans-serif;
