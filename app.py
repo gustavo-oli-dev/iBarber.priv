@@ -859,13 +859,27 @@ def auth_google_callback():
                 receber_lembretes=True, guest=False, tenant_id=tid,
             )
             db.session.add(user)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception:
+                # C5: race condition — outro request criou o mesmo usuário simultaneamente
+                db.session.rollback()
+                user = (User.query.filter_by(google_id=google_id, tenant_id=tid).first() or
+                        User.query.filter_by(email=email, tenant_id=tid).first())
+                if not user:
+                    flash('Erro ao criar conta. Tente novamente.', 'error')
+                    return redirect(url_for('index'))
     session.clear()
     session['user_id']       = user.id
     session['user_name']     = user.name
     session['user_email']    = user.email
     session['path_tenant_id'] = tid
-    _base = f"https://{oauth_host}" if oauth_host and oauth_host != request.host else ''
+    # C4: só redirecionar para subdomínios conhecidos do APP_DOMAIN (evita open redirect)
+    _base = ''
+    if oauth_host and oauth_host != request.host:
+        _allowed_suffix = f".{APP_DOMAIN}"
+        if oauth_host == APP_DOMAIN or oauth_host.endswith(_allowed_suffix):
+            _base = f"https://{oauth_host}"
     if not user.contact:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")
@@ -1071,14 +1085,6 @@ def _enviar_comprovante_pagamento(user, pedido):
     </div>
     """
     _enviar_email(user.email, 'Comprovante de pagamento — Barbearia', html)
-
-@app.route('/esqueci-senha')
-def esqueci_senha():
-    return redirect(url_for('index'))
-
-@app.route('/redefinir-senha/<token>')
-def redefinir_senha(token):
-    return redirect(url_for('index'))
 
 @app.route('/logout')
 def logout():
@@ -1346,13 +1352,14 @@ def agendar():
     _dur_req = int(duracao_total) if duracao_total else _dur_default
     _data_hora_fim = data_hora + timedelta(minutes=_dur_req)
 
-    # Busca agendamentos que se sobrepõem à janela [data_hora, data_hora_fim)
+    # C6: with_for_update() serializa requisições concorrentes para o mesmo dia/tenant
     inicio_dia = datetime.combine(data_hora.date(), datetime.min.time())
     fim_dia    = inicio_dia + timedelta(days=1)
     ags_dia = (Agendamento.query
                .filter_by(status='ativo', tenant_id=_api_tid())
                .filter(Agendamento.data_hora >= inicio_dia,
                        Agendamento.data_hora < fim_dia)
+               .with_for_update()
                .all())
     ags_slot = [
         ag for ag in ags_dia
@@ -1453,16 +1460,26 @@ def reagendar_agendamento():
         nova_dt = datetime.fromisoformat(nova_dh_str)
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
-    # Verifica disponibilidade no novo horário
+    # C7: verificar sobreposição com duração, não só horário exato
+    _dur_s = _get_setting('intervalo_minutos', ag.tenant_id)
+    _dur_default_r = int(_dur_s.value) if _dur_s and _dur_s.value else 40
+    _nova_fim = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_r)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
     capacidade = max(1, len(ativos))
-    ags_slot = Agendamento.query.filter(
-        Agendamento.data_hora == nova_dt,
-        Agendamento.status == 'ativo',
-        Agendamento.tenant_id == ag.tenant_id,
-        Agendamento.id != ag.id,
-    ).count()
-    if ags_slot >= capacidade:
+    _inicio_dia_r = datetime.combine(nova_dt.date(), datetime.min.time())
+    _fim_dia_r    = _inicio_dia_r + timedelta(days=1)
+    ags_dia_r = (Agendamento.query
+                 .filter_by(status='ativo', tenant_id=ag.tenant_id)
+                 .filter(Agendamento.data_hora >= _inicio_dia_r,
+                         Agendamento.data_hora < _fim_dia_r,
+                         Agendamento.id != ag.id)
+                 .all())
+    ags_slot_r = [
+        x for x in ags_dia_r
+        if x.data_hora < _nova_fim and
+           x.data_hora + timedelta(minutes=x.duracao_total or _dur_default_r) > nova_dt
+    ]
+    if len(ags_slot_r) >= capacidade:
         return jsonify({'erro': 'Horário não disponível'}), 409
     ag.data_hora = nova_dt
     if barbeiro_id is not None:
@@ -1489,15 +1506,26 @@ def api_gestao_reagendar():
         nova_dt = datetime.fromisoformat(nova_dh_str)
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
+    # C7: verificar sobreposição com duração, não só horário exato
+    _dur_sg = _get_setting('intervalo_minutos', tid)
+    _dur_default_g = int(_dur_sg.value) if _dur_sg and _dur_sg.value else 40
+    _nova_fim_g = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_g)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), tid)
     capacidade = max(1, len(ativos))
-    ags_slot = Agendamento.query.filter(
-        Agendamento.data_hora == nova_dt,
-        Agendamento.status == 'ativo',
-        Agendamento.tenant_id == tid,
-        Agendamento.id != ag.id,
-    ).count()
-    if ags_slot >= capacidade:
+    _inicio_dia_g = datetime.combine(nova_dt.date(), datetime.min.time())
+    _fim_dia_g    = _inicio_dia_g + timedelta(days=1)
+    ags_dia_g = (Agendamento.query
+                 .filter_by(status='ativo', tenant_id=tid)
+                 .filter(Agendamento.data_hora >= _inicio_dia_g,
+                         Agendamento.data_hora < _fim_dia_g,
+                         Agendamento.id != ag.id)
+                 .all())
+    ags_slot_g = [
+        x for x in ags_dia_g
+        if x.data_hora < _nova_fim_g and
+           x.data_hora + timedelta(minutes=x.duracao_total or _dur_default_g) > nova_dt
+    ]
+    if len(ags_slot_g) >= capacidade:
         return jsonify({'erro': 'Horário não disponível'}), 409
     ag.data_hora = nova_dt
     if barbeiro_id is not None:
@@ -2415,7 +2443,6 @@ def api_status_pagamentos():
 @app.route('/api/criar-pagamento', methods=['POST'])
 def criar_pagamento():
     data      = request.get_json(silent=True) or {}
-    total     = _sf(data.get('total', 0))
     metodo    = data.get('metodo', 'pix')
     pedido_id = data.get('pedido_id')
 
@@ -2425,6 +2452,15 @@ def criar_pagamento():
 
     if not mp_token:
         return jsonify({'erro': 'Mercado Pago não configurado. Configure o Access Token em Credenciais.'}), 400
+
+    # C2+C3: validar pedido no servidor — rejeitar se não pertencer a este tenant
+    if pedido_id:
+        pedido_obj = db.session.get(Pedido, pedido_id)
+        if not pedido_obj or pedido_obj.tenant_id != _tid:
+            return jsonify({'erro': 'pedido não encontrado'}), 404
+        total = pedido_obj.total
+    else:
+        total = _sf(data.get('total', 0))
 
     if metodo == 'pix':
         email_pagador = data.get('payer_email') or session.get('user_email', 'cliente@barbearia.com')
@@ -3316,13 +3352,15 @@ def enviar_retorno_automatico():
                 db.session.commit()
                 print(f'[RETORNO] Enviado para {user.email}')
 
-scheduler = BackgroundScheduler(daemon=True)
-scheduler.add_job(verificar_lembretes,      'interval', minutes=30)
-scheduler.add_job(verificar_assinaturas,    'interval', hours=12)
-scheduler.add_job(limpar_guests,            'interval', hours=24)
-scheduler.add_job(limpar_trials_expirados,  'interval', hours=24)
-scheduler.add_job(enviar_retorno_automatico,'interval', hours=12)
-scheduler.start()
+# C8: em modo debug o Werkzeug sobe dois processos; iniciar o scheduler só no principal
+if not _is_dev or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(verificar_lembretes,      'interval', minutes=30)
+    scheduler.add_job(verificar_assinaturas,    'interval', hours=12)
+    scheduler.add_job(limpar_guests,            'interval', hours=24)
+    scheduler.add_job(limpar_trials_expirados,  'interval', hours=24)
+    scheduler.add_job(enviar_retorno_automatico,'interval', hours=12)
+    scheduler.start()
 
 
 @app.route('/api/ping', methods=['GET'])
@@ -4231,6 +4269,9 @@ def pagamento():
 @app.route('/api/personalizar/upload', methods=['POST'])
 @limiter.limit('20 per hour')
 def api_personalizar_upload():
+    # C9: endpoint de upload restrito a gestor autenticado
+    if not session.get('gestao_tenant_id'):
+        return jsonify({'erro': 'não autenticado'}), 401
     arquivo = request.files.get('imagem')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
@@ -4872,23 +4913,24 @@ def api_pagamento_criar_v2():
 @app.route('/api/pagamento/webhook', methods=['POST'])
 def api_pagamento_webhook():
 
-    # Verificação de assinatura do Mercado Pago
+    # Verificação de assinatura do Mercado Pago — obrigatória
     mp_secret = os.environ.get('MP_WEBHOOK_SECRET', '')
-    if mp_secret:
-        sig_header = request.headers.get('X-Signature', '')
-        ts = ''
-        received = ''
-        for part in sig_header.split(','):
-            part = part.strip()
-            if part.startswith('ts='):
-                ts = part[3:]
-            elif part.startswith('v1='):
-                received = part[3:]
-        data_id = request.args.get('data.id', '') or (request.get_json(force=True) or {}).get('data', {}).get('id', '')
-        manifest = f'id:{data_id};request-id:{request.headers.get("X-Request-Id","")};ts:{ts};'
-        expected = hmac.new(mp_secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
-        if received and not hmac.compare_digest(expected, received):
-            return '', 401
+    if not mp_secret:
+        return '', 401  # secret não configurado → rejeitar toda requisição
+    sig_header = request.headers.get('X-Signature', '')
+    ts = ''
+    received = ''
+    for part in sig_header.split(','):
+        part = part.strip()
+        if part.startswith('ts='):
+            ts = part[3:]
+        elif part.startswith('v1='):
+            received = part[3:]
+    data_id = request.args.get('data.id', '') or (request.get_json(force=True) or {}).get('data', {}).get('id', '')
+    manifest = f'id:{data_id};request-id:{request.headers.get("X-Request-Id","")};ts:{ts};'
+    expected = hmac.new(mp_secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+    if not received or not hmac.compare_digest(expected, received):
+        return '', 401
 
     data = request.get_json(force=True) or {}
     if data.get('type') != 'payment':

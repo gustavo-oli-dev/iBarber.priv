@@ -4,7 +4,6 @@
 <style>
 /* Ocultar footer nesta página para tela única */
 .footer { display: none !important; }
-body { overflow: hidden; }
 .agendamento-card {
   position: relative;
   border: 1.5px solid #C9A96E;
@@ -82,7 +81,12 @@ body { overflow: hidden; }
   font-size: 1.4rem;
   cursor: pointer;
   line-height: 1;
-  padding: 0 .2rem;
+  padding: 0;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .hist-close:hover { color: #f0ece4; }
 

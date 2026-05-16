@@ -164,12 +164,12 @@ main { flex: 1; }
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   background: none;
   border: 1px solid var(--border);
   cursor: pointer;
-  padding: 0;
+  padding: 0 8px;
   border-radius: var(--radius);
 }
 .nav-toggle span {
@@ -424,8 +424,8 @@ main { flex: 1; }
 }
 .modal-close {
   position: absolute;
-  top: 1rem;
-  right: 1.1rem;
+  top: 0.6rem;
+  right: 0.6rem;
   background: none;
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -434,6 +434,12 @@ main { flex: 1; }
   cursor: pointer;
   transition: color var(--transition);
   padding: 0;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
 }
 .modal-close:hover { color: var(--text); }
 .modal-footer {
@@ -705,9 +711,9 @@ main { flex: 1; }
   border: 1px solid var(--border);
   color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   cursor: pointer;
-  padding: 0.2rem 0.4rem;
+  padding: 0.3rem 0.6rem;
   transition: color var(--transition);
 }
 .btn-ver-mais-mini:hover { color: var(--gold); }
@@ -900,6 +906,11 @@ main { flex: 1; }
   cursor: pointer;
   line-height: 1;
   transition: color var(--transition);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .carrinho-fechar:hover { color: var(--text); }
 .carrinho-lista {
@@ -926,9 +937,15 @@ main { flex: 1; }
   border-radius: var(--radius);
   font-size: 1.2rem;
   cursor: pointer;
-  padding: 0 0.2rem;
+  padding: 0;
   line-height: 1;
   transition: color var(--transition);
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .carrinho-item-remover:hover { color: var(--error); }
 .carrinho-vazio {
@@ -1264,6 +1281,15 @@ main { flex: 1; }
     background: var(--bg);
     border-bottom-color: var(--border);
   }
+  /* Backdrop-filter causa jank no Android — desabilitar no mobile */
+  .modal-overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .fab {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   .nav-links { display: none; }
   .nav-toggle { display: flex; }
   .nav-drawer { display: flex; }
@@ -1338,7 +1364,7 @@ main { flex: 1; }
   background: rgba(76,175,130,0.08);
 }
 .cal-dia-semana {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1350,7 +1376,7 @@ main { flex: 1; }
   line-height: 1;
 }
 .cal-dia-mes {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 .cal-dia-btn.selecionado .cal-dia-num,
@@ -1817,7 +1843,6 @@ img, video, iframe, table { max-width: 100%; }
   /* Calendar modal */
   .cal-modal { padding: 1.1rem 0.9rem !important; }
   .cal-dia-btn { min-width: 48px; padding: 0.4rem 0.45rem; }
-  .cal-dia-semana, .cal-dia-mes { font-size: 0.62rem; }
   .cal-dia-num { font-size: 1.05rem; }
   .cal-horarios-grid { grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
   .cal-hora-btn { font-size: 0.88rem; padding: 0.8rem 0; }
