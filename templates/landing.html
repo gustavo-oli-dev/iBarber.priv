@@ -366,6 +366,62 @@ footer{
   nav{padding:0 1rem;height:56px}
 }
 
+/* ── FEATURES INTERACTIVE ── */
+.fi-wrap{max-width:1100px;margin:0 auto}
+.fi-hdr{margin-bottom:3rem}
+.fi-layout{display:grid;grid-template-columns:265px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;min-height:460px}
+.fi-sidebar{background:rgba(255,255,255,0.025);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:1.75rem 0}
+.fi-sidebar-head{display:flex;align-items:center;gap:.75rem;padding:0 1.5rem 1.5rem;border-bottom:1px solid var(--border);margin-bottom:1rem}
+.fi-sidebar-icon{width:38px;height:38px;border-radius:10px;background:rgba(201,169,110,.15);border:1px solid rgba(201,169,110,.35);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.fi-sidebar-label{font-size:.7rem;font-weight:700;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;line-height:1.4}
+.fi-btn{display:flex;align-items:center;gap:.85rem;padding:.85rem 1.5rem;cursor:pointer;border:none;background:none;color:var(--muted);width:100%;text-align:left;transition:background .15s,color .15s;position:relative;font-family:inherit}
+.fi-btn:hover{background:rgba(255,255,255,0.04);color:var(--text)}
+.fi-btn.active{background:rgba(201,169,110,.08);color:var(--text)}
+.fi-btn.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gold);border-radius:0 2px 2px 0}
+.fi-num{width:27px;height:27px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0;transition:all .2s;background:transparent;color:inherit}
+.fi-btn.active .fi-num{background:var(--gold);border-color:var(--gold);color:#000}
+.fi-btn-body{display:flex;flex-direction:column;gap:2px}
+.fi-btn-title{font-size:.82rem;font-weight:600;line-height:1.3}
+.fi-btn-sub{font-size:.7rem;color:var(--muted);line-height:1.3}
+.fi-btn.active .fi-btn-sub{color:rgba(201,169,110,0.6)}
+.fi-content{padding:2.5rem 2.75rem;display:flex;flex-direction:column;flex:1}
+.fi-panel{display:none;flex:1;flex-direction:column}
+.fi-panel.active{display:flex;animation:fiIn .3s ease}
+@keyframes fiIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fi-panel-tag{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:.5rem}
+.fi-panel h3{font-size:1.2rem;font-weight:700;margin-bottom:.7rem;line-height:1.3}
+.fi-panel>p{font-size:.875rem;color:var(--muted);line-height:1.7;margin-bottom:1.2rem}
+.fi-pts{list-style:none;display:flex;flex-direction:column;gap:.45rem;margin-bottom:1.4rem}
+.fi-pts li{display:flex;align-items:flex-start;gap:.55rem;font-size:.835rem;color:var(--muted);line-height:1.5}
+.fi-pts li::before{content:'✦';color:var(--gold);font-size:.58rem;margin-top:4px;flex-shrink:0}
+.fi-pts strong{color:var(--text);font-weight:500}
+.fi-visual{margin-top:auto;padding:1.1rem 1.25rem;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:12px;display:flex;align-items:center;justify-content:center;gap:.75rem;min-height:84px;overflow:hidden;flex-shrink:0}
+.fi-progress{display:flex;gap:5px;padding-top:1.25rem}
+.fi-prog{flex:1;height:3px;border-radius:99px;background:rgba(255,255,255,0.08);transition:background .4s}
+.fi-prog.active{background:var(--gold)}
+/* Mini mockup helpers */
+.fi-svc{display:flex;align-items:center;gap:.5rem;padding:.45rem .7rem;background:#141414;border:1px solid #2a2a2a;border-radius:8px;font-size:.67rem;white-space:nowrap}
+.fi-svc.hi{border-color:rgba(201,169,110,.4);color:var(--gold)}
+.fi-card{display:flex;flex-direction:column;gap:.2rem;padding:.6rem .85rem;background:#141414;border:1px solid #252525;border-radius:10px;min-width:72px}
+.fi-card-lbl{font-size:.58rem;color:#666}
+.fi-card-val{font-size:1rem;font-weight:700;color:var(--gold)}
+.fi-emp{display:flex;align-items:center;gap:.55rem;padding:.45rem .7rem;background:#141414;border:1px solid #252525;border-radius:8px;font-size:.68rem;color:#aaa}
+.fi-emp-av{width:22px;height:22px;border-radius:50%;background:rgba(201,169,110,.2);display:flex;align-items:center;justify-content:center;font-size:.65rem;flex-shrink:0}
+.fi-bar-wrap{display:flex;align-items:flex-end;gap:6px;height:60px}
+.fi-bar{width:18px;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--gold),rgba(201,169,110,.4))}
+.fi-swatch{width:28px;height:28px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.1)}
+@media(max-width:768px){
+  .fi-layout{grid-template-columns:1fr}
+  .fi-sidebar{flex-direction:row;overflow-x:auto;padding:.75rem;border-right:none;border-bottom:1px solid var(--border);gap:4px;scrollbar-width:none}
+  .fi-sidebar::-webkit-scrollbar{display:none}
+  .fi-sidebar-head{display:none}
+  .fi-btn{flex-direction:column;align-items:center;padding:.5rem .65rem;width:auto;flex-shrink:0;gap:.35rem;border-radius:8px}
+  .fi-btn.active::before{display:none}
+  .fi-btn.active{background:rgba(201,169,110,.12)}
+  .fi-btn-body{display:none}
+  .fi-content{padding:1.5rem 1.25rem}
+}
+
 /* ── ANIMATIONS ── */
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 .hero-tag,.hero h1,.hero-sub,.hero-ctas{animation:fadeUp .7s ease both}
@@ -451,44 +507,215 @@ footer{
   </div>
 </div>
 
-<!-- FEATURES -->
+<!-- FEATURES INTERACTIVE -->
 <section id="funcionalidades">
-  <div class="features-wrap">
-    <div class="features-top">
+  <div class="fi-wrap">
+    <div class="fi-hdr reveal">
       <div class="section-label">Funcionalidades</div>
-      <div class="section-title">Tudo que você precisa, nada que você não vai usar</div>
-      <p class="section-sub">Cada funcionalidade foi pensada junto com quem trabalha atrás da cadeira todo dia.</p>
+      <div class="section-title">Tudo que você precisa,<br>nada que não vai usar</div>
+      <p class="section-sub" style="margin-top:.75rem">Cada detalhe pensado para quem trabalha atrás da cadeira todo dia.</p>
     </div>
-    <div class="features-grid">
-      <div class="feature-item reveal">
-        <div class="feature-icon">🌐</div>
-        <h3>Site de agendamento</h3>
-        <p>Seus clientes agendam pelo celular, 24h por dia. Link personalizado com a identidade da sua barbearia.</p>
+
+    <div class="fi-layout reveal">
+
+      <!-- Sidebar -->
+      <div class="fi-sidebar">
+        <div class="fi-sidebar-head">
+          <div class="fi-sidebar-icon">✂️</div>
+          <div class="fi-sidebar-label">Funcionalidades<br>do iBarber</div>
+        </div>
+        <button class="fi-btn active" onclick="selFi(0)">
+          <div class="fi-num">1</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">Site de agendamento</div>
+            <div class="fi-btn-sub">Link personalizado, 24h no ar</div>
+          </div>
+        </button>
+        <button class="fi-btn" onclick="selFi(1)">
+          <div class="fi-num">2</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">Painel de gestão</div>
+            <div class="fi-btn-sub">Controle total pelo celular</div>
+          </div>
+        </button>
+        <button class="fi-btn" onclick="selFi(2)">
+          <div class="fi-num">3</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">Equipe e permissões</div>
+            <div class="fi-btn-sub">Acesso individual por barbeiro</div>
+          </div>
+        </button>
+        <button class="fi-btn" onclick="selFi(3)">
+          <div class="fi-num">4</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">PIX e cartão</div>
+            <div class="fi-btn-sub">Receba antes do cliente chegar</div>
+          </div>
+        </button>
+        <button class="fi-btn" onclick="selFi(4)">
+          <div class="fi-num">5</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">Relatórios</div>
+            <div class="fi-btn-sub">Dados claros sobre seu negócio</div>
+          </div>
+        </button>
+        <button class="fi-btn" onclick="selFi(5)">
+          <div class="fi-num">6</div>
+          <div class="fi-btn-body">
+            <div class="fi-btn-title">Visual personalizável</div>
+            <div class="fi-btn-sub">Sua marca, seu estilo</div>
+          </div>
+        </button>
       </div>
-      <div class="feature-item reveal reveal-delay-1">
-        <div class="feature-icon">📱</div>
-        <h3>App de gestão mobile</h3>
-        <p>Gerencie tudo pelo celular. Agendamentos, clientes, preços e equipe na palma da mão.</p>
-      </div>
-      <div class="feature-item reveal reveal-delay-2">
-        <div class="feature-icon">👨‍💼</div>
-        <h3>Gestão de funcionários</h3>
-        <p>Cadastre barbeiros com permissões individuais. Cada um acessa só o que precisa.</p>
-      </div>
-      <div class="feature-item reveal reveal-delay-3">
-        <div class="feature-icon">💳</div>
-        <h3>PIX e cartão integrados</h3>
-        <p>Receba pagamentos no ato do agendamento via PIX ou cartão. Tudo pelo Mercado Pago.</p>
-      </div>
-      <div class="feature-item reveal reveal-delay-4">
-        <div class="feature-icon">📊</div>
-        <h3>Relatórios e gráficos</h3>
-        <p>Acompanhe o crescimento da sua barbearia com gráficos de receita, serviços e agendamentos.</p>
-      </div>
-      <div class="feature-item reveal reveal-delay-5">
-        <div class="feature-icon">🎨</div>
-        <h3>Visual personalizável</h3>
-        <p>Escolha cores, fontes e estilo. O site e o app combinam com a identidade da sua marca.</p>
+
+      <!-- Content panels -->
+      <div class="fi-content">
+
+        <div class="fi-panel active" id="fi-0">
+          <div class="fi-panel-tag">Funcionalidade 01 — Site de agendamento</div>
+          <h3>Site personalizado com seu link único</h3>
+          <p>Seu cliente abre o celular, escolhe o serviço, o barbeiro e o horário — tudo sem precisar ligar. Disponível 24h por dia, sete dias por semana.</p>
+          <ul class="fi-pts">
+            <li>Link exclusivo: <strong>ibarber.app.br/sua-barbearia</strong></li>
+            <li>Visual com as cores e fontes da sua marca</li>
+            <li>Sem app para baixar — funciona direto no navegador</li>
+            <li>Agendamentos em tempo real, sem conflitos de horário</li>
+          </ul>
+          <div class="fi-visual">
+            <div class="fi-svc hi">✂️ Corte clássico · R$35</div>
+            <div class="fi-svc">🪒 Barba · R$25</div>
+            <div class="fi-svc">✨ Combo · R$55</div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog active"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div>
+          </div>
+        </div>
+
+        <div class="fi-panel" id="fi-1">
+          <div class="fi-panel-tag">Funcionalidade 02 — Painel de gestão</div>
+          <h3>Dashboard completo na palma da mão</h3>
+          <p>Controle toda a barbearia pelo celular. Agenda do dia, confirmação de horários, histórico de clientes e caixa num só painel — simples e rápido.</p>
+          <ul class="fi-pts">
+            <li>Resumo do dia: agendamentos, receita e clientes</li>
+            <li>Confirmação e cancelamento com um toque</li>
+            <li>Histórico completo de cada cliente</li>
+            <li>Funciona no celular e no computador</li>
+          </ul>
+          <div class="fi-visual">
+            <div class="fi-card"><div class="fi-card-lbl">Hoje</div><div class="fi-card-val">12</div><div style="font-size:.58rem;color:#555">agendamentos</div></div>
+            <div class="fi-card"><div class="fi-card-lbl">Mês</div><div class="fi-card-val">R$4.8k</div><div style="font-size:.58rem;color:#555">receita</div></div>
+            <div class="fi-card"><div class="fi-card-lbl">Clientes</div><div class="fi-card-val">247</div><div style="font-size:.58rem;color:#555">cadastrados</div></div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog"></div><div class="fi-prog active"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div>
+          </div>
+        </div>
+
+        <div class="fi-panel" id="fi-2">
+          <div class="fi-panel-tag">Funcionalidade 03 — Equipe e permissões</div>
+          <h3>Cada barbeiro com seu próprio acesso</h3>
+          <p>Cadastre toda a equipe com permissões específicas. Cada barbeiro vê e gerencia apenas o que precisa — sem misturar dados nem responsabilidades.</p>
+          <ul class="fi-pts">
+            <li>Login separado por barbeiro</li>
+            <li>Permissões individuais: agenda, clientes, preços, financeiro</li>
+            <li>Visão da agenda filtrada por funcionário</li>
+            <li>Controle total sempre nas mãos do proprietário</li>
+          </ul>
+          <div class="fi-visual" style="flex-direction:column;align-items:flex-start;padding:.75rem 1rem">
+            <div class="fi-emp"><div class="fi-emp-av">👤</div><div><div style="font-weight:600;color:#ddd">Miguel Santos</div><div style="font-size:.62rem;color:#555">Proprietário · acesso total</div></div><div style="margin-left:auto;font-size:.65rem;background:rgba(201,169,110,.15);color:var(--gold);padding:2px 7px;border-radius:20px;border:1px solid rgba(201,169,110,.3)">owner</div></div>
+            <div class="fi-emp" style="margin-top:6px"><div class="fi-emp-av">👤</div><div><div style="font-weight:600;color:#ddd">Rafael Lima</div><div style="font-size:.62rem;color:#555">Barbeiro · agenda + clientes</div></div><div style="margin-left:auto;font-size:.65rem;background:rgba(255,255,255,.05);color:#666;padding:2px 7px;border-radius:20px;border:1px solid #2a2a2a">staff</div></div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog active"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div>
+          </div>
+        </div>
+
+        <div class="fi-panel" id="fi-3">
+          <div class="fi-panel-tag">Funcionalidade 04 — PIX e cartão</div>
+          <h3>Receba antes do cliente sentar na cadeira</h3>
+          <p>Na hora de agendar, o cliente paga via PIX ou cartão. O dinheiro cai direto na sua conta Mercado Pago — sem intermediário, sem espera.</p>
+          <ul class="fi-pts">
+            <li>QR Code PIX gerado automaticamente no agendamento</li>
+            <li>Cartão de crédito/débito via checkout Mercado Pago</li>
+            <li>Agendamento só é confirmado após o pagamento</li>
+            <li>Sem taxa extra do iBarber — só a do Mercado Pago</li>
+          </ul>
+          <div class="fi-visual" style="gap:1.5rem">
+            <div style="width:64px;height:64px;background:#111;border:1px solid #2a2a2a;border-radius:10px;display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px;flex-shrink:0">
+              <div style="grid-column:1/4;grid-row:1/4;background:#333;border-radius:2px"></div><div style="grid-column:5/8;grid-row:1/4;background:#333;border-radius:2px"></div>
+              <div style="grid-column:3/6;grid-row:3/6;background:var(--gold);border-radius:1px"></div>
+              <div style="grid-column:1/4;grid-row:5/8;background:#333;border-radius:2px"></div><div style="grid-column:5/8;grid-row:5/8;background:#333;border-radius:2px"></div>
+            </div>
+            <div style="text-align:left">
+              <div style="font-size:.68rem;color:#555;margin-bottom:.2rem">Valor a pagar</div>
+              <div style="font-size:1.4rem;font-weight:800;color:var(--gold)">R$ 35,00</div>
+              <div style="font-size:.65rem;color:#4caf82;margin-top:.2rem">⚡ PIX · confirmação em segundos</div>
+            </div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog active"></div><div class="fi-prog"></div><div class="fi-prog"></div>
+          </div>
+        </div>
+
+        <div class="fi-panel" id="fi-4">
+          <div class="fi-panel-tag">Funcionalidade 05 — Relatórios</div>
+          <h3>Números claros, decisões mais fáceis</h3>
+          <p>Acompanhe o crescimento da sua barbearia com gráficos objetivos. Receita, serviços mais vendidos e evolução de clientes — tudo num relance.</p>
+          <ul class="fi-pts">
+            <li>Receita por dia, semana e mês</li>
+            <li>Serviços mais vendidos do período</li>
+            <li>Crescimento de clientes novos vs. recorrentes</li>
+            <li>Agendamentos realizados vs. cancelados</li>
+          </ul>
+          <div class="fi-visual" style="align-items:flex-end;gap:1.5rem;padding-bottom:1.5rem">
+            <div class="fi-bar-wrap">
+              <div class="fi-bar" style="height:35%"></div>
+              <div class="fi-bar" style="height:55%"></div>
+              <div class="fi-bar" style="height:48%"></div>
+              <div class="fi-bar" style="height:80%"></div>
+              <div class="fi-bar" style="height:65%"></div>
+              <div class="fi-bar" style="height:90%"></div>
+            </div>
+            <div style="text-align:left">
+              <div style="font-size:.62rem;color:#555;margin-bottom:.2rem">Receita — últimos 6 meses</div>
+              <div style="font-size:1.2rem;font-weight:700;color:var(--gold)">+34%</div>
+              <div style="font-size:.65rem;color:#4caf82">↑ crescimento</div>
+            </div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog active"></div><div class="fi-prog"></div>
+          </div>
+        </div>
+
+        <div class="fi-panel" id="fi-5">
+          <div class="fi-panel-tag">Funcionalidade 06 — Visual personalizável</div>
+          <h3>Sua identidade visual em todo o sistema</h3>
+          <p>Escolha cores, fontes e estilo. O site de agendamento e o painel de gestão adotam a sua marca — preview ao vivo antes de salvar.</p>
+          <ul class="fi-pts">
+            <li>Paleta de cores totalmente livre</li>
+            <li>Fontes modernas inclusas no plano</li>
+            <li>Preview em tempo real no agendamento e na gestão</li>
+            <li>Aplicado automaticamente em todos os dispositivos</li>
+          </ul>
+          <div class="fi-visual" style="gap:1rem">
+            <div style="display:flex;gap:6px;align-items:center">
+              <div class="fi-swatch" style="background:#C9A96E"></div>
+              <div class="fi-swatch" style="background:#e05b5b"></div>
+              <div class="fi-swatch" style="background:#5b9be0"></div>
+              <div class="fi-swatch" style="background:#5be07a"></div>
+              <div class="fi-swatch" style="background:#9b5be0"></div>
+            </div>
+            <div style="width:1px;height:40px;background:var(--border)"></div>
+            <div style="background:#141414;border:1px solid #2a2a2a;border-radius:8px;padding:.5rem .85rem;font-size:.68rem;color:var(--gold)">
+              <div style="font-size:.58rem;color:#555;margin-bottom:.15rem">Preview ao vivo</div>
+              ✦ Sua Barbearia
+            </div>
+          </div>
+          <div class="fi-progress">
+            <div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog active"></div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -844,6 +1071,16 @@ footer{
 </footer>
 
 <script>
+// ── Feature interactive sidebar ─────────────────────────────────────────────
+let _fiTimer;
+function selFi(idx) {
+  document.querySelectorAll('.fi-btn').forEach((b,i)=>b.classList.toggle('active',i===idx));
+  document.querySelectorAll('.fi-panel').forEach((p,i)=>p.classList.toggle('active',i===idx));
+  clearTimeout(_fiTimer);
+  _fiTimer = setTimeout(()=>selFi((idx+1)%6), 4800);
+}
+_fiTimer = setTimeout(()=>selFi(1), 4800);
+
 function escolherPlano(plano) {
   localStorage.setItem('plano_selecionado', plano);
   window.location.href = '/personalizar';
