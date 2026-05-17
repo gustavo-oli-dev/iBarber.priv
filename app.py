@@ -896,7 +896,7 @@ def auth_google_callback():
     user_info = req_http.get('https://www.googleapis.com/oauth2/v3/userinfo',
                               headers={'Authorization': f'Bearer {access_token}'}, timeout=10).json()
     google_id = user_info.get('sub')
-    email     = user_info.get('email', '').lower()
+    email     = user_info.get('email', '').strip().lower()
     nome      = user_info.get('name', 'Usuário')
     if not google_id or not email:
         flash('Não foi possível obter dados do Google.', 'error')
@@ -986,7 +986,7 @@ def api_perfil_update():
             return jsonify({'erro': 'Telefone inválido — mínimo 10 dígitos'}), 400
         user.contact = tel
     elif campo == 'email':
-        email = valor.lower()
+        email = valor.strip().lower()
         if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'erro': 'E-mail inválido'}), 400
         conflito = User.query.filter(User.email == email, User.id != user.id, User.tenant_id == user.tenant_id).first()
@@ -1053,6 +1053,8 @@ def _enviar_email(dest, assunto, html):
         return False
 
 def _enviar_confirmacao_agendamento(user, data_hora):
+    if not user or not user.email or user.email.endswith('@ibarber.local'):
+        return
     data_fmt = f"{DIAS_PT[data_hora.weekday()]}, {data_hora.day} de {MESES_PT[data_hora.month-1]}"
     hora_fmt = data_hora.strftime('%H:%M')
     html = f"""
@@ -1408,6 +1410,11 @@ def agendar():
     data = request.get_json() or {}
     pedido_id     = data.get('pedido_id')
     data_hora_str = data.get('data_hora', '')
+    # Garantir que o pedido pertence ao usuário logado
+    if pedido_id:
+        _ped = db.session.get(Pedido, pedido_id)
+        if not _ped or _ped.user_id != session['user_id']:
+            return jsonify({'erro': 'pedido inválido'}), 403
     try:
         data_hora = datetime.fromisoformat(data_hora_str)
     except Exception:
@@ -1455,10 +1462,13 @@ def agendar():
     if len(ags_slot) >= capacidade:
         return jsonify({'erro': 'Este horário já está cheio. Escolha outro.'}), 400
 
-    # Determinar funcionario_id
+    # Determinar funcionario_id — validar que é um funcionário ativo do tenant
     funcionario_id = data.get('funcionario_id')
+    _ativos_ids = {f['id'] for f in ativos} | {0}  # 0 = proprietário
     if funcionario_id is not None:
         funcionario_id = int(funcionario_id)
+        if funcionario_id not in _ativos_ids:
+            return jsonify({'erro': 'funcionário inválido'}), 400
     else:
         # Auto-atribuir funcionário livre
         ocupados_ids = {ag.funcionario_id for ag in ags_slot if ag.funcionario_id}
@@ -1506,7 +1516,7 @@ def cancelar_agendamento(ag_id):
     db.session.commit()
     # Email de cancelamento ao cliente
     user = db.session.get(User, ag.user_id)
-    if user and not user.email.endswith('@ibarber.local'):
+    if user and user.email and not user.email.endswith('@ibarber.local'):
         data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
         hora_fmt = ag.data_hora.strftime('%H:%M')
         html_cancel = f"""
@@ -1576,7 +1586,10 @@ def reagendar_agendamento():
         return jsonify({'erro': 'Horário não disponível'}), 409
     ag.data_hora = nova_dt
     if barbeiro_id is not None:
-        ag.funcionario_id = barbeiro_id
+        _ativos_ids_r = {f['id'] for f in ativos} | {0}
+        if int(barbeiro_id) not in _ativos_ids_r:
+            return jsonify({'erro': 'funcionário inválido'}), 400
+        ag.funcionario_id = int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento
     user = db.session.get(User, ag.user_id)
@@ -1626,7 +1639,10 @@ def api_gestao_reagendar():
         return jsonify({'erro': 'Horário não disponível'}), 409
     ag.data_hora = nova_dt
     if barbeiro_id is not None:
-        ag.funcionario_id = barbeiro_id
+        _ativos_ids_g = {f['id'] for f in ativos} | {0}
+        if int(barbeiro_id) not in _ativos_ids_g:
+            return jsonify({'erro': 'funcionário inválido'}), 400
+        ag.funcionario_id = int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento pela gestão
     user = db.session.get(User, ag.user_id)
@@ -2625,7 +2641,7 @@ def criar_pagamento():
         total = _sf(data.get('total', 0))
 
     if metodo == 'pix':
-        email_pagador = data.get('payer_email') or session.get('user_email', 'cliente@barbearia.com')
+        email_pagador = (data.get('payer_email') or '').strip().lower() or session.get('user_email', '').strip().lower() or 'cliente@barbearia.com'
         payload = {
             'transaction_amount': round(total, 2),
             'description': 'Barbearia – Serviços',
