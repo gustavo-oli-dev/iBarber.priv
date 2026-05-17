@@ -410,16 +410,34 @@ footer{
 .fi-bar-wrap{display:flex;align-items:flex-end;gap:6px;height:60px}
 .fi-bar{width:18px;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--gold),rgba(201,169,110,.4))}
 .fi-swatch{width:28px;height:28px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.1)}
+.fi-btn-icon{display:none;font-size:1rem;line-height:1;flex-shrink:0}
 @media(max-width:768px){
-  .fi-layout{grid-template-columns:1fr}
-  .fi-sidebar{flex-direction:row;overflow-x:auto;padding:.75rem;border-right:none;border-bottom:1px solid var(--border);gap:4px;scrollbar-width:none}
+  .fi-layout{grid-template-columns:1fr;min-height:0}
+  .fi-sidebar{flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:.6rem .75rem;border-right:none;border-bottom:1px solid var(--border);gap:3px;scrollbar-width:none}
   .fi-sidebar::-webkit-scrollbar{display:none}
   .fi-sidebar-head{display:none}
-  .fi-btn{flex-direction:column;align-items:center;padding:.5rem .65rem;width:auto;flex-shrink:0;gap:.35rem;border-radius:8px}
+  .fi-btn{flex-direction:column;align-items:center;padding:.55rem .7rem;width:auto;flex-shrink:0;gap:.25rem;border-radius:8px;min-width:50px}
   .fi-btn.active::before{display:none}
   .fi-btn.active{background:rgba(201,169,110,.12)}
   .fi-btn-body{display:none}
-  .fi-content{padding:1.5rem 1.25rem}
+  .fi-btn-icon{display:block}
+  .fi-num{width:22px;height:22px;font-size:.62rem}
+  .fi-content{padding:1.25rem 1rem;overflow:hidden}
+  .fi-panel-tag{display:none}
+  .fi-panel h3{font-size:1rem;margin-bottom:.45rem}
+  .fi-panel>p{font-size:.82rem;margin-bottom:.9rem}
+  .fi-pts{gap:.4rem;margin-bottom:.9rem}
+  .fi-pts li{font-size:.78rem}
+  .fi-visual{flex-wrap:wrap;min-height:auto;margin-top:.75rem;padding:.7rem;gap:.5rem;overflow:hidden}
+  .fi-svc{white-space:normal;font-size:.63rem;padding:.35rem .55rem}
+  .fi-card{min-width:58px;padding:.45rem .6rem}
+  .fi-card-val{font-size:.9rem}
+  .fi-emp{min-width:0;overflow:hidden}
+  .fi-emp-badge{display:none}
+  .fi-bar-wrap{height:44px}
+  .fi-bar{width:13px}
+  .fi-swatch{width:22px;height:22px}
+  .fi-progress{padding-top:.7rem}
 }
 
 /* ── ANIMATIONS ── */
@@ -525,6 +543,7 @@ footer{
           <div class="fi-sidebar-label">Funcionalidades<br>do iBarber</div>
         </div>
         <button class="fi-btn active" onclick="selFi(0)">
+          <span class="fi-btn-icon">🌐</span>
           <div class="fi-num">1</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">Site de agendamento</div>
@@ -532,6 +551,7 @@ footer{
           </div>
         </button>
         <button class="fi-btn" onclick="selFi(1)">
+          <span class="fi-btn-icon">📱</span>
           <div class="fi-num">2</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">Painel de gestão</div>
@@ -539,6 +559,7 @@ footer{
           </div>
         </button>
         <button class="fi-btn" onclick="selFi(2)">
+          <span class="fi-btn-icon">👥</span>
           <div class="fi-num">3</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">Equipe e permissões</div>
@@ -546,6 +567,7 @@ footer{
           </div>
         </button>
         <button class="fi-btn" onclick="selFi(3)">
+          <span class="fi-btn-icon">⚡</span>
           <div class="fi-num">4</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">PIX e cartão</div>
@@ -553,6 +575,7 @@ footer{
           </div>
         </button>
         <button class="fi-btn" onclick="selFi(4)">
+          <span class="fi-btn-icon">📊</span>
           <div class="fi-num">5</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">Relatórios</div>
@@ -560,6 +583,7 @@ footer{
           </div>
         </button>
         <button class="fi-btn" onclick="selFi(5)">
+          <span class="fi-btn-icon">🎨</span>
           <div class="fi-num">6</div>
           <div class="fi-btn-body">
             <div class="fi-btn-title">Visual personalizável</div>
@@ -622,8 +646,8 @@ footer{
             <li>Controle total sempre nas mãos do proprietário</li>
           </ul>
           <div class="fi-visual" style="flex-direction:column;align-items:flex-start;padding:.75rem 1rem">
-            <div class="fi-emp"><div class="fi-emp-av">👤</div><div><div style="font-weight:600;color:#ddd">Miguel Santos</div><div style="font-size:.62rem;color:#555">Proprietário · acesso total</div></div><div style="margin-left:auto;font-size:.65rem;background:rgba(201,169,110,.15);color:var(--gold);padding:2px 7px;border-radius:20px;border:1px solid rgba(201,169,110,.3)">owner</div></div>
-            <div class="fi-emp" style="margin-top:6px"><div class="fi-emp-av">👤</div><div><div style="font-weight:600;color:#ddd">Rafael Lima</div><div style="font-size:.62rem;color:#555">Barbeiro · agenda + clientes</div></div><div style="margin-left:auto;font-size:.65rem;background:rgba(255,255,255,.05);color:#666;padding:2px 7px;border-radius:20px;border:1px solid #2a2a2a">staff</div></div>
+            <div class="fi-emp"><div class="fi-emp-av">👤</div><div style="min-width:0;overflow:hidden"><div style="font-weight:600;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Miguel Santos</div><div style="font-size:.62rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Proprietário · acesso total</div></div><div class="fi-emp-badge" style="margin-left:auto;flex-shrink:0;font-size:.65rem;background:rgba(201,169,110,.15);color:var(--gold);padding:2px 7px;border-radius:20px;border:1px solid rgba(201,169,110,.3)">owner</div></div>
+            <div class="fi-emp" style="margin-top:6px"><div class="fi-emp-av">👤</div><div style="min-width:0;overflow:hidden"><div style="font-weight:600;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Rafael Lima</div><div style="font-size:.62rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Barbeiro · agenda + clientes</div></div><div class="fi-emp-badge" style="margin-left:auto;flex-shrink:0;font-size:.65rem;background:rgba(255,255,255,.05);color:#666;padding:2px 7px;border-radius:20px;border:1px solid #2a2a2a">staff</div></div>
           </div>
           <div class="fi-progress">
             <div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog active"></div><div class="fi-prog"></div><div class="fi-prog"></div><div class="fi-prog"></div>
