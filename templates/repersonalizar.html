@@ -448,9 +448,11 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
           <div class="b-dots"><div class="b-dot" style="background:#ff5f57"></div><div class="b-dot" style="background:#febc2e"></div><div class="b-dot" style="background:#28c840"></div></div>
           <div class="b-url" id="desk-url-bar">localhost:5000/</div>
         </div>
-        <div class="browser-body">
-          <iframe id="iframe-ag-desk" src="" style="width:100%;height:510px;border:none;display:block" onload="onFrameLoad(this)"></iframe>
-          <iframe id="iframe-gt-desk" src="/preview/gestao" style="width:100%;height:510px;border:none;display:none" onload="onFrameLoad(this)"></iframe>
+        <div class="browser-body" style="position:relative;overflow:hidden">
+          <!-- scale = 878/1280 = 0.686 · height = 510/0.686 = 744px -->
+          <iframe id="iframe-ag-desk" src="" onload="onFrameLoad(this)" style="width:1280px;height:744px;border:none;display:block;transform:scale(0.686);transform-origin:top left;flex-shrink:0"></iframe>
+          <iframe id="iframe-gt-desk" src="" onload="onFrameLoad(this)" style="width:1280px;height:744px;border:none;display:none;transform:scale(0.686);transform-origin:top left;flex-shrink:0"></iframe>
+          <div style="position:absolute;inset:0;z-index:10;cursor:default" onwheel="fwdScroll(event,'iframe-ag-desk','iframe-gt-desk')"></div>
         </div>
       </div>
       <div id="prev-phone" class="prev-phone" style="display:none">
@@ -459,7 +461,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
           <div class="phone-screen">
             <div class="phone-inner">
               <iframe id="iframe-ag-mob" src="" style="width:375px;height:754px;border:none;display:block" onload="onFrameLoad(this)"></iframe>
-              <iframe id="iframe-gt-mob" src="/preview/gestao" style="width:375px;height:754px;border:none;display:none" onload="onFrameLoad(this)"></iframe>
+              <iframe id="iframe-gt-mob" src="" style="width:375px;height:754px;border:none;display:none" onload="onFrameLoad(this)"></iframe>
             </div>
           </div>
         </div>
@@ -705,6 +707,8 @@ async function entrar() {
     syncPickers();
     document.getElementById('iframe-ag-desk').src = buildAgUrl();
     document.getElementById('iframe-ag-mob').src  = buildAgUrl();
+    document.getElementById('iframe-gt-desk').src = buildGtUrl('dashboard');
+    document.getElementById('iframe-gt-mob').src  = buildGtUrl('dashboard');
     showHideIframes();
     updateUrlBar();
 
@@ -893,6 +897,15 @@ function postTheme() {
     if(siteMode === 'ag') { postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag); }
     else { postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt); }
   }
+}
+
+function fwdScroll(e, idAg, idGt) {
+  e.preventDefault();
+  const agEl = document.getElementById(idAg);
+  const gtEl = document.getElementById(idGt);
+  const active = (agEl && agEl.style.display !== 'none') ? agEl : gtEl;
+  const scale = idAg.includes('desk') ? (1 / 0.686) : 1;
+  try { if (active && active.contentWindow) active.contentWindow.scrollBy(0, e.deltaY * scale); } catch(_) {}
 }
 
 function onFrameLoad(iframe) {
