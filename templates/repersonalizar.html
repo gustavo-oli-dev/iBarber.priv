@@ -443,7 +443,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
     </div>
     <div class="canvas-body">
-      <div id="prev-desktop" class="prev-desktop">
+      <div id="prev-desktop" class="prev-desktop" style="max-width:calc(1280px * 0.686 + 2px)">
         <div class="browser-chrome">
           <div class="b-dots"><div class="b-dot" style="background:#ff5f57"></div><div class="b-dot" style="background:#febc2e"></div><div class="b-dot" style="background:#28c840"></div></div>
           <div class="b-url" id="desk-url-bar">localhost:5000/</div>
@@ -881,6 +881,15 @@ function buildAgUrl() {
     p:'1', fundo:t.fundo, superficie:t.superficie, destaque:t.destaque,
     texto:t.texto, borda:t.borda, fonteTitulo:t.fonteTitulo,
     fonteCorpo:t.fonteCorpo, cardRadius:t.cardRadius, btnEstilo:t.btnEstilo
+  }).toString();
+}
+
+function buildGtUrl(screen) {
+  const t = T.gt;
+  return '/preview/gt/' + screen + '?' + new URLSearchParams({
+    fundo:t.fundo, superficie:t.superficie, borda:t.borda,
+    destaque:t.destaque, texto:t.texto,
+    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo
   }).toString();
 }
 
