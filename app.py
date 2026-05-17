@@ -75,6 +75,25 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+@app.after_request
+def _security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
+    if not _is_dev:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://accounts.google.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob: https:; "
+        "connect-src 'self' https://api.mercadopago.com https://accounts.google.com; "
+        "frame-ancestors 'self';"
+    )
+    return response
+
 def _processar_imagem(arquivo, max_px=1400, quality=82):
     """Validate, strip EXIF, resize, return (BytesIO, error_str)."""
     try:
@@ -673,7 +692,8 @@ def login():
 def login_rapido():
     nome    = request.form.get('nome', '').strip()
     contato = request.form.get('contato', '').strip()
-    alergia = request.form.get('alergia', '').strip()
+    observation = (request.form.get('alergia') or request.form.get('observation') or '').strip()[:500]
+    alergia = observation
     if not nome or not contato:
         flash('Nome e contato são obrigatórios.', 'error')
         return redirect(url_for('login'))
@@ -719,9 +739,11 @@ def api_auth_telefone():
 @limiter.limit('10 per minute')
 def api_auth_criar_telefone():
     data      = request.get_json(force=True) or {}
-    nome      = data.get('nome', '').strip()
+    nome      = data.get('nome', '').strip()[:100]
     tel       = ''.join(c for c in data.get('telefone', '') if c.isdigit())
     email_opt = data.get('email', '').strip().lower() or None
+    if email_opt and not re.match(r'^[^@]+@[^@]+\.[^@]+$', email_opt):
+        return jsonify({'erro': 'e-mail inválido'}), 400
     lembretes = bool(data.get('lembretes')) and bool(email_opt)
     if not nome or len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
@@ -1037,7 +1059,7 @@ def _enviar_confirmacao_agendamento(user, data_hora):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Agendamento Confirmado!</h2>
-      <p>Olá, <strong>{user.name}</strong>! Seu horário foi reservado.</p>
+      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu horário foi reservado.</p>
       <div style="background:#1a1a1a;border-left:4px solid #C9A96E;
                   padding:16px 20px;border-radius:6px;margin:20px 0;">
         <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1060,7 +1082,7 @@ def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#f87171;margin-top:0;">⚠️ Agendamento Cancelado</h2>
-      <p>Olá, <strong>{user.name}</strong>!</p>
+      <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
       <p style="color:#ccc;">Seu agendamento foi cancelado:</p>
       <p style="color:#f87171;font-weight:600;">{motivo}</p>
       <div style="background:#1a1a1a;border-left:4px solid #f87171;
@@ -1115,7 +1137,7 @@ def _enviar_comprovante_pagamento(user, pedido):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Pagamento Confirmado!</h2>
-      <p>Olá, <strong>{user.name}</strong>! Seu pagamento foi aprovado.</p>
+      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu pagamento foi aprovado.</p>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         {itens_html}
         <tr style="border-top:1px solid #333;">
@@ -1337,16 +1359,34 @@ def preview_demo_logout():
     return '', 200
 
 @app.route('/confirmar-pedido', methods=['POST'])
+@limiter.limit('20 per minute')
 def confirmar_pedido():
     if 'user_id' not in session:
         return jsonify({'erro': 'não autenticado'}), 401
 
     data  = request.get_json()
     itens = data.get('itens', [])
-    total = _sf(data.get('total', 0))
+    _tid  = session.get('path_tenant_id') or session.get('tenant_id') or _api_tid()
+
+    # validate type
+    if not isinstance(itens, list):
+        return jsonify({'erro': 'itens inválido'}), 400
+
+    # recalculate total server-side
+    total_calculado = 0.0
+    for item in itens:
+        svc = Servico.query.filter_by(
+            nome=item.get('nome', ''), tenant_id=_tid, ativo=True
+        ).first()
+        if svc:
+            item['preco'] = svc.preco  # override client price
+            total_calculado += svc.preco
+        else:
+            total_calculado += _sf(item.get('preco', 0))
+    total = total_calculado
 
     pedido = Pedido(user_id=session['user_id'], total=total,
-                    tenant_id=session.get('path_tenant_id') or session.get('tenant_id') or _api_tid())
+                    tenant_id=_tid)
     db.session.add(pedido)
     db.session.flush()
     for item in itens:
@@ -1473,7 +1513,7 @@ def cancelar_agendamento(ag_id):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-          <p>Olá, <strong>{user.name}</strong>! Seu agendamento foi cancelado.</p>
+          <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado.</p>
           <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                       padding:16px 20px;border-radius:6px;margin:20px 0;">
             <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1489,6 +1529,7 @@ def cancelar_agendamento(ag_id):
     return jsonify({'ok': True})
 
 @app.route('/reagendar-agendamento', methods=['POST'])
+@limiter.limit('10 per minute')
 def reagendar_agendamento():
     if 'user_id' not in session:
         return jsonify({'erro': 'não autenticado'}), 401
@@ -1601,6 +1642,9 @@ def api_lista_espera_entrar():
     data_dh = data.get('data')
     if not data_dh:
         return jsonify({'erro': 'data obrigatória'}), 400
+    data_val = (data.get('data') or '').strip()
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', data_val):
+        return jsonify({'erro': 'data inválida'}), 400
     tid = _api_tid()
     if not tid:
         return jsonify({'erro': 'tenant inválido'}), 400
@@ -1657,7 +1701,7 @@ def _notificar_lista_espera(tenant_id, data_str):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#C9A96E;margin-top:0;">Abriu uma vaga!</h2>
-          <p>Olá, <strong>{user.name}</strong>!</p>
+          <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
           <p>Uma vaga abriu em <strong>{nome_barbearia}</strong> para <strong>{data_fmt}</strong>.</p>
           <div style="text-align:center;margin:24px 0;">
             <a href="{_tenant_url(slug)}"
@@ -1982,6 +2026,9 @@ def api_tenant_config_put():
     d = request.get_json(force=True) or {}
     for campo in ('nome', 'whatsapp', 'maps_url'):
         if campo in d:
+            if campo == 'maps_url' and d[campo]:
+                if not re.match(r'^https?://', str(d[campo])):
+                    continue
             setattr(tenant, campo, (d[campo] or '').strip() or None)
     if 'fab_wpp' in d and isinstance(d['fab_wpp'], dict):
         tenant.fab_wpp = json.dumps(d['fab_wpp'])
@@ -2015,10 +2062,10 @@ def api_categorias_criar():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
-    nome = d.get('nome', '').strip()
+    nome = d.get('nome', '').strip()[:100]
     if not nome: return jsonify({'erro': 'nome obrigatório'}), 400
     cat = Categoria(
-        nome=nome, icone=d.get('icone', '✦'),
+        nome=nome, icone=(d.get('icone', '✦') or '✦')[:10],
         ordem=Categoria.query.filter_by(tenant_id=tid).count(),
         tenant_id=tid,
     )
@@ -2082,7 +2129,7 @@ def api_servicos_criar():
         categoria='',
         categoria_id=cat_id,
         preco=preco,
-        duracao=max(5, int(d.get('duracao', 30))),
+        duracao=max(5, min(int(d.get('duracao', 30)), 480)),
         ordem=Servico.query.filter_by(categoria_id=cat_id, ativo=True, tenant_id=tid).count(),
         tenant_id=tid,
     )
@@ -2105,11 +2152,12 @@ def api_servico_detalhe(sid):
         if novo_preco < 0:
             return jsonify({'erro': 'preco inválido'}), 400
         sv.preco = novo_preco
-    if 'duracao'      in d: sv.duracao      = max(5, int(d['duracao']))
+    if 'duracao'      in d: sv.duracao      = max(5, min(int(d['duracao']), 480))
     db.session.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/horarios-disponiveis')
+@limiter.limit('60 per minute')
 def api_horarios_disponiveis():
     data_str = request.args.get('data', '')
     try:
@@ -2253,6 +2301,8 @@ def api_gestor_barbeiro():
 @app.route('/api/escala/<data_str>', methods=['GET', 'POST'])
 def api_escala(data_str):
     """GET: lista funcionários e se trabalham na data. POST: salva ausências."""
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', data_str):
+        return jsonify({'erro': 'data inválida'}), 400
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     todos = Funcionario.query.filter_by(ativo=True, tenant_id=tid).order_by(Funcionario.nome).all()
@@ -2307,10 +2357,12 @@ def api_config_horarios():
         data     = request.get_json(silent=True) or {}
         intervalo = data.pop('intervalo_minutos', None)
         if intervalo is not None:
-            _upsert_setting('intervalo_minutos', str(int(intervalo)), _tid)
+            intervalo = max(10, min(int(intervalo), 120))
+            _upsert_setting('intervalo_minutos', str(intervalo), _tid)
         dias_agenda = data.pop('dias_agenda', None)
         if dias_agenda is not None:
-            _upsert_setting('dias_agenda', str(int(dias_agenda)), _tid)
+            dias_agenda = max(1, min(int(dias_agenda), 60))
+            _upsert_setting('dias_agenda', str(dias_agenda), _tid)
         _upsert_setting('horario_funcionamento', json.dumps(data, ensure_ascii=False), _tid)
         db.session.commit()
         return jsonify({'ok': True})
@@ -2375,6 +2427,9 @@ def api_dias_fechados():
     if request.method in ('POST', 'DELETE'):
         body = request.get_json(silent=True) or {}
         data_val = body.get('data', '')
+        if request.method == 'POST' and data_val:
+            if not re.match(r'^\d{4}-\d{2}-\d{2}$', data_val):
+                return jsonify({'erro': 'data inválida'}), 400
         if request.method == 'POST' and data_val and data_val not in dias:
             dias.append(data_val); dias.sort()
             if body.get('cancelar'):
@@ -2545,7 +2600,10 @@ def api_status_pagamentos():
     return jsonify({'pix': pix_ok and pix_ligado, 'cartao': mp_ok and cartao_ligado})
 
 @app.route('/api/criar-pagamento', methods=['POST'])
+@limiter.limit('10 per minute')
 def criar_pagamento():
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
     data      = request.get_json(silent=True) or {}
     metodo    = data.get('metodo', 'pix')
     pedido_id = data.get('pedido_id')
@@ -2623,7 +2681,10 @@ def criar_pagamento():
         return jsonify({'checkout_url': d.get('init_point', '')})
 
 @app.route('/api/verificar-pagamento/<int:mp_payment_id>', methods=['GET'])
+@limiter.limit('30 per minute')
 def verificar_pagamento(mp_payment_id):
+    if 'user_id' not in session:
+        return jsonify({'erro': 'não autenticado'}), 401
     pedido_id  = request.args.get('pedido_id', type=int)
     mp_token_s = _get_setting('mp_token', _api_tid())
     if not mp_token_s or not mp_token_s.value:
@@ -3188,7 +3249,7 @@ def api_entradas():
 def api_entrada_criar():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
-    descricao = d.get('descricao', '').strip()
+    descricao = d.get('descricao', '').strip()[:200]
     valor     = _sf(d.get('valor', 0))
     forma     = d.get('forma', 'dinheiro').strip()
     formas_validas = {'dinheiro', 'pix', 'cartao_credito', 'cartao_debito', 'cartao'}
@@ -3196,6 +3257,8 @@ def api_entrada_criar():
         return jsonify({'erro': 'descrição obrigatória'}), 400
     if valor <= 0:
         return jsonify({'erro': 'valor deve ser maior que zero'}), 400
+    if valor > 99999:
+        return jsonify({'erro': 'valor inválido'}), 400
     if forma not in formas_validas:
         forma = 'dinheiro'
     tid = verificar_token(request)
@@ -3242,6 +3305,8 @@ def api_fotos_upload():
     arquivo   = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo enviado'}), 400
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     buf, err = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
@@ -3283,7 +3348,7 @@ def _corpo_lembrete(user_name, data_hora, tipo):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Lembrete de Agendamento</h2>
-      <p>Olá, <strong>{user_name}</strong>!</p>
+      <p>Olá, <strong>{html.escape(user_name)}</strong>!</p>
       <p>Seu agendamento está marcado para <strong>{aviso}</strong>:</p>
       <div style="background:#1a1a1a;border-left:4px solid #C9A96E;
                   padding:16px 20px;border-radius:6px;margin:20px 0;">
@@ -3456,7 +3521,7 @@ def enviar_retorno_automatico():
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
-                  <p>Olá, <strong>{user.name}</strong>!</p>
+                  <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
                   <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
                   <p>Que tal agendar seu próximo horário?</p>
                   <div style="text-align:center;margin:24px 0;">
@@ -3633,12 +3698,19 @@ def api_funcionarios_criar():
         # Bloqueia se já existe funcionário ATIVO com esse email
         if Funcionario.query.filter_by(email=email_func, tenant_id=tid, ativo=True).first():
             return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
+    senha = d.get('senha', '').strip()
+    if len(senha) < 6:
+        return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
     perms = d.get('permissoes', {})
+    nome_func = d.get('nome', '').strip()[:100]
+    if not nome_func:
+        return jsonify({'erro': 'nome obrigatório'}), 400
+    tel_func = (d.get('telefone', '').strip() or '')[:20] or None
     f = Funcionario(
-        nome=d.get('nome', '').strip(),
+        nome=nome_func,
         email=email_func,
-        password=generate_password_hash(d.get('senha', '')),
-        telefone=d.get('telefone', '').strip() or None,
+        password=generate_password_hash(senha),
+        telefone=tel_func,
         tenant_id=tid,
         perm_agendamentos=perms.get('agendamentos', True),
         perm_calendario=perms.get('calendario', True),
@@ -3685,8 +3757,11 @@ def api_funcionario_detalhe(fid):
         f.telefone = d['telefone'].strip() or None
     if 'ativo' in d:
         f.ativo = bool(d['ativo'])
-    if 'nova_senha' in d and d['nova_senha']:
-        f.password = generate_password_hash(d['nova_senha'])
+    nova_senha = d.get('nova_senha', '').strip()
+    if nova_senha and len(nova_senha) < 6:
+        return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
+    if nova_senha:
+        f.password = generate_password_hash(nova_senha)
     perms = d.get('permissoes', {})
     if perms:
         f.perm_agendamentos = perms.get('agendamentos', f.perm_agendamentos)
@@ -3736,6 +3811,8 @@ def api_funcionario_foto(fid):
     arquivo = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     buf, err = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
@@ -3765,6 +3842,8 @@ def api_gestor_foto():
     arquivo = request.files.get('foto')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     buf, err = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
@@ -4021,7 +4100,7 @@ def gestao_agendamento_status(ag_id):
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-                  <p>Olá, <strong>{user.name}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
+                  <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
                   <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                               padding:16px 20px;border-radius:6px;margin:20px 0;">
                     <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -4091,7 +4170,10 @@ def gestao_entradas():
     if request.method == 'POST':
         desc = request.form.get('descricao', '').strip()
         valor = _sf(request.form.get('valor', 0))
+        formas_validas = {'dinheiro', 'cartao', 'pix'}
         forma = request.form.get('forma', 'dinheiro')
+        if forma not in formas_validas:
+            forma = 'dinheiro'
         if desc and valor > 0:
             db.session.add(EntradaMonetaria(descricao=desc, valor=valor, forma=forma, tenant_id=_tid))
             db.session.commit()
@@ -4222,6 +4304,9 @@ def api_gestao_produto_criar():
     db.session.add(p)
     db.session.flush()
     arquivo = request.files.get('foto')
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        db.session.rollback()
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     if arquivo and arquivo.filename:
         buf, err = _processar_imagem(arquivo)
         if err:
@@ -4267,6 +4352,8 @@ def api_gestao_produto(pid):
         return jsonify({'erro': 'valor inválido'}), 400
     p.valor = novo_valor
     arquivo = request.files.get('foto')
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     if arquivo and arquivo.filename:
         buf, err = _processar_imagem(arquivo)
         if err:
@@ -4375,6 +4462,8 @@ def gestao_contato():
         whatsapp  = request.form.get('whatsapp', '').strip()
         maps_url  = request.form.get('maps_url', '').strip()
         contato   = request.form.get('contato', '').strip()
+        if maps_url and not re.match(r'^https?://', maps_url):
+            maps_url = ''
         tenant.whatsapp = whatsapp
         tenant.maps_url = maps_url
         tenant.contato  = contato
@@ -4496,6 +4585,8 @@ def api_personalizar_upload():
     arquivo = request.files.get('imagem')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
+    if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
+        return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     buf, err = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
@@ -4579,6 +4670,7 @@ server {{
 
 
 @app.route('/api/cadastro-personalizar', methods=['POST'])
+@limiter.limit('5 per hour')
 def api_cadastro_personalizar():
     d = request.get_json(force=True) or {}
     slug = d.get('slug', '').lower().strip()
@@ -4793,6 +4885,7 @@ def api_cadastro():
 
 
 @app.route('/api/pagamento/cartao', methods=['POST'])
+@limiter.limit('5 per minute')
 def api_pagamento_cartao():
     d = request.get_json(force=True) or {}
     token        = d.get('token')
@@ -5044,6 +5137,7 @@ def admin_entrar_gestao(tid):
     return redirect(url_for('gestao_dashboard'))
 
 @app.route('/api/pagamento/criar', methods=['POST'])
+@limiter.limit('5 per minute')
 def api_pagamento_criar_v2():
     d = request.get_json(force=True) or {}
     tenant = db.session.get(Tenant, d.get('tenant_id'))
@@ -5219,6 +5313,7 @@ def api_pagamento_webhook():
     return '', 200
 
 @app.route('/verificar-slug/<slug>')
+@limiter.limit('30 per minute')
 def verificar_slug(slug):
     slug = slug.lower().strip()
     valido = bool(re.match(r'^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$', slug))

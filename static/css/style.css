@@ -1935,3 +1935,217 @@ img, video, iframe, table { max-width: 100%; }
 img {
   image-rendering: auto;
 }
+
+/* ═══════════════════════════════════════════════════════
+   PERSONALIDADE — animações, micro-interações, estados
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Keyframes base ──────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes stepIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0)  scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  70%  { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+@keyframes checkIn {
+  from { stroke-dashoffset: 40; opacity: 0; }
+  to   { stroke-dashoffset: 0;  opacity: 1; }
+}
+
+/* ── Hero stack + stagger ────────────────────────────── */
+.hero-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+  text-align: center;
+  position: relative;
+  z-index: 1;        /* acima do overlay ::before */
+}
+.stagger > * {
+  animation: fadeUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger > *:nth-child(2) { animation-delay: 0.15s; }
+.stagger > *:nth-child(3) { animation-delay: 0.25s; }
+.stagger > *:nth-child(4) { animation-delay: 0.35s; }
+
+/* ── Hero title ──────────────────────────────────────── */
+.hero-title {
+  font-family: var(--font-serif);
+  font-size: clamp(2.4rem, 8vw, 5rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+  color: var(--text);
+}
+.hero-eyebrow {
+  font-size: 0.78rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.85;
+}
+
+/* ── Botões — feedback tátil ─────────────────────────── */
+.btn:active:not(:disabled) {
+  transform: scale(0.96) translateZ(0);
+  transition-duration: 0.08s;
+}
+.btn-gold:active:not(:disabled) {
+  opacity: 0.88;
+}
+
+/* ── Step transitions no modal ───────────────────────── */
+.step.ativo {
+  animation: stepIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Skeleton loading ────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--surface2) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius);
+  color: transparent !important;
+  pointer-events: none;
+  user-select: none;
+}
+.skeleton * { visibility: hidden; }
+
+/* ── Serviço selecionado — gold em vez de só verde ───── */
+.servico-acordeao.selecionado {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+.servico-acordeao.selecionado .servico-btn--acordeao {
+  background: rgba(200, 200, 200, 0.06);
+}
+.servico-acordeao.selecionado .servico-label { color: var(--text); }
+.servico-acordeao.selecionado .servico-preco { color: var(--gold); }
+.servico-acordeao.selecionado .btn-add-carrinho {
+  background: var(--gold);
+  border-left-color: var(--gold);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* ── Slot de horário selecionado ─────────────────────── */
+.cal-hora-btn.selecionado,
+.slot-btn.selecionado {
+  background: var(--gold) !important;
+  color: var(--bg) !important;
+  border-color: var(--gold) !important;
+  font-weight: 700;
+  transform: scale(1.04) translateZ(0);
+  box-shadow: 0 2px 12px rgba(200,200,200,0.18);
+}
+
+/* ── Dia do calendário selecionado ───────────────────── */
+.cal-dia-btn.selecionado {
+  background: var(--gold);
+  color: var(--bg);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+/* ── Sucesso de agendamento ──────────────────────────── */
+.sucesso-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  margin: 0 auto 1rem;
+  animation: pop 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  animation-delay: 0.1s;
+}
+.sucesso-icon-wrap svg .check-path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: checkIn 0.4s ease 0.4s both;
+}
+
+/* ── Empty state personalizado ───────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1rem;
+  color: var(--text-muted);
+  text-align: center;
+  animation: fadeIn 0.3s ease both;
+}
+.empty-state-mark {
+  font-size: 1.6rem;
+  opacity: 0.3;
+  letter-spacing: 0.4em;
+}
+.empty-state-title {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.empty-state-sub {
+  font-size: 0.78rem;
+  opacity: 0.6;
+  max-width: 220px;
+  line-height: 1.55;
+}
+
+/* ── Entrada de conteúdo nas páginas ─────────────────── */
+.page-enter {
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.page-enter-delay { animation-delay: 0.1s; }
+
+/* ── Carrinho FAB — mantém pop existente e adiciona glow ── */
+.carrinho-fab:active { transform: scale(0.92) translateZ(0); }
+
+/* ── Input focus com borda gold suave ────────────────── */
+.field-input:focus {
+  border-color: var(--gold-dim);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200,200,200,0.08);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ── Reduce motion — respeita preferência do sistema ─── */
+@media (prefers-reduced-motion: reduce) {
+  .stagger > *,
+  .step.ativo,
+  .page-enter,
+  .hero-title,
+  .hero-eyebrow,
+  .sucesso-icon-wrap,
+  .skeleton {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
