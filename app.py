@@ -1235,10 +1235,14 @@ def preview_gt(screen):
         {'id':3,'nome':'Marcos Lima','email':'marcos@example.com','contact':'(11) 99999-3333','criado_em':'2024-01-14'},
     ])
 
+    _all_perms = {k: True for k in ['agendamentos','calendario','marcar','clientes',
+                                    'servicos','precos','pedidos','entradas','fotos']}
     ctx = dict(
         gt_tema_override=gt_tema_override,
         gt_preview_nome=gt_preview_nome,
         token='preview',
+        gestao_is_owner=True,
+        gestao_perms=_all_perms,
     )
     screen_map = {
         'dashboard':    ('gestao/dashboard.html',    {**ctx, 'active':'dashboard',
