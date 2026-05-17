@@ -157,6 +157,7 @@ class Tenant(db.Model):
     fab_wpp          = db.Column(db.Text, nullable=True)   # JSON
     fab_maps         = db.Column(db.Text, nullable=True)   # JSON
     loja_ativa       = db.Column(db.Boolean, default=False)
+    token_version    = db.Column(db.Integer, default=0, nullable=False, server_default='0')
     assinaturas      = db.relationship('Assinatura', backref='tenant', lazy=True, order_by='Assinatura.id.desc()')
 
     def em_trial(self):
@@ -1772,36 +1773,49 @@ def meu_historico():
 
 _SECRET = os.environ.get('SECRET_KEY', 'dev-secret')
 
-def _gerar_token(tenant_id: int, func_id: int = 0) -> str:
-    msg = f"{tenant_id}:{func_id}"
+def _gerar_token(tenant_id: int, func_id: int = 0, version: int = 0) -> str:
+    msg = f"{tenant_id}:{func_id}:{version}"
     sig = hmac.new(_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
     return base64.b64encode(f"{msg}:{sig}".encode()).decode()
 
 def _extrair_tenant_token(token: str):
-    """Retorna (tenant_id, func_id) ou (None, None) se inválido."""
+    """Retorna (tenant_id, func_id, version) ou (None, None, None) se inválido.
+    Aceita tokens antigos no formato tid:fid (version=0) para retrocompatibilidade."""
     try:
         decoded = base64.b64decode(token.encode()).decode()
-        parts = decoded.rsplit(':', 1)
-        if len(parts) != 2: return None, None
-        payload, sig = parts
+        payload, sig = decoded.rsplit(':', 1)
         expected = hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected): return None, None
-        tid_str, fid_str = payload.split(':', 1)
-        return int(tid_str), int(fid_str)
+        if not hmac.compare_digest(sig, expected): return None, None, None
+        parts = payload.split(':')
+        if len(parts) == 2:
+            # formato legado: tid:fid — versão implícita 0
+            return int(parts[0]), int(parts[1]), 0
+        elif len(parts) == 3:
+            return int(parts[0]), int(parts[1]), int(parts[2])
+        return None, None, None
     except Exception:
-        return None, None
+        return None, None, None
+
+def _token_valido(tid, version) -> bool:
+    """Valida se a versão do token bate com a versão atual do tenant no banco."""
+    if not tid: return False
+    t = db.session.get(Tenant, tid)
+    if not t: return False
+    return (t.token_version or 0) == version
 
 def verificar_token(req):
-    """Retorna tenant_id se válido, None caso contrário."""
+    """Retorna tenant_id se válido e na versão correta, None caso contrário."""
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    tid, _ = _extrair_tenant_token(token)
-    return tid  # None = inválido, int = tenant_id válido
+    tid, _, ver = _extrair_tenant_token(token)
+    if tid and _token_valido(tid, ver):
+        return tid
+    return None
 
 def verificar_token_admin(req):
-    """Retorna tenant_id se o token pertence ao gestor (func_id==0), None caso contrário."""
+    """Retorna tenant_id se o token pertence ao gestor (func_id==0) e versão válida."""
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    tid, fid = _extrair_tenant_token(token)
-    if tid and fid == 0:
+    tid, fid, ver = _extrair_tenant_token(token)
+    if tid and fid == 0 and _token_valido(tid, ver):
         return tid
     return None
 
@@ -3465,6 +3479,22 @@ def enviar_retorno_automatico():
         except Exception as e:
             print(f'[SCHEDULER] enviar_retorno_automatico erro: {e}')
 
+def _migrate_db():
+    """Adiciona colunas novas sem quebrar instâncias existentes."""
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE tenant ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"
+            ))
+            conn.commit()
+            print('[MIGRATE] token_version adicionado à tabela tenant')
+    except Exception:
+        pass  # coluna já existe
+
+with app.app_context():
+    _migrate_db()
+
 # C8: em modo debug o Werkzeug sobe dois processos; iniciar o scheduler só no principal
 if not _is_dev or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
     scheduler = BackgroundScheduler(daemon=True)
@@ -3479,6 +3509,79 @@ if not _is_dev or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
 @app.route('/api/ping', methods=['GET'])
 def ping():
     return jsonify({'ok': True, 'app': 'barbearia'})
+
+# ── Token rotation ─────────────────────────────────────────────────────────────
+
+@app.route('/api/rotar-token', methods=['POST'])
+def api_rotar_token():
+    """Gestor invalida todos os tokens emitidos anteriormente e recebe um novo."""
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 401
+    tenant = db.session.get(Tenant, tid)
+    if not tenant: return jsonify({'erro': 'tenant não encontrado'}), 404
+    tenant.token_version = (tenant.token_version or 0) + 1
+    db.session.commit()
+    novo_token = _gerar_token(tenant.id, 0, tenant.token_version)
+    return jsonify({'ok': True, 'token': novo_token, 'version': tenant.token_version})
+
+# ── Email blast — atualização do APK ───────────────────────────────────────────
+
+def _email_atualizar_apk(tenant):
+    apk_url   = f'https://{APP_DOMAIN}/static/app/ibarber.apk'
+    painel_url = f'https://{APP_DOMAIN}/gestao/login'
+    corpo = f"""
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;
+      background:#0f0f0f;color:#f0f0f0;padding:32px;border-radius:12px;">
+      <h2 style="color:#C9A96E;margin-top:0;">✦ iBarber</h2>
+      <h3 style="font-weight:500;color:#f0f0f0;margin-bottom:6px;">
+        Atualização importante do app
+      </h3>
+      <p style="color:#aaa;margin-bottom:24px;">
+        Lançamos uma nova versão do <strong style="color:#C9A96E;">iBarber Admin</strong>
+        com melhorias de segurança. Recomendamos atualizar o quanto antes.
+      </p>
+      <a href="{apk_url}" style="display:inline-block;background:#C9A96E;color:#000;
+        font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;
+        margin-bottom:24px;">
+        Baixar nova versão
+      </a>
+      <p style="color:#888;font-size:13px;margin-bottom:4px;">
+        <strong>Como instalar:</strong>
+      </p>
+      <ol style="color:#888;font-size:13px;line-height:1.8;padding-left:20px;">
+        <li>Baixe o arquivo pelo botão acima</li>
+        <li>Abra o arquivo .apk no seu celular</li>
+        <li>Se solicitado, autorize a instalação de fontes desconhecidas</li>
+        <li>Faça login com o e-mail <strong style="color:#C9A96E;">{tenant.email}</strong></li>
+      </ol>
+      <p style="color:#555;font-size:12px;border-top:1px solid #222;
+        padding-top:16px;margin-top:24px;">
+        Precisa de ajuda? Acesse seu painel em
+        <a href="{painel_url}" style="color:#C9A96E;">{painel_url}</a>
+      </p>
+    </div>
+    """
+    return _enviar_email(
+        tenant.email,
+        '✦ iBarber — Atualização de segurança disponível',
+        corpo
+    )
+
+@app.route('/api/admin/email-apk-update', methods=['POST'])
+def api_admin_email_apk_update():
+    """Dispara e-mail de atualização do APK para todos os tenants ativos."""
+    data = request.get_json(force=True) or {}
+    if data.get('key') != API_TOKEN:
+        return jsonify({'erro': 'não autorizado'}), 401
+    tenants = Tenant.query.filter_by(ativo=True, assinatura_ativa=True).all()
+    enviados = 0
+    falhas   = 0
+    for t in tenants:
+        if _email_atualizar_apk(t):
+            enviados += 1
+        else:
+            falhas += 1
+    return jsonify({'ok': True, 'enviados': enviados, 'falhas': falhas, 'total': len(tenants)})
 
 @app.route('/api/admin/login', methods=['POST'])
 @limiter.limit('10 per minute')
