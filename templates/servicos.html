@@ -430,32 +430,77 @@
     const setaId  = 'seta_'  + slug;
     const preco   = 'R$ ' + s.preco.toFixed(2).replace('.', ',');
     totalFotos[slug] = 0;
-    return `
-    <div class="servico-acordeao">
-      <div class="servico-acordeao-header">
-        <button class="servico-btn servico-btn--acordeao"
-                data-servico="${s.nome}"
-                onclick="toggleAcordeao('${fotosId}','${setaId}')">
-          <span class="servico-icon">✦</span>
-          <span class="servico-label">${s.nome}</span>
-          <span class="servico-preco">${preco}</span>
-          <span class="acordeao-seta" id="${setaId}">›</span>
-        </button>
-        <button class="btn-add-carrinho"
-                onclick="adicionarAoCarrinho('${s.nome.replace(/'/g,"\\'")}','${s.categoria_nome||''}')">+</button>
-      </div>
-      <div class="acordeao-fotos" id="${fotosId}">
-        <div class="mini-fotos-grid">
-          <div class="mini-foto" onclick="abrirLightbox(0,'${slug}')"></div>
-          <div class="mini-foto" onclick="abrirLightbox(1,'${slug}')"></div>
-          <div class="mini-foto" onclick="abrirLightbox(2,'${slug}')"></div>
-          <div class="mini-foto" onclick="abrirLightbox(3,'${slug}')"></div>
-        </div>
-        <div class="acordeao-rodape">
-          <button class="btn-ver-mais-mini" style="display:none;" onclick="event.stopPropagation()">Ver mais</button>
-        </div>
-      </div>
-    </div>`;
+
+    // Build card using DOM API to avoid XSS from s.nome / s.categoria_nome
+    const wrapper = document.createElement('div');
+    wrapper.className = 'servico-acordeao';
+
+    const header = document.createElement('div');
+    header.className = 'servico-acordeao-header';
+
+    const mainBtn = document.createElement('button');
+    mainBtn.className = 'servico-btn servico-btn--acordeao';
+    mainBtn.dataset.servico = s.nome;
+    mainBtn.onclick = () => toggleAcordeao(fotosId, setaId);
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'servico-icon';
+    iconSpan.textContent = '✦';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'servico-label';
+    labelSpan.textContent = s.nome;
+
+    const precoSpan = document.createElement('span');
+    precoSpan.className = 'servico-preco';
+    precoSpan.textContent = preco;
+
+    const setaSpan = document.createElement('span');
+    setaSpan.className = 'acordeao-seta';
+    setaSpan.id = setaId;
+    setaSpan.textContent = '›';
+
+    mainBtn.appendChild(iconSpan);
+    mainBtn.appendChild(labelSpan);
+    mainBtn.appendChild(precoSpan);
+    mainBtn.appendChild(setaSpan);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn-add-carrinho';
+    addBtn.textContent = '+';
+    addBtn.onclick = () => adicionarAoCarrinho(s.nome, s.categoria_nome || '');
+
+    header.appendChild(mainBtn);
+    header.appendChild(addBtn);
+
+    const fotosDiv = document.createElement('div');
+    fotosDiv.className = 'acordeao-fotos';
+    fotosDiv.id = fotosId;
+
+    const miniGrid = document.createElement('div');
+    miniGrid.className = 'mini-fotos-grid';
+    [0, 1, 2, 3].forEach(i => {
+      const d = document.createElement('div');
+      d.className = 'mini-foto';
+      d.onclick = () => abrirLightbox(i, slug);
+      miniGrid.appendChild(d);
+    });
+
+    const rodape = document.createElement('div');
+    rodape.className = 'acordeao-rodape';
+    const verMaisBtn = document.createElement('button');
+    verMaisBtn.className = 'btn-ver-mais-mini';
+    verMaisBtn.style.display = 'none';
+    verMaisBtn.onclick = e => e.stopPropagation();
+    rodape.appendChild(verMaisBtn);
+
+    fotosDiv.appendChild(miniGrid);
+    fotosDiv.appendChild(rodape);
+
+    wrapper.appendChild(header);
+    wrapper.appendChild(fotosDiv);
+
+    return wrapper;
   }
 
   async function _carregarServicos() {
@@ -473,13 +518,27 @@
       const telaInicial = document.getElementById('telaInicial');
       const jaPreenchido = telaInicial.children.length > 0;
       if (_categorias.length === 0) {
-        if (!jaPreenchido) telaInicial.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;">Esta barbearia ainda não cadastrou serviços. Volte em breve!</p>';
+        if (!jaPreenchido) {
+          const p = document.createElement('p');
+          p.style.cssText = 'color:var(--text-muted);text-align:center;grid-column:1/-1;';
+          p.textContent = 'Esta barbearia ainda não cadastrou serviços. Volte em breve!';
+          telaInicial.appendChild(p);
+        }
       } else if (!jaPreenchido) {
-        telaInicial.innerHTML = _categorias.map(cat => `
-          <button class="servico-btn" onclick="mostrarCategoria(${cat.id})">
-            <span class="servico-icon">${cat.icone || '✦'}</span>
-            <span class="servico-label">${cat.nome}</span>
-          </button>`).join('');
+        _categorias.forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className = 'servico-btn';
+          btn.onclick = () => mostrarCategoria(cat.id);
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'servico-icon';
+          iconSpan.textContent = cat.icone || '✦';
+          const labelSpan = document.createElement('span');
+          labelSpan.className = 'servico-label';
+          labelSpan.textContent = cat.nome;
+          btn.appendChild(iconSpan);
+          btn.appendChild(labelSpan);
+          telaInicial.appendChild(btn);
+        });
       }
 
       // Guardar serviços por categoria_id
@@ -505,9 +564,15 @@
     const tela  = document.getElementById('telaCategoria');
     tela.style.display = 'block';
     tela.className = 'servicos-grid';
-    tela.innerHTML = lista.length
-      ? lista.map(_criarCard).join('')
-      : '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;">Nenhum serviço cadastrado nesta categoria ainda.</p>';
+    tela.innerHTML = '';
+    if (lista.length) {
+      lista.forEach(s => tela.appendChild(_criarCard(s)));
+    } else {
+      const p = document.createElement('p');
+      p.style.cssText = 'color:var(--text-muted);text-align:center;grid-column:1/-1;';
+      p.textContent = 'Nenhum serviço cadastrado nesta categoria ainda.';
+      tela.appendChild(p);
+    }
 
     document.getElementById('btnVoltar').style.display = 'inline-flex';
     _recarregarFotosCategoria(lista);
@@ -634,14 +699,33 @@
       carrinho.forEach(item => {
         const li = document.createElement('li');
         li.className = 'carrinho-item';
-        li.innerHTML = `
-          <div style="flex:1;min-width:0">
-            <span class="carrinho-item-nome">${item.nome}</span>
-            <span style="display:block;font-size:.75rem;color:var(--text-muted)">⏱ ${item.duracao} min</span>
-          </div>
-          <span class="carrinho-item-preco">R$ ${item.preco.toFixed(2).replace('.', ',')}</span>
-          <button class="carrinho-item-remover" onclick="removerDoCarrinho(${item.id})">×</button>
-        `;
+
+        const infoDiv = document.createElement('div');
+        infoDiv.style.cssText = 'flex:1;min-width:0';
+
+        const nomeSpan = document.createElement('span');
+        nomeSpan.className = 'carrinho-item-nome';
+        nomeSpan.textContent = item.nome;
+
+        const duracaoSpan = document.createElement('span');
+        duracaoSpan.style.cssText = 'display:block;font-size:.75rem;color:var(--text-muted)';
+        duracaoSpan.textContent = '⏱ ' + item.duracao + ' min';
+
+        infoDiv.appendChild(nomeSpan);
+        infoDiv.appendChild(duracaoSpan);
+
+        const precoSpan = document.createElement('span');
+        precoSpan.className = 'carrinho-item-preco';
+        precoSpan.textContent = 'R$ ' + item.preco.toFixed(2).replace('.', ',');
+
+        const removerBtn = document.createElement('button');
+        removerBtn.className = 'carrinho-item-remover';
+        removerBtn.textContent = '×';
+        removerBtn.onclick = () => removerDoCarrinho(item.id);
+
+        li.appendChild(infoDiv);
+        li.appendChild(precoSpan);
+        li.appendChild(removerBtn);
         lista.appendChild(li);
       });
       const durEl = document.getElementById('carrinhoDuracao');
@@ -1060,19 +1144,52 @@
     const podeCancelar = diffHoras > 1;
     const _formaLabel = {dinheiro: 'Pagar no local', pix: 'PIX', cartao: 'Cartão'};
     const formaTexto     = ag.forma_pagamento ? (_formaLabel[ag.forma_pagamento] || ag.forma_pagamento) : '';
-    const barbeiroTexto  = ag.funcionario_nome ? `✦ ${ag.funcionario_nome}` : '';
-    conteudo.innerHTML = `
-      <div class="ag-info">
-        <p class="ag-data">${dataFmt}</p>
-        <p class="ag-hora">${hora}</p>
-        ${barbeiroTexto ? `<p style="color:#C9A96E;font-size:0.85rem;text-align:center;margin:0.4rem 0 0;opacity:0.8;">${barbeiroTexto}</p>` : ''}
-        ${formaTexto ? `<p style="color:#888;font-size:0.78rem;text-align:center;margin:0.3rem 0 0;opacity:0.6;">${formaTexto}</p>` : ''}
-      </div>
-      ${podeCancelar
-        ? `<button class="btn btn-danger btn-full" style="margin-top:1.2rem;" onclick="cancelarAgendamento(${ag.id})">Cancelar agendamento</button>`
-        : `<p class="ag-aviso">Cancelamento indisponível — faltam menos de 1h.</p>`
-      }
-    `;
+    const barbeiroNome   = ag.funcionario_nome || '';
+
+    conteudo.innerHTML = '';
+
+    const agInfoDiv = document.createElement('div');
+    agInfoDiv.className = 'ag-info';
+
+    const dataP = document.createElement('p');
+    dataP.className = 'ag-data';
+    dataP.textContent = dataFmt;
+    agInfoDiv.appendChild(dataP);
+
+    const horaP = document.createElement('p');
+    horaP.className = 'ag-hora';
+    horaP.textContent = hora;
+    agInfoDiv.appendChild(horaP);
+
+    if (barbeiroNome) {
+      const barbP = document.createElement('p');
+      barbP.style.cssText = 'color:#C9A96E;font-size:0.85rem;text-align:center;margin:0.4rem 0 0;opacity:0.8;';
+      barbP.textContent = '✦ ' + barbeiroNome;
+      agInfoDiv.appendChild(barbP);
+    }
+
+    if (formaTexto) {
+      const formaP = document.createElement('p');
+      formaP.style.cssText = 'color:#888;font-size:0.78rem;text-align:center;margin:0.3rem 0 0;opacity:0.6;';
+      formaP.textContent = formaTexto;
+      agInfoDiv.appendChild(formaP);
+    }
+
+    conteudo.appendChild(agInfoDiv);
+
+    if (podeCancelar) {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-danger btn-full';
+      cancelBtn.style.marginTop = '1.2rem';
+      cancelBtn.textContent = 'Cancelar agendamento';
+      cancelBtn.onclick = () => cancelarAgendamento(ag.id);
+      conteudo.appendChild(cancelBtn);
+    } else {
+      const avisoP = document.createElement('p');
+      avisoP.className = 'ag-aviso';
+      avisoP.textContent = 'Cancelamento indisponível — faltam menos de 1h.';
+      conteudo.appendChild(avisoP);
+    }
   }
   async function cancelarAgendamento(id) {
     if (!confirm('Deseja cancelar seu agendamento?')) return;
@@ -1130,15 +1247,23 @@
     document.getElementById('galeriaTitulo').textContent = nome || 'Fotos';
     document.getElementById('galeriaQtd').textContent = `${fotos.length} foto${fotos.length !== 1 ? 's' : ''}`;
     const grid = document.getElementById('galeriaGrid');
-    grid.innerHTML = fotos.map((url, i) => `
-      <div onclick="abrirLightbox(${i},'${slug}')" style="
-        aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
-        background:#1a1a1a;position:relative;">
-        <img src="${url}" alt="" loading="lazy" style="
-          width:100%;height:100%;object-fit:cover;display:block;
-          transition:transform .2s;" onmouseover="this.style.transform='scale(1.04)'"
-          onmouseout="this.style.transform='scale(1)'">
-      </div>`).join('');
+    grid.innerHTML = '';
+    fotos.forEach((url, i) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;background:#1a1a1a;position:relative;';
+      cell.onclick = () => abrirLightbox(i, slug);
+
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s;';
+      img.onmouseover = () => { img.style.transform = 'scale(1.04)'; };
+      img.onmouseout  = () => { img.style.transform = 'scale(1)'; };
+
+      cell.appendChild(img);
+      grid.appendChild(cell);
+    });
     document.getElementById('galeriaOverlay').style.display = 'block';
     const panel = document.getElementById('galeriaPanel');
     panel.style.display = 'block';
@@ -1178,11 +1303,18 @@
     const foto  = document.getElementById('lightboxFoto');
     const fotos = fotosCache[lbGaleria] || [];
     foto.style.opacity = '0';
+    foto.innerHTML = '';
     if (fotos[lbIndice]) {
-      foto.innerHTML = `<img src="${fotos[lbIndice]}" alt=""
-        style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px;">`;
+      const img = document.createElement('img');
+      img.src = fotos[lbIndice];
+      img.alt = '';
+      img.style.cssText = 'max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px;';
+      foto.appendChild(img);
     } else {
-      foto.innerHTML = '<span style="font-size:3rem;color:var(--border);">✂</span>';
+      const fallback = document.createElement('span');
+      fallback.style.cssText = 'font-size:3rem;color:var(--border);';
+      fallback.textContent = '✂';
+      foto.appendChild(fallback);
     }
     setTimeout(() => { foto.style.opacity = '1'; }, 120);
   }
@@ -1205,29 +1337,82 @@
         body.innerHTML = '<p class="hist-vazio">Nenhum pedido encontrado.</p>';
         return;
       }
-      body.innerHTML = hist.map(h => {
-        const dt       = new Date(h.data_hora);
-        const dataFmt  = `${_DIAS_HIST[dt.getDay()]}, ${dt.getDate()} ${_MESES_HIST[dt.getMonth()]} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-        const status   = h.status || 'ativo';
-        const svcsHtml = (h.servicos || []).map(s =>
-          `<div class="hist-svc-row">
-             <span>${s.nome}</span>
-             <span class="hist-svc-preco">R$ ${s.preco.toFixed(2).replace('.',',')}</span>
-           </div>`
-        ).join('');
-        const barb = h.barbeiro ? `<div class="hist-barbeiro">✦ ${h.barbeiro}</div>` : '';
-        const total = `R$ ${(h.total||0).toFixed(2).replace('.',',')}`;
-        return `
-          <div class="hist-item">
-            <div class="hist-item-data">
-              <span>${dataFmt}</span>
-              <span class="hist-status ${status}">${_STATUS_LABEL[status] || status}</span>
-            </div>
-            <div class="hist-svcs">${svcsHtml || '<span style="color:#666;font-size:.78rem;">Sem serviços</span>'}</div>
-            ${barb}
-            <div class="hist-total-row"><span>Total</span><span>${total}</span></div>
-          </div>`;
-      }).join('');
+      body.innerHTML = '';
+      hist.forEach(h => {
+        const dt      = new Date(h.data_hora);
+        const dataFmt = `${_DIAS_HIST[dt.getDay()]}, ${dt.getDate()} ${_MESES_HIST[dt.getMonth()]} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+        const status  = h.status || 'ativo';
+        const total   = 'R$ ' + (h.total || 0).toFixed(2).replace('.', ',');
+
+        const item = document.createElement('div');
+        item.className = 'hist-item';
+
+        // Date + status row
+        const dataRow = document.createElement('div');
+        dataRow.className = 'hist-item-data';
+
+        const dataSpan = document.createElement('span');
+        dataSpan.textContent = dataFmt;
+
+        const statusSpan = document.createElement('span');
+        // Only allow known safe class values to prevent class injection
+        const safeStatus = ['ativo', 'concluido', 'cancelado'].includes(status) ? status : 'ativo';
+        statusSpan.className = 'hist-status ' + safeStatus;
+        statusSpan.textContent = _STATUS_LABEL[status] || status;
+
+        dataRow.appendChild(dataSpan);
+        dataRow.appendChild(statusSpan);
+        item.appendChild(dataRow);
+
+        // Services list
+        const svcsDiv = document.createElement('div');
+        svcsDiv.className = 'hist-svcs';
+        const servicos = h.servicos || [];
+        if (servicos.length === 0) {
+          const semSvc = document.createElement('span');
+          semSvc.style.cssText = 'color:#666;font-size:.78rem;';
+          semSvc.textContent = 'Sem serviços';
+          svcsDiv.appendChild(semSvc);
+        } else {
+          servicos.forEach(s => {
+            const row = document.createElement('div');
+            row.className = 'hist-svc-row';
+
+            const nomeSpan = document.createElement('span');
+            nomeSpan.textContent = s.nome;
+
+            const precoSpan = document.createElement('span');
+            precoSpan.className = 'hist-svc-preco';
+            precoSpan.textContent = 'R$ ' + s.preco.toFixed(2).replace('.', ',');
+
+            row.appendChild(nomeSpan);
+            row.appendChild(precoSpan);
+            svcsDiv.appendChild(row);
+          });
+        }
+        item.appendChild(svcsDiv);
+
+        // Barbeiro
+        if (h.barbeiro) {
+          const barbDiv = document.createElement('div');
+          barbDiv.className = 'hist-barbeiro';
+          barbDiv.textContent = '✦ ' + h.barbeiro;
+          item.appendChild(barbDiv);
+        }
+
+        // Total row
+        const totalRow = document.createElement('div');
+        totalRow.className = 'hist-total-row';
+        const totalLabel = document.createElement('span');
+        totalLabel.textContent = 'Total';
+        const totalVal = document.createElement('span');
+        totalVal.textContent = total;
+        totalRow.appendChild(totalLabel);
+        totalRow.appendChild(totalVal);
+        item.appendChild(totalRow);
+
+        body.appendChild(item);
+      });
     } catch(e) {
       document.getElementById('histBody').innerHTML = '<p class="hist-vazio">Erro ao carregar.</p>';
     }
@@ -1384,14 +1569,18 @@
         area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Sem horários disponíveis.</p>';
         return;
       }
-      area.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem;">
-        ${(body.disponiveis||[]).map(s =>
-          `<button class="r2-slot-btn" onclick="_selReagSlot2('${s}',this)"
-            style="padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;
-                   background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;
-                   font-family:inherit;cursor:pointer;transition:.12s;">${s}</button>`
-        ).join('')}
-      </div>`;
+      const slotsWrapper = document.createElement('div');
+      slotsWrapper.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem;';
+      (body.disponiveis || []).forEach(s => {
+        const slotBtn = document.createElement('button');
+        slotBtn.className = 'r2-slot-btn';
+        slotBtn.style.cssText = 'padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;font-family:inherit;cursor:pointer;transition:.12s;';
+        slotBtn.textContent = s;
+        slotBtn.onclick = function() { _selReagSlot2(s, this); };
+        slotsWrapper.appendChild(slotBtn);
+      });
+      area.innerHTML = '';
+      area.appendChild(slotsWrapper);
     } catch {
       area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Erro ao carregar.</p>';
     }
@@ -1419,12 +1608,15 @@
         document.getElementById('btnReag2').disabled = false;
       } else {
         const sel = document.getElementById('reagBarbeiroSel2');
-        sel.innerHTML = funcs.map(f =>
-          `<button class="r2-barb-btn" onclick="_selReagBarb2(${f.id},this)"
-            style="padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;
-                   background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;
-                   font-family:inherit;cursor:pointer;transition:.12s;">${f.nome}</button>`
-        ).join('');
+        sel.innerHTML = '';
+        funcs.forEach(f => {
+          const barbBtn = document.createElement('button');
+          barbBtn.className = 'r2-barb-btn';
+          barbBtn.style.cssText = 'padding:.35rem .75rem;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);color:var(--text);font-size:.85rem;font-family:inherit;cursor:pointer;transition:.12s;';
+          barbBtn.textContent = f.nome;
+          barbBtn.onclick = function() { _selReagBarb2(f.id, this); };
+          sel.appendChild(barbBtn);
+        });
         sel.style.display = 'flex';
         document.getElementById('reagBarbeiroLabel2').style.display = '';
       }

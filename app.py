@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import os, json, uuid, secrets, smtplib, requests as req_http
 import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
+from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
 from collections import Counter
 from urllib.parse import urlencode
@@ -45,9 +46,12 @@ def _gestao_trial_ctx():
         'trial_ativo': tenant.em_trial(),
         'trial_dias': tenant.trial_dias_restantes(),
     }
-_cors_raw = os.environ.get('CORS_ORIGINS', '*')
-_cors_origins = _cors_raw.split(',') if _cors_raw != '*' else '*'
-CORS(app, origins=_cors_origins, supports_credentials=True)
+_cors_raw = os.environ.get('CORS_ORIGINS', '')
+_cors_origins = [o.strip() for o in _cors_raw.split(',') if o.strip()] if _cors_raw else None
+if _cors_origins:
+    CORS(app, origins=_cors_origins, supports_credentials=True)
+else:
+    CORS(app, origins='*', supports_credentials=False)
 app.secret_key = os.environ.get('SECRET_KEY')
 _DB_URL = os.environ.get('DATABASE_URL')
 if not _DB_URL:
@@ -488,6 +492,22 @@ def _sf(val, default=0.0):
     except (TypeError, ValueError):
         return default
 
+def _fernet():
+    """Fernet instance keyed from SECRET_KEY via SHA-256."""
+    raw = (os.environ.get('SECRET_KEY') or 'fallback').encode()
+    key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest())
+    return Fernet(key)
+
+def _enc(value: str) -> str:
+    return _fernet().encrypt(value.encode()).decode()
+
+def _dec(value: str) -> str:
+    """Decrypt Fernet-encrypted value; returns plaintext on legacy/error (migration grace)."""
+    try:
+        return _fernet().decrypt(value.encode()).decode()
+    except (InvalidToken, Exception):
+        return value
+
 def get_mp_token():
     """Retorna o MP Access Token: env var primeiro, depois Setting persistido."""
     t = os.environ.get('MP_ACCESS_TOKEN', '')
@@ -495,9 +515,24 @@ def get_mp_token():
         return t
     try:
         s = _get_setting('admin_mp_access_token')
-        return s.value if s and s.value else ''
+        return _dec(s.value) if s and s.value else ''
     except Exception:
         return ''
+
+_CSS_COLOR_RE = re.compile(
+    r'^(#[0-9a-fA-F]{3,8}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|rgba\(\s*[\d,\s.]+\)|transparent|inherit)$'
+)
+
+def _safe_color(value: str, default: str) -> str:
+    v = (value or '').strip()
+    return v if _CSS_COLOR_RE.match(v) else default
+
+def _safe_radius(value, default='6') -> str:
+    try:
+        r = int(float(str(value)))
+        return str(max(0, min(r, 50)))
+    except (TypeError, ValueError):
+        return default
 
 def user_dict(u):
     return {
@@ -699,7 +734,7 @@ def api_auth_criar_telefone():
         session['user_email'] = existing.email
         if _ptid: session['path_tenant_id'] = _ptid
         return jsonify({'ok': True, 'nome': existing.name})
-    if email_opt and User.query.filter_by(email=email_opt).first():
+    if email_opt and User.query.filter_by(email=email_opt, tenant_id=tid).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
     email = email_opt or f"tel_{tel}_{tid or 0}@ibarber.local"
     user  = User(
@@ -734,7 +769,7 @@ def api_auth_lembretes():
     if ativo and not email_opt and user.email.endswith('@ibarber.local'):
         return jsonify({'erro': 'Informe um e-mail para receber lembretes'}), 400
     if email_opt:
-        conflito = User.query.filter(User.email == email_opt, User.id != user.id).first()
+        conflito = User.query.filter(User.email == email_opt, User.id != user.id, User.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já em uso'}), 400
         user.email = email_opt
@@ -1099,14 +1134,14 @@ def logout():
     return redirect(url_for('index'))
 
 def _build_ag_tema_override(args):
-    bg      = args.get('fundo',      '#0c0c0c')
-    surface = args.get('superficie', '#161616')
-    gold    = args.get('destaque',   '#C9A96E')
-    texto   = args.get('texto',      '#F0ECE4')
-    borda   = args.get('borda',      '#2A2A2A')
+    bg      = _safe_color(args.get('fundo',      ''), '#0c0c0c')
+    surface = _safe_color(args.get('superficie', ''), '#161616')
+    gold    = _safe_color(args.get('destaque',   ''), '#C9A96E')
+    texto   = _safe_color(args.get('texto',      ''), '#F0ECE4')
+    borda   = _safe_color(args.get('borda',      ''), '#2A2A2A')
     fonte_t = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteTitulo','Playfair Display'))[:50]
     fonte_c = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteCorpo', 'Inter'))[:50]
-    radius  = args.get('cardRadius', '6')
+    radius  = _safe_radius(args.get('cardRadius', '6'))
     estilo  = args.get('btnEstilo',  'arredondado')
     hero    = re.sub(r'["\'\\\r\n<>]', '', args.get('heroUrl', ''))
     btn_r   = '999px' if estilo=='pilula' else ('0px' if estilo=='angular' else f'{radius}px')
@@ -1125,11 +1160,11 @@ def _build_ag_tema_override(args):
     )
 
 def _gt_tema_override_css(args):
-    fundo      = args.get('fundo',      '#080808')
-    superficie = args.get('superficie', '#111111')
-    borda      = args.get('borda',      '#222222')
-    destaque   = args.get('destaque',   '#C8C8C8')
-    texto      = args.get('texto',      '#F2F2F2')
+    fundo      = _safe_color(args.get('fundo',      ''), '#080808')
+    superficie = _safe_color(args.get('superficie', ''), '#111111')
+    borda      = _safe_color(args.get('borda',      ''), '#222222')
+    destaque   = _safe_color(args.get('destaque',   ''), '#C8C8C8')
+    texto      = _safe_color(args.get('texto',      ''), '#F2F2F2')
     fonte_t    = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteTitulo','Playfair Display'))[:50]
     fonte_c    = re.sub(r'[^A-Za-z0-9 ]', '', args.get('fonteCorpo', 'Inter'))[:50]
     return (
@@ -1762,6 +1797,14 @@ def verificar_token(req):
     tid, _ = _extrair_tenant_token(token)
     return tid  # None = inválido, int = tenant_id válido
 
+def verificar_token_admin(req):
+    """Retorna tenant_id se o token pertence ao gestor (func_id==0), None caso contrário."""
+    token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    tid, fid = _extrair_tenant_token(token)
+    if tid and fid == 0:
+        return tid
+    return None
+
 def get_tenant_by_slug(slug):
     return Tenant.query.filter_by(slug=slug, ativo=True).first()
 
@@ -1818,20 +1861,28 @@ def inject_tenant():
     tema_font_link = ''
     if tema_config:
         css = [':root{']
-        if tema_config.get('fundo'):       css.append(f"--bg:{tema_config['fundo']};")
-        if tema_config.get('superficie'):  css.append(f"--surface:{tema_config['superficie']};--surface2:{tema_config['superficie']};")
-        if tema_config.get('borda'):       css.append(f"--border:{tema_config['borda']};")
-        if tema_config.get('destaque'):    d=tema_config['destaque']; css.append(f"--gold:{d};--gold-dim:{d}cc;--gold-hover:{d}dd;")
-        if tema_config.get('texto'):       tx=tema_config['texto']; css.append(f"--text:{tx};--text-muted:{tx}88;--placeholder:{tx}55;")
-        if tema_config.get('fonteTitulo'): css.append(f"--font-serif:'{tema_config['fonteTitulo']}',Georgia,serif;")
-        if tema_config.get('fonteCorpo'):  css.append(f"--font-sans:'{tema_config['fonteCorpo']}',system-ui,sans-serif;")
-        if tema_config.get('cardRadius') is not None: css.append(f"--radius:{tema_config['cardRadius']}px;")
+        _bg  = _safe_color(tema_config.get('fundo', ''), '')
+        _sur = _safe_color(tema_config.get('superficie', ''), '')
+        _brd = _safe_color(tema_config.get('borda', ''), '')
+        _gld = _safe_color(tema_config.get('destaque', ''), '')
+        _txt = _safe_color(tema_config.get('texto', ''), '')
+        if _bg:  css.append(f"--bg:{_bg};")
+        if _sur: css.append(f"--surface:{_sur};--surface2:{_sur};")
+        if _brd: css.append(f"--border:{_brd};")
+        if _gld: css.append(f"--gold:{_gld};--gold-dim:{_gld}cc;--gold-hover:{_gld}dd;")
+        if _txt: css.append(f"--text:{_txt};--text-muted:{_txt}88;--placeholder:{_txt}55;")
+        _tf_raw = re.sub(r'[^A-Za-z0-9 ]', '', tema_config.get('fonteTitulo', ''))[:50]
+        _cf_raw = re.sub(r'[^A-Za-z0-9 ]', '', tema_config.get('fonteCorpo', ''))[:50]
+        if _tf_raw: css.append(f"--font-serif:'{_tf_raw}',Georgia,serif;")
+        if _cf_raw: css.append(f"--font-sans:'{_cf_raw}',system-ui,sans-serif;")
+        _cr = _safe_radius(tema_config.get('cardRadius'), '')
+        if _cr: css.append(f"--radius:{_cr}px;")
         css.append('}')
         tema_css = '<style>' + ''.join(css) + '</style>'
         # Fontes customizadas do Google Fonts
         fonts_qs = []
-        tf = tema_config.get('fonteTitulo', '')
-        cf = tema_config.get('fonteCorpo', '')
+        tf = _tf_raw
+        cf = _cf_raw
         if tf: fonts_qs.append(f"family={tf.replace(' ','+')}:wght@400;600;700")
         if cf: fonts_qs.append(f"family={cf.replace(' ','+')}:wght@300;400;500")
         if fonts_qs:
@@ -1847,7 +1898,8 @@ def inject_tenant():
             js_parts.append(f"document.querySelectorAll('.btn,.btn-gold').forEach(function(el){{el.style.borderRadius='{br}';}});")
         hero = tema_config.get('heroUrl', '')
         if hero:
-            js_parts.append(f"var h=document.querySelector('.hero-central');if(h){{h.style.backgroundImage=\"url('{hero}')\";h.style.backgroundSize='cover';h.style.backgroundPosition='center';}}")
+            hero_safe = hero.replace('\\', '').replace('"', '').replace("'", '').replace('(', '').replace(')', '')
+            js_parts.append(f"var h=document.querySelector('.hero-central');if(h){{h.style.backgroundImage=\"url('{hero_safe}')\";h.style.backgroundSize='cover';h.style.backgroundPosition='center';}}")
         js_parts.append('})();</script>')
         if len(js_parts) > 2:
             tema_js = ''.join(js_parts)
@@ -1904,7 +1956,7 @@ def api_tenant_config_get():
     fab_maps_default = {'mostrar': False, 'texto': 'Estamos aqui!',   'cor': '#4285F4', 'corTexto': '#ffffff', 'posicaoH': 'right', 'bottom': 80}
     fab_wpp  = json.loads(tenant.fab_wpp)  if tenant.fab_wpp  else fab_wpp_default
     fab_maps = json.loads(tenant.fab_maps) if tenant.fab_maps else fab_maps_default
-    return jsonify({'nome': tenant.nome, 'email': tenant.email, 'whatsapp': tenant.whatsapp or '', 'maps_url': tenant.maps_url or '',
+    return jsonify({'nome': tenant.nome, 'whatsapp': tenant.whatsapp or '', 'maps_url': tenant.maps_url or '',
                     'fab_wpp': fab_wpp, 'fab_maps': fab_maps})
 
 @app.route('/api/tenant/config', methods=['PUT'])
@@ -2419,27 +2471,31 @@ def api_agendamento_status(ag_id):
     db.session.commit()
     return jsonify({'ok': True, 'status': ag.status})
 
+_SENSITIVE_KEYS = {'mp_token', 'mp_public_key', 'pix_chave'}
+
 @app.route('/api/credenciais', methods=['GET', 'POST'])
 def api_credenciais():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    if not verificar_token_admin(request): return jsonify({'erro': 'token inválido'}), 401
     _keys = ['pix_chave', 'mp_token', 'mp_public_key', 'pix_ativo', 'cartao_ativo']
     _tid = _api_tid()
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         for k in _keys:
             if k in data:
-                _upsert_setting(k, str(data[k]), _tid)
+                v = str(data[k])
+                _upsert_setting(k, _enc(v) if k in _SENSITIVE_KEYS and v else v, _tid)
         db.session.commit()
         return jsonify({'ok': True})
     result = {}
     for k in _keys:
         s = _get_setting(k, _tid)
-        result[k] = s.value if s else ''
+        raw = s.value if s else ''
+        result[k] = _dec(raw) if k in _SENSITIVE_KEYS and raw else raw
     return jsonify(result)
 
 @app.route('/api/credenciais/conta', methods=['POST'])
 def api_credenciais_conta():
-    tid = verificar_token(request)
+    tid = verificar_token_admin(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     tenant = db.session.get(Tenant, tid)
     if not tenant: return jsonify({'erro': 'não encontrado'}), 404
@@ -2482,7 +2538,7 @@ def criar_pagamento():
 
     _tid = _api_tid()
     mp_token_s = _get_setting('mp_token', _tid)
-    mp_token   = mp_token_s.value if mp_token_s else ''
+    mp_token   = _dec(mp_token_s.value) if mp_token_s and mp_token_s.value else ''
 
     if not mp_token:
         return jsonify({'erro': 'Mercado Pago não configurado. Configure o Access Token em Credenciais.'}), 400
@@ -2558,9 +2614,10 @@ def verificar_pagamento(mp_payment_id):
     mp_token_s = _get_setting('mp_token', _api_tid())
     if not mp_token_s or not mp_token_s.value:
         return jsonify({'status': 'unknown'}), 400
+    _mp_tok = _dec(mp_token_s.value)
     r = req_http.get(
         f'https://api.mercadopago.com/v1/payments/{mp_payment_id}',
-        headers={'Authorization': f'Bearer {mp_token_s.value}'},
+        headers={'Authorization': f'Bearer {_mp_tok}'},
         timeout=10,
     )
     if r.status_code != 200:
@@ -2605,7 +2662,7 @@ def retorno_pagamento():
             slug = _tenant.slug if _tenant else ''
             if status_mp == 'approved' and payment_id and pedido.status != 'pago':
                 mp_token_s = _get_setting('mp_token', pedido.tenant_id)
-                mp_token_v = mp_token_s.value if mp_token_s else ''
+                mp_token_v = _dec(mp_token_s.value) if mp_token_s and mp_token_s.value else ''
                 try:
                     rv = req_http.get(
                         f'https://api.mercadopago.com/v1/payments/{payment_id}',
@@ -2650,7 +2707,7 @@ def api_precos():
 
 @app.route('/api/usuarios', methods=['GET', 'POST'])
 def api_usuarios():
-    tid = verificar_token(request)
+    tid = verificar_token_admin(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         data  = request.get_json(silent=True) or {}
@@ -3146,7 +3203,8 @@ def api_entrada_deletar(eid):
 
 @app.route('/api/fotos', methods=['GET'])
 def api_fotos_listar():
-    tid = _api_tid()
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     categoria = request.args.get('categoria')
     q = FotoServico.query.filter_by(tenant_id=tid)
     if categoria:
@@ -3227,40 +3285,43 @@ def _corpo_lembrete(user_name, data_hora, tipo):
 
 def verificar_lembretes():
     with app.app_context():
-        agora = datetime.utcnow()
-        ags = (Agendamento.query
-               .filter_by(status='ativo')
-               .filter(Agendamento.data_hora > agora)
-               .options(joinedload(Agendamento.usuario))
-               .all())
-        if not ags:
-            return
-        ag_ids = [ag.id for ag in ags]
-        enviados = {
-            (l.agendamento_id, l.tipo)
-            for l in LembreteEnviado.query.filter(
-                LembreteEnviado.agendamento_id.in_(ag_ids)).all()
-        }
-        for ag in ags:
-            user = ag.usuario
-            if not user or not user.receber_lembretes:
-                continue
-            diff_h = (ag.data_hora - agora).total_seconds() / 3600
-            for tipo, horas in LEMBRETES:
-                if abs(diff_h - horas) > 0.5:
+        try:
+            agora = datetime.utcnow()
+            ags = (Agendamento.query
+                   .filter_by(status='ativo')
+                   .filter(Agendamento.data_hora > agora)
+                   .options(joinedload(Agendamento.usuario))
+                   .all())
+            if not ags:
+                return
+            ag_ids = [ag.id for ag in ags]
+            enviados = {
+                (l.agendamento_id, l.tipo)
+                for l in LembreteEnviado.query.filter(
+                    LembreteEnviado.agendamento_id.in_(ag_ids)).all()
+            }
+            for ag in ags:
+                user = ag.usuario
+                if not user or not user.receber_lembretes:
                     continue
-                if (ag.id, tipo) in enviados:
-                    continue
-                ok = _enviar_email(
-                    user.email,
-                    'Lembrete — Barbearia',
-                    _corpo_lembrete(user.name, ag.data_hora, tipo)
-                )
-                if ok:
-                    db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo=tipo))
-                    db.session.commit()
-                    enviados.add((ag.id, tipo))
-                    print(f'[LEMBRETE] {tipo} enviado para {user.email}')
+                diff_h = (ag.data_hora - agora).total_seconds() / 3600
+                for tipo, horas in LEMBRETES:
+                    if abs(diff_h - horas) > 0.5:
+                        continue
+                    if (ag.id, tipo) in enviados:
+                        continue
+                    ok = _enviar_email(
+                        user.email,
+                        'Lembrete — Barbearia',
+                        _corpo_lembrete(user.name, ag.data_hora, tipo)
+                    )
+                    if ok:
+                        db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo=tipo))
+                        db.session.commit()
+                        enviados.add((ag.id, tipo))
+                        print(f'[LEMBRETE] {tipo} enviado para {user.email}')
+        except Exception as e:
+            print(f'[SCHEDULER] verificar_lembretes erro: {e}')
 
 @app.route('/api/testar-lembretes', methods=['POST'])
 def testar_lembretes():
@@ -3286,19 +3347,20 @@ def testar_lembretes():
 
 def verificar_assinaturas():
     with app.app_context():
-        agora = datetime.utcnow()
-        vencidas = Assinatura.query.filter(
-            Assinatura.status == 'ativo',
-            Assinatura.vencimento < agora
-        ).all()
-        for a in vencidas:
-            a.status = 'suspenso'
-            tenant = db.session.get(Tenant, a.tenant_id)
-            if tenant:
-                tenant.assinatura_ativa = False
-                _enviar_email(tenant.email,
-                    'Assinatura vencida — Barbearia Online',
-                    f'''<div style="font-family:Arial,sans-serif;
+        try:
+            agora = datetime.utcnow()
+            vencidas = Assinatura.query.filter(
+                Assinatura.status == 'ativo',
+                Assinatura.vencimento < agora
+            ).all()
+            for a in vencidas:
+                a.status = 'suspenso'
+                tenant = db.session.get(Tenant, a.tenant_id)
+                if tenant:
+                    tenant.assinatura_ativa = False
+                    _enviar_email(tenant.email,
+                        'Assinatura vencida — Barbearia Online',
+                        f'''<div style="font-family:Arial,sans-serif;
                       background:#0f0f0f;color:#f0f0f0;padding:28px;
                       border-radius:10px;">
                       <h2 style="color:#C9A96E;">Assinatura vencida</h2>
@@ -3308,89 +3370,100 @@ def verificar_assinaturas():
                            style="color:#C9A96E;">seuapp.com.br</a>
                         para reativar seu site.
                       </p></div>''')
-        db.session.commit()
+            db.session.commit()
+        except Exception as e:
+            print(f'[SCHEDULER] verificar_assinaturas erro: {e}')
 
 def limpar_guests():
     with app.app_context():
-        limite = datetime.utcnow() - timedelta(hours=24)
-        guests = User.query.filter_by(guest=True).filter(User.criado_em < limite).all()
-        for g in guests:
-            tem_ag = Agendamento.query.filter_by(user_id=g.id, status='ativo').first()
-            if not tem_ag:
-                db.session.delete(g)
-        db.session.commit()
+        try:
+            limite = datetime.utcnow() - timedelta(hours=24)
+            guests = User.query.filter_by(guest=True).filter(User.criado_em < limite).all()
+            for g in guests:
+                tem_ag = Agendamento.query.filter_by(user_id=g.id, status='ativo').first()
+                if not tem_ag:
+                    db.session.delete(g)
+            db.session.commit()
+        except Exception as e:
+            print(f'[SCHEDULER] limpar_guests erro: {e}')
 
 def limpar_trials_expirados():
     with app.app_context():
-        agora = datetime.utcnow()
-        expirados = Tenant.query.filter(
-            Tenant.trial_expira != None,
-            Tenant.trial_expira < agora,
-            Tenant.assinatura_ativa == False,
-        ).all()
-        for t in expirados:
-            db.session.delete(t)
-        if expirados:
-            db.session.commit()
-            print(f'[TRIAL] {len(expirados)} tenant(s) expirado(s) excluídos.')
+        try:
+            agora = datetime.utcnow()
+            expirados = Tenant.query.filter(
+                Tenant.trial_expira != None,
+                Tenant.trial_expira < agora,
+                Tenant.assinatura_ativa == False,
+            ).all()
+            for t in expirados:
+                db.session.delete(t)
+            if expirados:
+                db.session.commit()
+                print(f'[TRIAL] {len(expirados)} tenant(s) expirado(s) excluídos.')
+        except Exception as e:
+            print(f'[SCHEDULER] limpar_trials_expirados erro: {e}')
 
 def enviar_retorno_automatico():
     """Envia email 28 dias após um corte sugerindo reagendar."""
     with app.app_context():
-        agora = datetime.utcnow()
-        alvo_inicio = agora - timedelta(days=30)
-        alvo_fim    = agora - timedelta(days=27)
-        ags = (Agendamento.query
-               .filter(Agendamento.status == 'concluido',
-                       Agendamento.data_hora >= alvo_inicio,
-                       Agendamento.data_hora < alvo_fim)
-               .options(joinedload(Agendamento.usuario))
-               .all())
-        ag_ids = [ag.id for ag in ags]
-        if not ag_ids:
-            return
-        ja_enviados = {
-            l.agendamento_id
-            for l in LembreteEnviado.query.filter(
-                LembreteEnviado.agendamento_id.in_(ag_ids),
-                LembreteEnviado.tipo == 'retorno'
-            ).all()
-        }
-        for ag in ags:
-            if ag.id in ja_enviados:
-                continue
-            user = ag.usuario
-            if not user or not user.receber_lembretes:
-                continue
-            if not user.email or user.email.endswith('@ibarber.local'):
-                continue
-            tenant = db.session.get(Tenant, ag.tenant_id)
-            nome_b = tenant.nome if tenant else 'Barbearia'
-            slug   = tenant.slug if tenant else ''
-            html = f"""
-            <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
-                        background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
-              <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
-              <p>Olá, <strong>{user.name}</strong>!</p>
-              <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
-              <p>Que tal agendar seu próximo horário?</p>
-              <div style="text-align:center;margin:24px 0;">
-                <a href="{_tenant_url(slug)}"
-                   style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
-                          text-decoration:none;font-weight:bold;font-size:15px;">
-                  Agendar agora
-                </a>
-              </div>
-              <p style="color:#888;font-size:12px;">
-                Para cancelar esses lembretes, acesse seu perfil no site.
-              </p>
-            </div>
-            """
-            ok = _enviar_email(user.email, f'Hora de renovar — {nome_b}', html)
-            if ok:
-                db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo='retorno'))
-                db.session.commit()
-                print(f'[RETORNO] Enviado para {user.email}')
+        try:
+            agora = datetime.utcnow()
+            alvo_inicio = agora - timedelta(days=30)
+            alvo_fim    = agora - timedelta(days=27)
+            ags = (Agendamento.query
+                   .filter(Agendamento.status == 'concluido',
+                           Agendamento.data_hora >= alvo_inicio,
+                           Agendamento.data_hora < alvo_fim)
+                   .options(joinedload(Agendamento.usuario))
+                   .all())
+            ag_ids = [ag.id for ag in ags]
+            if not ag_ids:
+                return
+            ja_enviados = {
+                l.agendamento_id
+                for l in LembreteEnviado.query.filter(
+                    LembreteEnviado.agendamento_id.in_(ag_ids),
+                    LembreteEnviado.tipo == 'retorno'
+                ).all()
+            }
+            for ag in ags:
+                if ag.id in ja_enviados:
+                    continue
+                user = ag.usuario
+                if not user or not user.receber_lembretes:
+                    continue
+                if not user.email or user.email.endswith('@ibarber.local'):
+                    continue
+                tenant = db.session.get(Tenant, ag.tenant_id)
+                nome_b = tenant.nome if tenant else 'Barbearia'
+                slug   = tenant.slug if tenant else ''
+                html = f"""
+                <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
+                            background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
+                  <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
+                  <p>Olá, <strong>{user.name}</strong>!</p>
+                  <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
+                  <p>Que tal agendar seu próximo horário?</p>
+                  <div style="text-align:center;margin:24px 0;">
+                    <a href="{_tenant_url(slug)}"
+                       style="background:#C9A96E;color:#000;padding:12px 28px;border-radius:8px;
+                              text-decoration:none;font-weight:bold;font-size:15px;">
+                      Agendar agora
+                    </a>
+                  </div>
+                  <p style="color:#888;font-size:12px;">
+                    Para cancelar esses lembretes, acesse seu perfil no site.
+                  </p>
+                </div>
+                """
+                ok = _enviar_email(user.email, f'Hora de renovar — {nome_b}', html)
+                if ok:
+                    db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo='retorno'))
+                    db.session.commit()
+                    print(f'[RETORNO] Enviado para {user.email}')
+        except Exception as e:
+            print(f'[SCHEDULER] enviar_retorno_automatico erro: {e}')
 
 # C8: em modo debug o Werkzeug sobe dois processos; iniciar o scheduler só no principal
 if not _is_dev or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
@@ -4631,6 +4704,9 @@ def api_pagamento_cartao():
     tenant = db.session.get(Tenant, tenant_id)
     if not tenant:
         return jsonify({'erro': 'tenant não encontrado'}), 404
+    onb_tid = session.get('onb_tenant_id')
+    if onb_tid and int(onb_tid) != tenant.id:
+        return jsonify({'erro': 'tenant inválido para esta sessão'}), 403
     mp_token = get_mp_token()
     if not mp_token:
         return jsonify({'erro': 'credenciais não configuradas'}), 400
@@ -4852,8 +4928,10 @@ def api_admin_vencimento(tid):
 
 @app.route('/admin/entrar-gestao/<int:tid>')
 def admin_entrar_gestao(tid):
-    key = request.args.get('key', '')
-    if key != API_TOKEN:
+    key = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    if not key:
+        key = request.args.get('key', '')
+    if not key or key != API_TOKEN:
         return 'Não autorizado', 401
     t = db.session.get(Tenant, tid)
     if not t:
@@ -4868,6 +4946,10 @@ def api_pagamento_criar_v2():
     tenant = db.session.get(Tenant, d.get('tenant_id'))
     if not tenant:
         return jsonify({'erro': 'tenant não encontrado'}), 404
+    # Validate tenant_id matches onboarding session or is a new signup
+    onb_tid = session.get('onb_tenant_id')
+    if onb_tid and int(onb_tid) != tenant.id:
+        return jsonify({'erro': 'tenant inválido para esta sessão'}), 403
     plano = d.get('plano', '')
     if plano not in PLANOS:
         return jsonify({'erro': 'plano inválido'}), 400
@@ -5073,6 +5155,10 @@ def tenant_loja(slug):
     tenant = get_tenant_by_slug(slug)
     if not tenant or not tenant.assinatura_ativa or not getattr(tenant, 'loja_ativa', False):
         return redirect(url_for('tenant_site', slug=slug))
+    if session.get('user_id') and session.get('path_tenant_id') and session['path_tenant_id'] != tenant.id:
+        session.pop('user_id', None)
+        session.pop('user_name', None)
+        session.pop('user_email', None)
     session['path_tenant_id'] = tenant.id
     produtos = Produto.query.filter_by(tenant_id=tenant.id).order_by(Produto.criado_em.desc()).all()
     return render_template('loja.html', tenant=tenant, produtos=produtos,
@@ -5095,6 +5181,10 @@ def tenant_site(slug):
                 f'<div><h2 style="color:#C9A96E">✦ {tenant.nome}</h2>'
                 '<p style="color:#888;margin-top:.5rem">Site em ativação — aguardando confirmação do pagamento.</p>'
                 '</div></body></html>', 402)
+    if session.get('user_id') and session.get('path_tenant_id') and session['path_tenant_id'] != tenant.id:
+        session.pop('user_id', None)
+        session.pop('user_name', None)
+        session.pop('user_email', None)
     session['path_tenant_id'] = tenant.id
     session.pop('is_preview', None)
     session.pop('tenant_id', None)
