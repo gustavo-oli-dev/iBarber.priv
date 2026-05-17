@@ -4990,10 +4990,38 @@ def admin_painel():
         </form></body></html>''', 401
     tenants = Tenant.query.order_by(Tenant.id.desc()).all()
     mp_pub  = _get_setting('admin_mp_public_key')
+
+    from collections import defaultdict
+    now = datetime.utcnow()
+    chart_data = []
+    for i in range(11, -1, -1):
+        raw   = now.month - i - 1
+        month = raw % 12 + 1
+        year  = now.year + raw // 12
+        label = datetime(year, month, 1).strftime('%b/%y')
+        count = 0; receita = 0.0
+        for t in tenants:
+            for asn in t.assinaturas:
+                if asn.criado_em and asn.criado_em.year == year and asn.criado_em.month == month:
+                    count += 1
+                    receita += float(asn.valor_total or 0)
+        chart_data.append({'label': label, 'count': count, 'receita': receita})
+
+    planos_dist = defaultdict(int)
+    for t in tenants:
+        latest = next((a for a in t.assinaturas if a.status == 'ativo'), None)
+        if latest:
+            planos_dist[latest.plano.capitalize()] += 1
+
+    receita_total = sum(float(asn.valor_total or 0) for t in tenants for asn in t.assinaturas if asn.status == 'ativo')
+
     return render_template('admin_painel.html',
         tenants=tenants, key=senha,
         mp_public_key=mp_pub.value if mp_pub else '',
-        mp_token_set=bool(get_mp_token()))
+        mp_token_set=bool(get_mp_token()),
+        chart_data=chart_data,
+        planos_dist=dict(planos_dist),
+        receita_total=receita_total)
 
 @app.route('/api/admin/credenciais', methods=['POST'])
 def api_admin_credenciais():

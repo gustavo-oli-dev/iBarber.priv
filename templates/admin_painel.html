@@ -72,6 +72,25 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .ib-erro{color:var(--error);font-size:.72rem;margin-top:.2rem;display:block}
 .ib-invalido{border-color:var(--error)!important}
 
+/* CHART */
+.adm-chart-wrap{display:flex;gap:5px;align-items:flex-end;height:90px}
+.adm-chart-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:100%}
+.adm-chart-val{font-size:.55rem;color:var(--gold);line-height:1}
+.adm-chart-bar{width:100%;border-radius:3px 3px 0 0;transition:opacity .15s}
+.adm-chart-bar:hover{opacity:.7}
+.adm-chart-lbl{display:flex;gap:5px;margin-top:5px}
+.adm-chart-lbl-i{flex:1;font-size:.52rem;color:var(--muted);text-align:center;line-height:1.3}
+.plano-pill{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .65rem;border:1px solid var(--border);border-radius:50px;font-size:.73rem;color:var(--muted)}
+/* Mobile table */
+@media(max-width:640px){
+  .main{padding:1rem .75rem}
+  .col-id,.col-dt{display:none}
+  th,td{padding:.55rem .65rem}
+  .td-actions{gap:.2rem}
+  .btn-sm{font-size:.65rem;padding:.22rem .45rem}
+  .stat{font-size:1.7rem}
+}
+
 /* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:1rem}
 .modal-overlay.open{display:flex}
@@ -114,7 +133,52 @@ tr:hover td{background:rgba(255,255,255,.02)}
       <div class="stat">{{ tenants | length }}</div>
       <div class="stat-lbl">tenants no sistema</div>
     </div>
+    <div class="card">
+      <div class="card-title">Receita total</div>
+      <div class="stat" style="color:var(--gold)">R${{ "%.0f"|format(receita_total) }}</div>
+      <div class="stat-lbl">assinaturas ativas</div>
+    </div>
   </div>
+
+  <!-- GRÁFICO ADESÕES -->
+  <div class="card" style="margin-bottom:1.5rem">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem">
+      <div class="card-title" style="margin-bottom:0">Adesões — últimos 12 meses</div>
+      {% if planos_dist %}
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        {% for plano, qtd in planos_dist.items() %}
+        <span class="plano-pill"><span style="width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0"></span>{{ plano }}: <strong style="color:var(--text)">{{ qtd }}</strong></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="adm-chart-wrap" id="adm-chart"></div>
+    <div class="adm-chart-lbl" id="adm-lbl"></div>
+  </div>
+  <script>
+  (function(){
+    const data = {{ chart_data | tojson }};
+    const maxC = Math.max(...data.map(d=>d.count), 1);
+    const chart = document.getElementById('adm-chart');
+    const lbl   = document.getElementById('adm-lbl');
+    data.forEach(d => {
+      const h = d.count === 0 ? 3 : Math.max(6, Math.round((d.count / maxC) * 82));
+      const col = document.createElement('div');
+      col.className = 'adm-chart-col';
+      col.title = d.label + ': ' + d.count + ' adesão(ões)' + (d.receita ? ' · R$' + d.receita.toFixed(0) : '');
+      col.innerHTML =
+        '<span class="adm-chart-val">' + (d.count || '') + '</span>' +
+        '<div class="adm-chart-bar" style="height:' + h + 'px;background:' +
+          (d.count ? 'linear-gradient(180deg,var(--gold),rgba(201,169,110,.25))' : 'rgba(255,255,255,.05)') +
+        '"></div>';
+      chart.appendChild(col);
+      const l = document.createElement('div');
+      l.className = 'adm-chart-lbl-i';
+      l.textContent = d.label;
+      lbl.appendChild(l);
+    });
+  })();
+  </script>
 
   <!-- LINKS ÚTEIS -->
   <div class="card" style="margin-bottom:2rem;max-width:400px">
@@ -133,13 +197,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th class="col-id">ID</th>
           <th>Nome / Slug</th>
           <th>E-mail</th>
           <th>Status</th>
           <th>Plano</th>
           <th>Vencimento</th>
-          <th>Cadastro</th>
+          <th class="col-dt">Cadastro</th>
           <th></th>
         </tr>
       </thead>
@@ -147,7 +211,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       {% for t in tenants %}
         {% set asn = t.assinaturas | sort(attribute='id', reverse=True) | first if t.assinaturas else none %}
         <tr id="row-{{ t.id }}">
-          <td style="color:var(--muted)">{{ t.id }}</td>
+          <td class="col-id" style="color:var(--muted)">{{ t.id }}</td>
           <td>
             <div style="font-weight:600">{{ t.nome }}</div>
             <div style="font-size:.72rem;color:var(--muted)">/{{ t.slug }}</div>
@@ -180,7 +244,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
               <span style="color:var(--muted)">—</span>
             {% endif %}
           </td>
-          <td style="color:var(--muted);white-space:nowrap;font-size:.78rem">
+          <td class="col-dt" style="color:var(--muted);white-space:nowrap;font-size:.78rem">
             {% if t.criado_em %}{{ t.criado_em.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
           </td>
           <td>
