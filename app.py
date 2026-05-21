@@ -2599,8 +2599,8 @@ def api_credenciais_conta():
             return jsonify({'erro': 'E-mail já em uso'}), 400
         tenant.email = email_novo
     if senha_nova:
-        if len(senha_nova) < 6:
-            return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
+        if len(senha_nova) < 8:
+            return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
         tenant.password = generate_password_hash(senha_nova)
     db.session.commit()
     return jsonify({'ok': True})
@@ -3465,8 +3465,8 @@ def verificar_assinaturas():
                       <h2 style="color:#C9A96E;">Assinatura vencida</h2>
                       <p>Olá {tenant.nome}, sua assinatura venceu.</p>
                       <p>Renove em
-                        <a href="https://seuapp.com.br/renovar/{tenant.slug}"
-                           style="color:#C9A96E;">seuapp.com.br</a>
+                        <a href="https://ibarber.app.br/planos"
+                           style="color:#C9A96E;">ibarber.app.br</a>
                         para reativar seu site.
                       </p></div>''')
             db.session.commit()
@@ -3719,8 +3719,8 @@ def api_funcionarios_criar():
         if Funcionario.query.filter_by(email=email_func, tenant_id=tid, ativo=True).first():
             return jsonify({'erro': 'E-mail já cadastrado nesta barbearia'}), 400
     senha = d.get('senha', '').strip()
-    if len(senha) < 6:
-        return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
+    if len(senha) < 8:
+        return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
     perms = d.get('permissoes', {})
     nome_func = d.get('nome', '').strip()[:100]
     if not nome_func:
@@ -3778,8 +3778,8 @@ def api_funcionario_detalhe(fid):
     if 'ativo' in d:
         f.ativo = bool(d['ativo'])
     nova_senha = d.get('nova_senha', '').strip()
-    if nova_senha and len(nova_senha) < 6:
-        return jsonify({'erro': 'Senha deve ter mínimo 6 caracteres'}), 400
+    if nova_senha and len(nova_senha) < 8:
+        return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
     if nova_senha:
         f.password = generate_password_hash(nova_senha)
     perms = d.get('permissoes', {})
@@ -4704,8 +4704,8 @@ def api_cadastro_personalizar():
     if Tenant.query.filter_by(email=email).first():
         return jsonify({'erro': 'e-mail já cadastrado'}), 400
     senha = d.get('senha', '').strip()
-    if len(senha) < 6:
-        return jsonify({'erro': 'senha deve ter ao menos 6 caracteres'}), 400
+    if len(senha) < 8:
+        return jsonify({'erro': 'Senha deve ter ao menos 8 caracteres'}), 400
     tenant = Tenant(
         slug=slug,
         nome=d.get('nome', '').strip(),
@@ -4782,8 +4782,8 @@ def api_repersonalizar_credenciais():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
         tenant.email = email
     if senha:
-        if len(senha) < 6:
-            return jsonify({'erro': 'Senha deve ter pelo menos 6 caracteres'}), 400
+        if len(senha) < 8:
+            return jsonify({'erro': 'Senha deve ter pelo menos 8 caracteres'}), 400
         tenant.password = generate_password_hash(senha)
     if whatsapp is not None:
         tenant.whatsapp = whatsapp or None

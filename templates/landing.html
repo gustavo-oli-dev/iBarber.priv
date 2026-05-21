@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>iBarber — Gestão completa para barbearias</title>
 <meta name="description" content="Site de agendamento, app de gestão e controle financeiro para barbearias. Configure em 3 minutos. PIX, cartão e muito mais."/>
 <meta name="keywords" content="barbearia, agendamento online, app barbearia, gestão barbearia, iBarber"/>
@@ -18,6 +18,8 @@
   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -32,7 +34,7 @@
   --muted2:#555;
   --radius:14px;
 }
-html{scroll-behavior:smooth}
+@media(prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
@@ -1092,7 +1094,14 @@ footer{
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo"><span>✦</span> iBarber</div>
-  <div class="footer-copy">© 2026 iBarber · Todos os direitos reservados</div>
+  <div class="footer-copy">© 2026 iBarber · Todos os direitos reservados
+    <span style="margin:0 .5rem;color:var(--border)">·</span>
+    <a href="/privacidade" style="color:var(--muted);text-decoration:underline;text-underline-offset:3px">Privacidade</a>
+    <span style="margin:0 .5rem;color:var(--border)">·</span>
+    <a href="/termos" style="color:var(--muted);text-decoration:underline;text-underline-offset:3px">Termos</a>
+    <span style="margin:0 .5rem;color:var(--border)">·</span>
+    <a href="mailto:contato@ibarber.app.br" style="color:var(--muted);text-decoration:underline;text-underline-offset:3px">Contato</a>
+  </div>
 </footer>
 
 <script>
