@@ -3910,6 +3910,14 @@ def _enviar_boas_vindas(tenant):
 def landing():
     return render_template('landing.html', hide_fabs=True)
 
+@app.route('/privacidade')
+def privacidade():
+    return render_template('privacidade.html')
+
+@app.route('/termos')
+def termos():
+    return render_template('termos.html')
+
 # ─── Site de Gestão (HTML/Flask) ──────────────────────────────────────────────
 
 def _gestao_login_required():
