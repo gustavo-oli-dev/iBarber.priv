@@ -603,7 +603,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
       <div class="canvas-url">
         <span class="canvas-url-lock">🔒</span>
-        <span id="canvas-url-text">seu-slug.ibarber.app.br</span>
+        <span id="canvas-url-text">seu-slug.ibarber.shop</span>
       </div>
       <div class="toggle-group">
         <button class="tg-btn active" id="mode-global" onclick="setEditMode('global')" title="Editar ambos os sites">🌐 Global</button>
@@ -1119,7 +1119,7 @@ function updateUrlBar() {
   const slug = (document.getElementById('id-nome') && document.getElementById('id-nome').value.trim()
     ? document.getElementById('id-nome').value.trim().toLowerCase().replace(/\s+/g,'-')
     : 'sua-barbearia');
-  const base = slug + '.ibarber.app.br';
+  const base = slug + '.ibarber.shop';
   let path = '';
   if (siteMode === 'ag') {
     path = agUrlMap[agScreen] ?? agScreen;

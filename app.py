@@ -69,7 +69,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 _is_dev = os.environ.get('FLASK_DEBUG', '0') == '1' or os.environ.get('FLASK_ENV') == 'development'
 app.config['SESSION_COOKIE_SECURE'] = not _is_dev
-_cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
+_cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.shop')
 app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not _is_dev else None
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
@@ -118,9 +118,9 @@ MAIL_FROM     = 'Barbearia <ibarbeariaaa@gmail.com>'
 API_TOKEN            = os.environ.get('API_TOKEN', '')
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
-GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.app.br/auth/google/callback')
+GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.shop/auth/google/callback')
 ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
-APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.app.br')
+APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.shop')
 CF_TOKEN      = os.environ.get('CF_TOKEN', '')
 CF_ZONE_ID    = os.environ.get('CF_ZONE_ID', '')
 VPS_IP        = os.environ.get('VPS_IP', 'IP_REMOVIDO')
@@ -3465,8 +3465,8 @@ def verificar_assinaturas():
                       <h2 style="color:#C9A96E;">Assinatura vencida</h2>
                       <p>Olá {tenant.nome}, sua assinatura venceu.</p>
                       <p>Renove em
-                        <a href="https://ibarber.app.br/planos"
-                           style="color:#C9A96E;">ibarber.app.br</a>
+                        <a href="https://ibarber.shop/planos"
+                           style="color:#C9A96E;">ibarber.shop</a>
                         para reativar seu site.
                       </p></div>''')
             db.session.commit()
@@ -3983,7 +3983,7 @@ def _gestao_template_ctx():
 def _csrf_ok():
     """Verifica Origin/Referer em form POSTs para prevenir CSRF."""
     origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
-    host   = request.host  # ex: ibarber.app.br ou slug.ibarber.app.br
+    host   = request.host  # ex: ibarber.shop ou slug.ibarber.shop
     return not origin or (APP_DOMAIN in origin) or (host in origin)
 
 @app.route('/gestao/login', methods=['GET', 'POST'])
