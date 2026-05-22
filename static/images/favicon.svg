@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="13" ry="13" fill="#0a0a0a"/>
+  <!-- dot do i -->
+  <circle cx="32" cy="13" r="6" fill="#C9A96E"/>
+  <!-- haste do i -->
+  <rect x="27" y="23" width="10" height="31" rx="5" ry="5" fill="#C9A96E"/>
+</svg>
