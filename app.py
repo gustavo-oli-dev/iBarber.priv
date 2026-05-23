@@ -1891,6 +1891,9 @@ def get_tenant_by_slug(slug):
 def get_tenant_atual():
     # 1. Subdomínio (produção com *.dominio.com)
     host = request.host.split(':')[0]
+    # Domínio principal nunca é um tenant
+    if host == APP_DOMAIN or host == f'www.{APP_DOMAIN}':
+        return None
     slug = host.split('.')[0]
     _reservados = ('www', 'localhost', '127', 'seuapp', 'ibarber', '0', '192', '10')
     if slug not in _reservados and '.' in request.host:
