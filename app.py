@@ -1914,10 +1914,11 @@ def inject_tenant():
     except Exception:
         t = None
 
-    # Fallback: gestão logada
-    if t is None and session.get('gestao_tenant_id'):
+    # Fallback: gestão ou repersonalizar logados
+    _fallback_tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
+    if t is None and _fallback_tid:
         try:
-            t = db.session.get(Tenant, session['gestao_tenant_id'])
+            t = db.session.get(Tenant, _fallback_tid)
         except Exception:
             t = None
 
@@ -4612,10 +4613,7 @@ def pagamento():
 @app.route('/api/personalizar/upload', methods=['POST'])
 @limiter.limit('20 per hour')
 def api_personalizar_upload():
-    # C9: endpoint de upload restrito a gestor autenticado
-    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
-    if not tid:
-        return jsonify({'erro': 'não autenticado'}), 401
+    # Upload público: usado no onboarding (sem sessão) e no repersonalizar (com sessão)
     arquivo = request.files.get('imagem')
     if not arquivo:
         return jsonify({'erro': 'nenhum arquivo'}), 400
