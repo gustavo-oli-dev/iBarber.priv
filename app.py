@@ -2373,8 +2373,8 @@ def api_escala(data_str):
 
 @app.route('/api/config-horarios', methods=['GET', 'POST'])
 def api_config_horarios():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         data     = request.get_json(silent=True) or {}
         intervalo = data.pop('intervalo_minutos', None)
@@ -2406,8 +2406,8 @@ def api_config_publica():
 @app.route('/api/horarios/conflitos', methods=['POST'])
 def api_horarios_conflitos():
     """Verifica agendamentos futuros que ficam fora do novo horário semanal."""
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     novos = request.get_json(silent=True) or {}
     DOW_MAP = {'Monday':'seg','Tuesday':'ter','Wednesday':'qua','Thursday':'qui',
                'Friday':'sex','Saturday':'sab','Sunday':'dom'}
@@ -2430,20 +2430,21 @@ def api_horarios_conflitos():
 
 @app.route('/api/dias-fechados/conflitos', methods=['GET'])
 def api_dias_fechados_conflitos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     data_val = request.args.get('data', '')
     if not data_val:
         return jsonify({'erro': 'data obrigatória'}), 400
     # H6: rejeitar datas que não seguem o formato YYYY-MM-DD (previne SQL injection via data maliciosa)
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', data_val):
         return jsonify({'erro': 'data inválida'}), 400
-    conflitos = _conflitos_agendamentos_futuros(_api_tid(), data=data_val)
+    conflitos = _conflitos_agendamentos_futuros(_tid, data=data_val)
     return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
 @app.route('/api/dias-fechados', methods=['GET', 'POST', 'DELETE'])
 def api_dias_fechados():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     s = _get_setting('dias_fechados', _tid)
     dias = json.loads(s.value) if s and s.value else []
     if request.method in ('POST', 'DELETE'):
@@ -2566,9 +2567,9 @@ _SENSITIVE_KEYS = {'mp_token', 'mp_public_key', 'pix_chave'}
 
 @app.route('/api/credenciais', methods=['GET', 'POST'])
 def api_credenciais():
-    if not verificar_token_admin(request): return jsonify({'erro': 'token inválido'}), 401
     _keys = ['pix_chave', 'mp_token', 'mp_public_key', 'pix_ativo', 'cartao_ativo']
-    _tid = _api_tid()
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         for k in _keys:
@@ -4611,7 +4612,8 @@ def pagamento():
 @limiter.limit('20 per hour')
 def api_personalizar_upload():
     # C9: endpoint de upload restrito a gestor autenticado
-    if not session.get('gestao_tenant_id'):
+    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
+    if not tid:
         return jsonify({'erro': 'não autenticado'}), 401
     arquivo = request.files.get('imagem')
     if not arquivo:
@@ -4910,6 +4912,10 @@ def api_cadastro():
         trial_expira=datetime.utcnow() + timedelta(days=7),
     )
     db.session.add(tenant)
+    db.session.flush()
+    for nome_cat in ['Corte', 'Barba', 'Combo']:
+        db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
+    _upsert_setting('gestor_e_barbeiro', 'true', tenant.id)
     db.session.commit()
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
