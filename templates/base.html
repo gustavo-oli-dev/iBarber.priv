@@ -33,7 +33,8 @@
       {% set _logo = (preview_identity.logoUrl | default('')) or (tema_config.logoUrl | default('')) %}
       {% set _nome = (preview_identity.nomeDisplay | default('')) or (tema_config.nomeDisplay | default('')) or (tenant.nome | upper if tenant else 'BARBEARIA') %}
       {% if _logo %}
-        <img src="{{ _logo }}" alt="{{ _nome }}" style="height:28px;max-width:140px;object-fit:contain;display:block;">
+        <img src="{{ _logo }}" alt="{{ _nome }}" style="height:28px;max-width:140px;object-fit:contain;display:block;" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='');" >
+        <span style="display:none"><span class="logo-mark">✦</span> {{ _nome }}</span>
       {% else %}
         <span class="logo-mark">✦</span> {{ _nome }}
       {% endif %}

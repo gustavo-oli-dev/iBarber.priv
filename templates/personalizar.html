@@ -1170,11 +1170,11 @@ function clearNomeErr() {
 function irParaPlanos() {
   const nomeEl = document.getElementById('id-nome');
   const nome = nomeEl ? nomeEl.value.trim() : '';
-  if(!nome) {
+  const logoUrl = T.ag.logoUrl || T.gt.logoUrl || '';
+  if(!nome && !logoUrl) {
     const err = document.getElementById('err-nome');
-    if(err) err.style.display = 'block';
+    if(err) { err.textContent = 'Informe o nome da barbearia ou faça upload da logo'; err.style.display = 'block'; }
     if(nomeEl) { nomeEl.classList.add('invalid'); nomeEl.focus(); }
-    // Scroll panel to the identity section on mobile
     nomeEl && nomeEl.scrollIntoView({behavior:'smooth', block:'center'});
     return;
   }
