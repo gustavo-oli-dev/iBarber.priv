@@ -1742,10 +1742,11 @@ def _notificar_lista_espera(tenant_id, data_str):
 def meu_agendamento():
     if 'user_id' not in session:
         return jsonify({'agendamento': None})
-    ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo')
-          .order_by(Agendamento.data_hora.desc())
-          .first())
+    _tid = session.get('path_tenant_id')
+    q = Agendamento.query.filter_by(user_id=session['user_id'], status='ativo')
+    if _tid:
+        q = q.filter_by(tenant_id=_tid)
+    ag = q.order_by(Agendamento.data_hora.desc()).first()
     if not ag:
         return jsonify({'agendamento': None})
     if ag.funcionario_id == 0:
@@ -1768,10 +1769,11 @@ def atualizar_forma_pagamento():
     forma = data.get('forma', '')
     if forma not in ('dinheiro', 'pix', 'cartao'):
         return jsonify({'erro': 'forma inválida'}), 400
-    ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo')
-          .filter(Agendamento.data_hora > _agora_brt())
-          .first())
+    _tid = session.get('path_tenant_id')
+    q = Agendamento.query.filter_by(user_id=session['user_id'], status='ativo')
+    if _tid:
+        q = q.filter_by(tenant_id=_tid)
+    ag = q.filter(Agendamento.data_hora > _agora_brt()).first()
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
     ag.forma_pagamento = forma
@@ -1803,15 +1805,15 @@ def _to_brt(dt):
 def meu_historico():
     if 'user_id' not in session:
         return jsonify({'historico': []})
-    ags = (Agendamento.query
-           .filter_by(user_id=session['user_id'])
-           .options(joinedload(Agendamento.funcionario))
-           .order_by(Agendamento.data_hora.desc())
-           .limit(20).all())
+    _tid = session.get('path_tenant_id')
+    q = Agendamento.query.filter_by(user_id=session['user_id'])
+    if _tid:
+        q = q.filter_by(tenant_id=_tid)
+    ags = q.options(joinedload(Agendamento.funcionario)).order_by(Agendamento.data_hora.desc()).limit(20).all()
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
     pedidos = (
         {p.id: p for p in
-         Pedido.query.filter(Pedido.id.in_(pedido_ids))
+         Pedido.query.filter(Pedido.tenant_id == _tid, Pedido.id.in_(pedido_ids))
                      .options(joinedload(Pedido.itens)).all()}
         if pedido_ids else {}
     )
@@ -3226,7 +3228,7 @@ def api_agendamentos():
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
     pedidos = (
         {p.id: p for p in
-         Pedido.query.filter(Pedido.id.in_(pedido_ids))
+         Pedido.query.filter(Pedido.tenant_id == tid, Pedido.id.in_(pedido_ids))
                      .options(joinedload(Pedido.itens)).all()}
         if pedido_ids else {}
     )
@@ -3426,10 +3428,11 @@ def verificar_lembretes():
 def testar_lembretes():
     if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
     with app.app_context():
-        user = User.query.first()
+        tid = _api_tid()
+        user = User.query.filter_by(tenant_id=tid).first() if tid else User.query.first()
         if not user:
             return jsonify({'erro': 'nenhum usuário cadastrado'}), 404
-        ag = (Agendamento.query.filter_by(user_id=user.id, status='ativo')
+        ag = (Agendamento.query.filter_by(user_id=user.id, tenant_id=user.tenant_id, status='ativo')
               .order_by(Agendamento.data_hora.asc()).first())
         if not ag:
             return jsonify({'erro': 'nenhum agendamento ativo para este usuário'}), 404
@@ -4041,7 +4044,7 @@ def gestao_dashboard():
            .filter(Agendamento.data_hora >= janela_ini, Agendamento.data_hora <= janela_fim)
            .order_by(Agendamento.data_hora.asc()).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
-    pedidos_map = {p.id: p for p in Pedido.query.filter(Pedido.id.in_(pedido_ids)).options(joinedload(Pedido.itens)).all()} if pedido_ids else {}
+    pedidos_map = {p.id: p for p in Pedido.query.filter(Pedido.tenant_id == _tid, Pedido.id.in_(pedido_ids)).options(joinedload(Pedido.itens)).all()} if pedido_ids else {}
     # Serializar para JSON
     ags_json = []
     for ag in ags:
@@ -4210,7 +4213,7 @@ def gestao_entradas():
            .options(joinedload(Agendamento.usuario))
            .order_by(Agendamento.data_hora.desc()).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
-    pedidos_map = {p.id: p for p in Pedido.query.filter(Pedido.id.in_(pedido_ids))
+    pedidos_map = {p.id: p for p in Pedido.query.filter(Pedido.tenant_id == _tid, Pedido.id.in_(pedido_ids))
                    .options(joinedload(Pedido.itens)).all()} if pedido_ids else {}
     ags_json = []
     for ag in ags:
