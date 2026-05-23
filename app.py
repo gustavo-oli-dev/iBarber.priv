@@ -36,7 +36,7 @@ app.jinja_env.globals['APP_VERSION'] = APP_VERSION
 
 @app.context_processor
 def _gestao_trial_ctx():
-    tid = session.get('gestao_tenant_id')
+    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
     if not tid:
         return {}
     tenant = db.session.get(Tenant, tid)
@@ -260,8 +260,8 @@ def _upsert_setting(key, value, tenant_id=None):
         db.session.add(Setting(key=full, value=value))
 
 def _gestao_tid():
-    """Retorna tenant_id do gestor logado, ou None."""
-    return session.get('gestao_tenant_id')
+    """Retorna tenant_id do gestor ou repersonalizador logado, ou None."""
+    return session.get('gestao_tenant_id') or session.get('reperson_tid')
 
 def _api_tid():
     """Retorna tenant_id a partir do contexto atual (gestão session, Bearer token ou path)."""
@@ -562,7 +562,7 @@ def user_dict(u):
     }
 
 def pedido_dict(p):
-    ag   = Agendamento.query.filter_by(pedido_id=p.id).first()
+    ag   = Agendamento.query.filter_by(pedido_id=p.id, tenant_id=p.tenant_id).first()
     user = db.session.get(User, p.user_id)
     return {
         'id': p.id, 'user_id': p.user_id, 'total': p.total,
@@ -2300,8 +2300,8 @@ def api_barbeiros_disponiveis():
 @app.route('/api/gestor-barbeiro', methods=['GET', 'POST'])
 def api_gestor_barbeiro():
     """Lê/salva se o gestor conta como barbeiro e seu nome."""
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     ativo, nome = _gestor_como_barbeiro(_tid)
     if request.method == 'GET':
         gf = _get_setting('gestor_foto', _tid)
@@ -2881,8 +2881,8 @@ def api_usuario(uid):
 
 @app.route('/api/pedidos', methods=['GET'])
 def api_pedidos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    tid = _api_tid()
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     pedidos = Pedido.query.filter_by(tenant_id=tid).order_by(Pedido.criado_em.desc()).all()
     return jsonify([pedido_dict(p) for p in pedidos])
 
@@ -3057,7 +3057,8 @@ def api_export():
     # Accept token via _token query param (for <a> download links) or Authorization header
     _qt = request.args.get('_token', '')
     if _qt:
-        tid = _extrair_tenant_token(_qt)[0]
+        _ext_tid, _, _ext_ver = _extrair_tenant_token(_qt)
+        tid = _ext_tid if (_ext_tid and _token_valido(_ext_tid, _ext_ver)) else None
     else:
         tid = verificar_token(request)
     if not tid:
@@ -3086,8 +3087,7 @@ def api_export():
 
     if tipo == 'agendamentos':
         w.writerow(['Data','Hora','Cliente','Contato','Serviços','Barbeiro','Status','Forma Pagamento'])
-        q = Agendamento.query
-        if tid: q = q.filter(Agendamento.tenant_id == tid)
+        q = Agendamento.query.filter(Agendamento.tenant_id == tid)
         if d_ini: q = q.filter(Agendamento.data_hora >= d_ini)
         if d_fim: q = q.filter(Agendamento.data_hora <= d_fim)
         for ag in q.order_by(Agendamento.data_hora.desc()).all():
@@ -3111,15 +3111,13 @@ def api_export():
 
     elif tipo == 'clientes':
         w.writerow(['Nome','Email','Contato','Cadastrado em'])
-        q = User.query
-        if tid: q = q.filter(User.tenant_id == tid)
+        q = User.query.filter(User.tenant_id == tid)
         for c in q.order_by(User.name).all():
             w.writerow([c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
 
     elif tipo == 'servicos':
         w.writerow(['Data','Cliente','Serviço','Categoria','Preço (R$)','Status'])
-        q = Pedido.query
-        if tid: q = q.filter(Pedido.tenant_id == tid)
+        q = Pedido.query.filter(Pedido.tenant_id == tid)
         if d_ini: q = q.filter(Pedido.criado_em >= d_ini)
         if d_fim: q = q.filter(Pedido.criado_em <= d_fim)
         for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).all():
@@ -3270,7 +3268,8 @@ def api_entradas():
 
 @app.route('/api/entradas', methods=['POST'])
 def api_entrada_criar():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     d = request.get_json() or {}
     descricao = d.get('descricao', '').strip()[:200]
     valor     = _sf(d.get('valor', 0))
@@ -3284,7 +3283,6 @@ def api_entrada_criar():
         return jsonify({'erro': 'valor inválido'}), 400
     if forma not in formas_validas:
         forma = 'dinheiro'
-    tid = verificar_token(request)
     e = EntradaMonetaria(descricao=descricao, valor=valor, forma=forma, tenant_id=tid)
     db.session.add(e)
     db.session.commit()
@@ -3427,10 +3425,10 @@ def verificar_lembretes():
 
 @app.route('/api/testar-lembretes', methods=['POST'])
 def testar_lembretes():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
     with app.app_context():
-        tid = _api_tid()
-        user = User.query.filter_by(tenant_id=tid).first() if tid else User.query.first()
+        user = User.query.filter_by(tenant_id=tid).first()
         if not user:
             return jsonify({'erro': 'nenhum usuário cadastrado'}), 404
         ag = (Agendamento.query.filter_by(user_id=user.id, tenant_id=user.tenant_id, status='ativo')
@@ -3681,7 +3679,7 @@ def admin_login():
     tenant = Tenant.query.filter_by(email=email, ativo=True).first()
     if not tenant or not check_password_hash(tenant.password, senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     return jsonify({'ok': True, 'token': token, 'nome': tenant.nome, 'tipo': 'admin'})
 
 @app.route('/api/funcionarios/login', methods=['POST'])
@@ -3694,7 +3692,8 @@ def api_funcionarios_login():
     f = next((c for c in candidatos if check_password_hash(c.password, senha)), None)
     if not f:
         return jsonify({'erro': 'credenciais inválidas'}), 401
-    token = _gerar_token(f.tenant_id, f.id)
+    t = db.session.get(Tenant, f.tenant_id)
+    token = _gerar_token(f.tenant_id, f.id, t.token_version or 0 if t else 0)
     return jsonify({
         'ok': True, 'tipo': 'funcionario',
         'nome': f.nome, 'token': token,
@@ -3812,8 +3811,8 @@ def api_funcionario_conflitos(fid):
 
 @app.route('/api/gestor-barbeiro/conflitos', methods=['GET'])
 def api_gestor_barbeiro_conflitos():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     conflitos = _conflitos_agendamentos_futuros(_tid, funcionario_id=0)
     return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
@@ -3853,8 +3852,8 @@ def api_funcionario_foto(fid):
 @app.route('/api/gestor-foto', methods=['POST', 'DELETE'])
 @limiter.limit('20 per hour', methods=['POST'])
 def api_gestor_foto():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    _tid = _api_tid()
+    _tid = verificar_token(request)
+    if not _tid: return jsonify({'erro': 'token inválido'}), 401
     if request.method == 'DELETE':
         s = _get_setting('gestor_foto', _tid)
         if s and s.value:
@@ -3926,7 +3925,7 @@ def termos():
 
 def _gestao_login_required():
     """Retorna None se ok, ou um redirect se não autenticado."""
-    tid = session.get('gestao_tenant_id')
+    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
     if not tid:
         return redirect(url_for('gestao_login'))
     if not db.session.get(Tenant, tid):
@@ -3935,7 +3934,7 @@ def _gestao_login_required():
     return None
 
 def _gestao_tenant():
-    return db.session.get(Tenant, session.get('gestao_tenant_id'))
+    return db.session.get(Tenant, session.get('gestao_tenant_id') or session.get('reperson_tid'))
 
 def _gestao_is_owner():
     return not session.get('gestao_func_id')
@@ -3980,7 +3979,7 @@ def _gestao_owner_required():
 
 @app.context_processor
 def _gestao_template_ctx():
-    if session.get('gestao_tenant_id'):
+    if session.get('gestao_tenant_id') or session.get('reperson_tid'):
         return {'gestao_is_owner': _gestao_is_owner(), 'gestao_perms': _gestao_perms()}
     return {}
 
@@ -4005,9 +4004,10 @@ def gestao_login():
             session['gestao_tenant_id'] = tenant.id
             session['gestao_nome'] = tenant.nome
             return redirect(url_for('gestao_dashboard'))
-        # Tenta login como funcionário
-        func = Funcionario.query.filter_by(email=email, ativo=True).first()
-        if func and func.tenant_id and check_password_hash(func.password, senha):
+        # Tenta login como funcionário (checa senha em todos os candidatos para evitar ambiguidade de tenant)
+        func = next((c for c in Funcionario.query.filter_by(email=email, ativo=True).all()
+                     if check_password_hash(c.password, senha)), None)
+        if func and func.tenant_id:
             t = db.session.get(Tenant, func.tenant_id)
             if t and t.ativo:
                 session.clear()
@@ -4024,6 +4024,7 @@ def gestao_logout():
     session.pop('gestao_tenant_id', None)
     session.pop('gestao_func_id', None)
     session.pop('gestao_nome', None)
+    session.pop('reperson_tid', None)
     return redirect(url_for('gestao_login'))
 
 @app.route('/gestao')
@@ -4730,6 +4731,10 @@ def api_cadastro_personalizar():
         assinatura_ativa=False,
     )
     db.session.add(tenant)
+    db.session.flush()
+    for nome_cat in ['Corte', 'Barba', 'Combo']:
+        db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
+    _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'slug': slug, 'tenant_id': tenant.id})
@@ -4915,7 +4920,7 @@ def api_cadastro():
     db.session.flush()
     for nome_cat in ['Corte', 'Barba', 'Combo']:
         db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
-    _upsert_setting('gestor_e_barbeiro', 'true', tenant.id)
+    _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
@@ -5387,10 +5392,8 @@ def verificar_slug(slug):
 
 @app.route('/api/minha-assinatura')
 def api_minha_assinatura():
-    if not verificar_token(request): return jsonify({'erro': 'token inválido'}), 401
-    tenant_id = request.args.get('tenant_id', type=int)
-    if not tenant_id:
-        return jsonify({'erro': 'tenant_id obrigatório'}), 400
+    tenant_id = verificar_token(request)
+    if not tenant_id: return jsonify({'erro': 'token inválido'}), 401
     assinatura = Assinatura.query.filter_by(
         tenant_id=tenant_id).order_by(Assinatura.criado_em.desc()).first()
     if not assinatura:
