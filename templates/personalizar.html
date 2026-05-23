@@ -180,7 +180,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .canvas-body::-webkit-scrollbar-thumb{background:#222;border-radius:4px}
 
 /* ── Desktop mockup — laptop frame ── */
-@keyframes onbFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes onbFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 
 .prev-desktop{
@@ -1192,14 +1192,18 @@ renderScreensSidebar();
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 
 function navegarCom(url) {
-  document.body.style.transition = 'opacity .25s ease';
-  document.body.style.opacity = '0';
-  setTimeout(() => location.replace(url), 270);
+  document.body.style.transition = 'opacity .22s ease';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.body.style.opacity = '0';
+    setTimeout(() => location.replace(url), 230);
+  }));
 }
 function voltarCom() {
-  document.body.style.transition = 'opacity .25s ease';
-  document.body.style.opacity = '0';
-  setTimeout(() => history.back(), 270);
+  document.body.style.transition = 'opacity .22s ease';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.body.style.opacity = '0';
+    setTimeout(() => history.back(), 230);
+  }));
 }
 </script>
 </body>
