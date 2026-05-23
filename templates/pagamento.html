@@ -115,10 +115,29 @@ body{display:flex;flex-direction:column}
 .glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
 @media(max-width:767px){.steps,.tb-sep{display:none!important}}
 @keyframes onbFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes sc-top{0%,100%{transform:rotate(-10deg)}42%,58%{transform:rotate(10deg)}}
+@keyframes sc-bot{0%,100%{transform:rotate(10deg)}42%,58%{transform:rotate(-10deg)}}
 body{animation:onbFadeIn .35s ease both}
 </style>
 </head>
 <body>
+
+<div id="onb-loading" style="position:fixed;inset:0;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2rem;opacity:0;transition:opacity .18s ease;pointer-events:none;">
+  <svg width="88" height="52" viewBox="0 0 88 52" fill="none" style="overflow:visible">
+    <g style="transform-origin:34px 26px;animation:sc-top .85s cubic-bezier(.4,0,.2,1) infinite">
+      <circle cx="9" cy="15" r="7" stroke="#C9A96E" stroke-width="1.8" fill="none"/>
+      <line x1="15" y1="19" x2="34" y2="26" stroke="#C9A96E" stroke-width="2.2" stroke-linecap="round"/>
+      <line x1="34" y1="26" x2="82" y2="21" stroke="#C9A96E" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+    <g style="transform-origin:34px 26px;animation:sc-bot .85s cubic-bezier(.4,0,.2,1) infinite">
+      <circle cx="9" cy="37" r="7" stroke="#C9A96E" stroke-width="1.8" fill="none"/>
+      <line x1="15" y1="33" x2="34" y2="26" stroke="#C9A96E" stroke-width="2.2" stroke-linecap="round"/>
+      <line x1="34" y1="26" x2="82" y2="31" stroke="#C9A96E" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+    <circle cx="34" cy="26" r="2.5" fill="#C9A96E"/>
+  </svg>
+  <span style="color:rgba(201,169,110,.5);font-size:.68rem;font-family:'Inter',sans-serif;letter-spacing:.22em;text-transform:uppercase">aguarde</span>
+</div>
 
 <div class="glow"></div>
 
@@ -371,11 +390,14 @@ document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preven
 document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
 
 function navegarCom(url) {
-  document.body.style.transition = 'opacity .22s ease';
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    document.body.style.opacity = '0';
-    setTimeout(() => location.replace(url), 230);
-  }));
+  const ov = document.getElementById('onb-loading');
+  if (ov) {
+    ov.style.pointerEvents = 'all';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      ov.style.opacity = '1';
+      setTimeout(() => location.replace(url), 600);
+    }));
+  } else { location.replace(url); }
 }
 </script>
 </body>
