@@ -114,6 +114,8 @@ body{display:flex;flex-direction:column}
 /* GLOW */
 .glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
 @media(max-width:767px){.steps,.tb-sep{display:none!important}}
+@keyframes onbFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+body{animation:onbFadeIn .35s ease both}
 </style>
 </head>
 <body>
@@ -312,7 +314,7 @@ async function iniciarCartaoBrick() {
               if (d.ok) {
                 resolve();
                 limparStorage();
-                window.location.href = `/sucesso/${d.slug || slug}`;
+                navegarCom(`/sucesso/${d.slug || slug}`);
               } else {
                 reject(new Error(d.erro || 'Pagamento recusado'));
               }
@@ -360,13 +362,19 @@ function iniciarPollingPix() {
       if (d.ativo) {
         clearInterval(pollInterval);
         limparStorage();
-        window.location.href = `/sucesso/${slug}`;
+        navegarCom(`/sucesso/${slug}`);
       }
     } catch(e) {}
   }, 5000);
 }
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+
+function navegarCom(url) {
+  document.body.style.transition = 'opacity .25s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => location.replace(url), 270);
+}
 </script>
 </body>
 </html>

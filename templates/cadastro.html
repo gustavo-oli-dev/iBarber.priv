@@ -87,6 +87,8 @@ body{display:flex;flex-direction:column}
 /* GLOW */
 .glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
 @media(max-width:767px){.steps,.tb-sep{display:none!important}}
+@keyframes onbFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+body{animation:onbFadeIn .35s ease both}
 </style>
 </head>
 <body>
@@ -165,7 +167,7 @@ body{display:flex;flex-direction:column}
     </div>
 
     <div class="btn-row">
-      <button class="btn-back" onclick="history.back()">Voltar</button>
+      <button class="btn-back" onclick="voltarCom()">Voltar</button>
       <button class="btn-criar" id="btn-criar" onclick="submeter()">Criar conta e pagar</button>
     </div>
     <div class="err-geral" id="err-geral"></div>
@@ -277,7 +279,7 @@ async function submeter() {
     if(d.ok) {
       localStorage.setItem('onb_tenant_id', d.tenant_id);
       localStorage.setItem('onb_slug', d.slug);
-      location.replace('/pagamento');
+      navegarCom('/pagamento');
     } else {
       showErr('err-geral', d.erro || 'Erro ao criar a conta');
     }
@@ -289,6 +291,17 @@ async function submeter() {
 }
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+
+function navegarCom(url) {
+  document.body.style.transition = 'opacity .25s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => location.replace(url), 270);
+}
+function voltarCom() {
+  document.body.style.transition = 'opacity .25s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => history.back(), 270);
+}
 </script>
 </body>
 </html>

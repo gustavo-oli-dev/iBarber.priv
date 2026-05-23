@@ -18,7 +18,7 @@
   --panel:300px;--screens:130px;
 }
 html,body{height:100%;overflow:hidden}
-body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;display:flex;flex-direction:column}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;display:flex;flex-direction:column;animation:onbFadeIn .35s ease both}
 
 /* ── TOPBAR ── */
 .topbar{
@@ -180,6 +180,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 .canvas-body::-webkit-scrollbar-thumb{background:#222;border-radius:4px}
 
 /* ── Desktop mockup — laptop frame ── */
+@keyframes onbFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes popIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 
 .prev-desktop{
@@ -376,7 +377,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
     <div class="step-item"><div class="step-num">4</div> Pagamento</div>
   </div>
   <div class="topbar-right">
-    <button class="btn-back" onclick="history.back()">Voltar</button>
+    <button class="btn-back" onclick="voltarCom()">Voltar</button>
     <button class="btn-avancar" onclick="irParaPlanos()">Próximo</button>
   </div>
 </header>
@@ -578,7 +579,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
       <!-- Voltar + Próximo — mobile -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.25rem;">
-        <button onclick="history.back()"
+        <button onclick="voltarCom()"
           style="padding:14px;background:transparent;border:1.5px solid var(--border);color:var(--text);border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;">
           Voltar
         </button>
@@ -1179,7 +1180,7 @@ function irParaPlanos() {
     return;
   }
   localStorage.setItem('onb_tema', JSON.stringify({ag: T.ag, gt: T.gt}));
-  location.replace('/planos');
+  navegarCom('/planos');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -1189,6 +1190,17 @@ reloadAgIframes();
 reloadGtIframes();
 renderScreensSidebar();
 document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});
+
+function navegarCom(url) {
+  document.body.style.transition = 'opacity .25s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => location.replace(url), 270);
+}
+function voltarCom() {
+  document.body.style.transition = 'opacity .25s ease';
+  document.body.style.opacity = '0';
+  setTimeout(() => history.back(), 270);
+}
 </script>
 </body>
 </html>
