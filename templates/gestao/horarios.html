@@ -77,9 +77,8 @@
     <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:1rem;">Os agendamentos abaixo ficam fora do novo horário. O que deseja fazer?</p>
     <div id="listaConflitoHorario" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.5rem .75rem;margin-bottom:1.25rem;max-height:180px;overflow-y:auto;font-size:.83rem;display:flex;flex-direction:column;gap:.35rem;"></div>
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
-      <button type="button" class="g-btn g-btn-outline" onclick="document.getElementById('modalConflitoHorario').style.display='none'">Cancelar</button>
-      <button type="button" class="g-btn g-btn-outline" style="color:var(--gold);border-color:var(--gold);" onclick="confirmarSalvarHorario('manter')">Salvar sem cancelar</button>
-      <button type="button" class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarSalvarHorario('cancelar')">Cancelar agendamentos</button>
+      <button type="button" class="g-btn g-btn-outline" onclick="document.getElementById('modalConflitoHorario').style.display='none'">Voltar</button>
+      <button type="button" class="g-btn g-btn-primary" style="background:var(--error);border-color:var(--error);margin-left:auto;" onclick="confirmarSalvarHorario('cancelar')">Salvar e cancelar agendamentos</button>
     </div>
   </div>
 </div>
