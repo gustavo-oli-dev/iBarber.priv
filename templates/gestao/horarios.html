@@ -246,24 +246,28 @@ async function verificarESalvarHorarios() {
       fechamento:form.querySelector(`[name="fechamento_${k}"]`)?.value || '18:00',
     };
   });
+  let conflitos = [];
   try {
     const r = await fetch('/api/horarios/conflitos', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
       body: JSON.stringify(novos)
     });
+    if (!r.ok) { form.submit(); return; }
     const d = await r.json();
-    if (d.conflitos && d.conflitos.length > 0) {
-      document.getElementById('listaConflitoHorario').innerHTML = d.conflitos.map(c =>
-        `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
-          <span style="color:var(--text);">${c.nome}</span>
-          <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
-        </div>`
-      ).join('');
-      document.getElementById('modalConflitoHorario').style.display = 'flex';
-      return;
-    }
-  } catch(e) {}
+    conflitos = d.conflitos || [];
+  } catch(e) { form.submit(); return; }
+
+  if (conflitos.length > 0) {
+    document.getElementById('listaConflitoHorario').innerHTML = conflitos.map(c =>
+      `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--text);">${c.nome}</span>
+        <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
+      </div>`
+    ).join('');
+    document.getElementById('modalConflitoHorario').style.display = 'flex';
+    return;
+  }
   form.submit();
 }
 
