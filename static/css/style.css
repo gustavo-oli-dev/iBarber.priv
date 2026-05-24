@@ -320,14 +320,17 @@ main { flex: 1; }
   position: relative;
   background-attachment: fixed; /* parallax no desktop */
 }
-/* Overlay escuro sobre a imagem de fundo para integrar ao tema */
+/* Overlay escuro só quando há imagem de fundo */
 .hero-central::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: transparent;
   z-index: 0;
   pointer-events: none;
+}
+.hero-central.has-hero::before {
+  background: rgba(0, 0, 0, 0.42);
 }
 /* Conteúdo acima do overlay — regra completa em "Hero improvements" abaixo */
 .btn-hero {

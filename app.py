@@ -2014,6 +2014,7 @@ def inject_tenant():
                 f"h.style.backgroundImage=\"url('{hero_safe}')\";"
                 f"h.style.backgroundSize='cover';"
                 f"h.style.backgroundPosition='center';"
+                f"h.classList.add('has-hero');"
                 f"document.body.style.backgroundImage='';"
                 f"}}else{{"
                 f"document.body.style.backgroundImage=\"url('{hero_safe}')\";"
