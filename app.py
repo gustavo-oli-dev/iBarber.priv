@@ -2283,7 +2283,38 @@ def api_horarios_disponiveis():
     ativos     = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
 
-    # Determina abertura/fechamento
+    def _ag_min(ag): return ag.data_hora.hour * 60 + ag.data_hora.minute
+    def _ag_dur(ag): return ag.duracao_total or duracao
+
+    slot_counts   = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
+    todos_tomados = list(slot_counts.keys())
+
+    # Modo slots pré-definidos
+    slots_ativo_s = _get_setting('slots_predefinidos_ativo', _tid)
+    if slots_ativo_s and slots_ativo_s.value == '1':
+        slots_s = _get_setting('slots_predefinidos', _tid)
+        todos_slots = json.loads(slots_s.value) if slots_s and slots_s.value else []
+
+        def _slot_disp_fixo(s):
+            s_min = int(s[:2]) * 60 + int(s[3:])
+            s_fim = s_min + duracao_solicitada
+            conflitos = sum(
+                1 for ag in agendados
+                if _ag_min(ag) < s_fim and _ag_min(ag) + _ag_dur(ag) > s_min
+            )
+            return conflitos < capacidade
+
+        if data_obj == agora_brt.date():
+            disponiveis = [
+                s for s in todos_slots
+                if _slot_disp_fixo(s) and
+                   datetime.combine(data_obj, datetime.strptime(s, '%H:%M').time()) > agora_brt
+            ]
+        else:
+            disponiveis = [s for s in todos_slots if _slot_disp_fixo(s)]
+        return jsonify({'disponiveis': disponiveis, 'tomados': todos_tomados, 'fechado': False})
+
+    # Modo horário aberto: determina abertura/fechamento
     fechamento_str = '18:00'
     abertura_str   = '08:00'
     he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
@@ -2310,9 +2341,6 @@ def api_horarios_disponiveis():
     _aber_min = ah * 60 + am
     _fech_min = fh * 60 + fm
 
-    def _ag_min(ag): return ag.data_hora.hour * 60 + ag.data_hora.minute
-    def _ag_dur(ag): return ag.duracao_total or duracao
-
     # Gera candidatos: grade fixa com duracao_solicitada + fim de cada agendamento
     candidatos = set()
     cur = _aber_min
@@ -2325,9 +2353,6 @@ def api_horarios_disponiveis():
             candidatos.add(fim_ag)
 
     todos_slots = [f'{m // 60:02d}:{m % 60:02d}' for m in sorted(candidatos)]
-
-    slot_counts   = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
-    todos_tomados = list(slot_counts.keys())
 
     def _slot_disponivel(s):
         s_min = int(s[:2]) * 60 + int(s[3:])
@@ -2621,6 +2646,26 @@ def api_horario_especial_del(hid):
     db.session.delete(h)
     db.session.commit()
     return jsonify({'ok': True})
+
+@app.route('/api/slots-predefinidos', methods=['GET', 'POST'])
+def api_slots_predefinidos():
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    if request.method == 'POST':
+        d = request.get_json() or {}
+        ativo = bool(d.get('ativo', False))
+        slots = d.get('slots', [])
+        slots = sorted(set(s for s in slots if isinstance(s, str) and len(s) == 5))
+        _upsert_setting('slots_predefinidos_ativo', '1' if ativo else '0', tid)
+        _upsert_setting('slots_predefinidos', json.dumps(slots), tid)
+        db.session.commit()
+        return jsonify({'ok': True})
+    ativo_s = _get_setting('slots_predefinidos_ativo', tid)
+    slots_s = _get_setting('slots_predefinidos', tid)
+    return jsonify({
+        'ativo': ativo_s.value == '1' if ativo_s else False,
+        'slots': json.loads(slots_s.value) if slots_s and slots_s.value else [],
+    })
 
 @app.route('/api/agendamentos/<int:ag_id>/status', methods=['POST'])
 def api_agendamento_status(ag_id):

@@ -39,7 +39,7 @@
     </div>
 
     <div class="g-section-title" style="margin-bottom:.75rem;">Configurações gerais</div>
-    <div class="g-form-row" style="max-width:420px;margin-bottom:1.5rem;">
+    <div class="g-form-row" style="max-width:420px;margin-bottom:1rem;">
       <div class="g-form-group">
         <label class="g-label">Duração do slot (min)</label>
         <select class="g-input" name="slot_minutos">
@@ -53,6 +53,27 @@
         <input class="g-input" type="number" name="dias_agenda" min="1" max="90" value="{{ config_geral.get('dias_agenda',20) }}" />
       </div>
     </div>
+
+    <!-- Toggle slots pré-definidos -->
+    <div style="display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;max-width:420px;margin-bottom:1.5rem;">
+      <label class="toggle-switch" style="flex-shrink:0;">
+        <input type="checkbox" id="toggleSlotsPre" onchange="onToggleSlotsPre(this.checked)" />
+        <span class="toggle-track"></span>
+      </label>
+      <span style="font-size:.875rem;color:var(--text);flex:1;">Slots pré-definidos</span>
+      <button type="button" onclick="abrirInfoSlots()" style="background:none;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;color:var(--text-muted);font-size:.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">ⓘ</button>
+    </div>
+
+    <!-- Área de gestão de slots pré-definidos -->
+    <div id="areaSlotsFixos" style="display:none;max-width:480px;margin-bottom:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;">
+      <div class="g-section-title" style="margin-bottom:.75rem;font-size:.8rem;">Horários disponíveis</div>
+      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;">
+        <input type="time" id="inputSlotNovo" class="g-input" style="width:130px;" />
+        <button type="button" class="g-btn g-btn-primary" style="padding:.4rem .85rem;" onclick="adicionarSlot()">+ Adicionar</button>
+      </div>
+      <div id="listaSlotsFixos" style="display:flex;flex-wrap:wrap;gap:.4rem;min-height:32px;"></div>
+    </div>
+
     <button type="button" class="g-btn g-btn-primary" onclick="verificarESalvarHorarios()">Salvar horários</button>
     <input type="hidden" name="_confirmar" id="confirmarHorarios" value="">
   </form>
@@ -170,6 +191,29 @@
   <div class="mobile-only" id="mobileEspeciais"></div>
 </div>
 
+<!-- Mini sidebar info slots -->
+<div id="infoSlotsOverlay" onclick="fecharInfoSlots()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;"></div>
+<div id="infoSlotsPanel" style="display:none;position:fixed;top:0;right:0;height:100%;width:min(340px,90vw);background:var(--bg);border-left:1px solid var(--border);z-index:301;padding:1.5rem 1.25rem;overflow-y:auto;transform:translateX(100%);transition:transform .25s ease;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+    <span style="font-weight:700;font-size:1rem;color:var(--text);">Slots pré-definidos</span>
+    <button onclick="fecharInfoSlots()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
+  </div>
+  <p style="font-size:.85rem;color:var(--text-muted);line-height:1.65;margin-bottom:1rem;">
+    Com esta opção <strong style="color:var(--text);">ativada</strong>, os clientes só verão os horários que você cadastrou manualmente — independente do horário de abertura e fechamento.
+  </p>
+  <p style="font-size:.85rem;color:var(--text-muted);line-height:1.65;margin-bottom:1rem;">
+    Quando um horário for marcado, ele some da lista disponível até ser liberado.
+  </p>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:1rem;">
+    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">MODO ABERTO (padrão)</div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">O sistema gera os horários automaticamente entre abertura e fechamento, ajustando pela duração de cada serviço.</p>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;">
+    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">MODO PRÉ-DEFINIDO</div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">Você define exatamente quais horários estarão disponíveis. Ideal para agendas com horários irregulares ou intervalos fixos não uniformes.</p>
+  </div>
+</div>
+
 <style>
 .g-tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-muted);padding:.6rem 1.1rem;font-size:.875rem;cursor:pointer;transition:.15s;}
 .g-tab:hover{color:var(--text-primary);}
@@ -180,6 +224,8 @@
 .esp-card-info{flex:1;min-width:0;}
 .esp-card-date{font-weight:600;font-size:.9rem;}
 .esp-card-hrs{font-size:.8rem;color:var(--text-muted);margin-top:.15rem;}
+.slot-tag{background:var(--surface2,var(--surface));border:1px solid var(--border);border-radius:6px;padding:.25rem .55rem;font-size:.82rem;display:flex;align-items:center;gap:.35rem;color:var(--text);}
+.slot-tag button{background:none;border:none;cursor:pointer;color:var(--error);font-size:.85rem;padding:0;line-height:1;}
 </style>
 
 <script>
@@ -470,5 +516,68 @@ function calSel(iso) {
 
 renderFechados();
 renderEspeciais();
+
+// ── Slots pré-definidos ─────────────────────────────────
+let _slotsFixos = [];
+
+function abrirInfoSlots() {
+  document.getElementById('infoSlotsOverlay').style.display = 'block';
+  const p = document.getElementById('infoSlotsPanel');
+  p.style.display = 'block';
+  requestAnimationFrame(() => p.style.transform = 'translateX(0)');
+}
+function fecharInfoSlots() {
+  const p = document.getElementById('infoSlotsPanel');
+  p.style.transform = 'translateX(100%)';
+  setTimeout(() => { p.style.display = 'none'; document.getElementById('infoSlotsOverlay').style.display = 'none'; }, 250);
+}
+
+function renderSlotsFixos() {
+  const box = document.getElementById('listaSlotsFixos');
+  if (!_slotsFixos.length) { box.innerHTML = '<span style="font-size:.8rem;color:var(--text-muted);">Nenhum horário adicionado.</span>'; return; }
+  box.innerHTML = _slotsFixos.map(s =>
+    `<div class="slot-tag">${s}<button onclick="removerSlot('${s}')">✕</button></div>`
+  ).join('');
+}
+
+function adicionarSlot() {
+  const v = document.getElementById('inputSlotNovo').value;
+  if (!v || _slotsFixos.includes(v)) return;
+  _slotsFixos.push(v);
+  _slotsFixos.sort();
+  renderSlotsFixos();
+  salvarSlotsFixos();
+}
+
+function removerSlot(s) {
+  _slotsFixos = _slotsFixos.filter(x => x !== s);
+  renderSlotsFixos();
+  salvarSlotsFixos();
+}
+
+function onToggleSlotsPre(checked) {
+  document.getElementById('areaSlotsFixos').style.display = checked ? '' : 'none';
+  salvarSlotsFixos();
+}
+
+async function salvarSlotsFixos() {
+  const ativo = document.getElementById('toggleSlotsPre').checked;
+  await fetch('/api/slots-predefinidos', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({ativo, slots: _slotsFixos})
+  }).catch(() => {});
+}
+
+// Carrega estado inicial
+fetch('/api/slots-predefinidos', {headers:{'Authorization':'Bearer '+TOKEN}})
+  .then(r => r.json())
+  .then(d => {
+    _slotsFixos = d.slots || [];
+    const tog = document.getElementById('toggleSlotsPre');
+    tog.checked = !!d.ativo;
+    document.getElementById('areaSlotsFixos').style.display = d.ativo ? '' : 'none';
+    renderSlotsFixos();
+  }).catch(() => {});
 </script>
 {% endblock %}
