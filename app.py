@@ -2263,40 +2263,15 @@ def api_horarios_disponiveis():
     duracao_s = _get_setting('intervalo_minutos', _tid)
     duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
 
-    # horário especial para esta data sobrepõe o semanal
-    fechamento_str = '18:00'
-    he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
-    if he:
-        fechamento_str = he.fechamento
-        todos_slots = _gerar_slots(he.abertura, he.fechamento, duracao)
-    else:
-        config_s = _get_setting('horario_funcionamento', _tid)
-        if config_s and config_s.value:
-            config  = json.loads(config_s.value)
-            dia_key = _DIAS_KEYS[data_obj.weekday()]
-            dia_cfg = config.get(dia_key, {})
-            if not dia_cfg.get('aberto', True):
-                return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
-            fechamento_str = dia_cfg.get('fechamento', '18:00')
-            todos_slots = _gerar_slots(dia_cfg.get('abertura', '08:00'),
-                                       fechamento_str, duracao)
-        else:
-            if data_obj.weekday() == 6:
-                return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
-            fechamento_str = '19:00'
-            todos_slots = _gerar_slots('08:00', '19:00', duracao) if duracao != 40 \
-                          else SLOTS_PADRAO.get(data_obj.weekday(), [])
-
+    # Duração solicitada pelo cliente (soma dos serviços escolhidos)
     duracao_solicitada = int(request.args.get('duracao', duracao))
-    _fech_min = int(fechamento_str[:2]) * 60 + int(fechamento_str[3:])
 
-    # Hora atual em BRT (UTC-3) — Brasil não tem horário de verão desde 2019
+    # Hora atual em BRT
     agora_brt = datetime.utcnow() - timedelta(hours=3)
-
-    # Data passada: não há slots disponíveis
     if data_obj < agora_brt.date():
         return jsonify({'disponiveis': [], 'tomados': [], 'fechado': False})
 
+    # Busca agendamentos do dia antes de gerar os candidatos
     inicio = datetime.combine(data_obj, datetime.min.time())
     fim    = inicio + timedelta(days=1)
     agendados = (Agendamento.query
@@ -2308,16 +2283,55 @@ def api_horarios_disponiveis():
     ativos     = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
 
-    def _slot_min(s): return int(s[:2]) * 60 + int(s[3:])
-    def _ag_min(ag):  return ag.data_hora.hour * 60 + ag.data_hora.minute
-    def _ag_dur(ag):  return ag.duracao_total or duracao
+    # Determina abertura/fechamento
+    fechamento_str = '18:00'
+    abertura_str   = '08:00'
+    he = HorarioEspecial.query.filter_by(data=data_str, tenant_id=_tid).first()
+    if he:
+        abertura_str   = he.abertura
+        fechamento_str = he.fechamento
+    else:
+        config_s = _get_setting('horario_funcionamento', _tid)
+        if config_s and config_s.value:
+            config  = json.loads(config_s.value)
+            dia_key = _DIAS_KEYS[data_obj.weekday()]
+            dia_cfg = config.get(dia_key, {})
+            if not dia_cfg.get('aberto', True):
+                return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
+            abertura_str   = dia_cfg.get('abertura', '08:00')
+            fechamento_str = dia_cfg.get('fechamento', '18:00')
+        else:
+            if data_obj.weekday() == 6:
+                return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
+            fechamento_str = '19:00'
 
-    slot_counts = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
+    ah, am = map(int, abertura_str.split(':'))
+    fh, fm = map(int, fechamento_str.split(':'))
+    _aber_min = ah * 60 + am
+    _fech_min = fh * 60 + fm
+
+    def _ag_min(ag): return ag.data_hora.hour * 60 + ag.data_hora.minute
+    def _ag_dur(ag): return ag.duracao_total or duracao
+
+    # Gera candidatos: grade fixa com duracao_solicitada + fim de cada agendamento
+    candidatos = set()
+    cur = _aber_min
+    while cur + duracao_solicitada <= _fech_min:
+        candidatos.add(cur)
+        cur += duracao_solicitada
+    for ag in agendados:
+        fim_ag = _ag_min(ag) + _ag_dur(ag)
+        if _aber_min <= fim_ag and fim_ag + duracao_solicitada <= _fech_min:
+            candidatos.add(fim_ag)
+
+    todos_slots = [f'{m // 60:02d}:{m % 60:02d}' for m in sorted(candidatos)]
+
+    slot_counts   = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
     todos_tomados = list(slot_counts.keys())
 
     def _slot_disponivel(s):
-        s_min  = _slot_min(s)
-        s_fim  = s_min + duracao_solicitada
+        s_min = int(s[:2]) * 60 + int(s[3:])
+        s_fim = s_min + duracao_solicitada
         if s_fim > _fech_min:
             return False
         conflitos = sum(
@@ -2326,7 +2340,6 @@ def api_horarios_disponiveis():
         )
         return conflitos < capacidade
 
-    # Hoje: filtra slots já passados comparando com hora BRT atual
     if data_obj == agora_brt.date():
         disponiveis = [
             s for s in todos_slots

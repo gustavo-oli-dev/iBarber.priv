@@ -1483,7 +1483,8 @@
     if (!calOpen && calDiaSel) {
       const data = new Date(calDiaSel);
       const iso = `${data.getFullYear()}-${String(data.getMonth()+1).padStart(2,'0')}-${String(data.getDate()).padStart(2,'0')}`;
-      fetch(`/api/horarios-disponiveis?data=${iso}`)
+      const _durPre = carrinho.reduce((s, i) => s + (i.duracao || 30), 0) || 30;
+      fetch(`/api/horarios-disponiveis?data=${iso}&duracao=${_durPre}`)
         .then(r => r.json())
         .then(body => { if (body && !body.fechado) window._slotsCache = body.disponiveis || []; })
         .catch(() => {});
