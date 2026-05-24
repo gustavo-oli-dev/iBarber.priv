@@ -350,7 +350,7 @@
     .ib-invalido { border-color: var(--error) !important; }
     .ib-invalido:focus { box-shadow: 0 0 0 3px rgba(224,85,85,.1) !important; }
   </style>
-  {% if tema_css %}{{ tema_css|safe }}{% endif %}
+  {% if gt_tema_css %}{{ gt_tema_css|safe }}{% elif tema_css %}{{ tema_css|safe }}{% endif %}
   {% if gt_tema_override %}{{ gt_tema_override|safe }}<style>body{pointer-events:none;overflow-x:hidden}</style>{% endif %}
   {% block head %}{% endblock %}
 </head>

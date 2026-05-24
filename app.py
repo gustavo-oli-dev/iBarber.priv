@@ -278,7 +278,7 @@ def _api_tid():
         return tid
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
     if token:
-        tid_tok, _ = _extrair_tenant_token(token)
+        tid_tok, *_ = _extrair_tenant_token(token)
         if tid_tok:
             return tid_tok
     t = get_tenant_atual()
@@ -1942,6 +1942,7 @@ def inject_tenant():
         t = _MockTenant()
 
     tema_config = {}
+    _gt_raw = {}
     _gt_logo_url = ''
     _gt_nome_display = ''
     if t and getattr(t, 'tema', None):
@@ -1965,37 +1966,40 @@ def inject_tenant():
         except Exception:
             pass
 
-    # Gera CSS de variáveis do tema em Python (mais seguro que Jinja2)
-    tema_css = ''
-    tema_font_link = ''
-    if tema_config:
+    def _build_tema_css(cfg):
+        """Gera (css_str, font_link_str) a partir de um dict de config de tema."""
+        if not cfg:
+            return '', ''
         css = [':root{']
-        _bg  = _safe_color(tema_config.get('fundo', ''), '')
-        _sur = _safe_color(tema_config.get('superficie', ''), '')
-        _brd = _safe_color(tema_config.get('borda', ''), '')
-        _gld = _safe_color(tema_config.get('destaque', ''), '')
-        _txt = _safe_color(tema_config.get('texto', ''), '')
+        _bg  = _safe_color(cfg.get('fundo', ''), '')
+        _sur = _safe_color(cfg.get('superficie', ''), '')
+        _brd = _safe_color(cfg.get('borda', ''), '')
+        _gld = _safe_color(cfg.get('destaque', ''), '')
+        _txt = _safe_color(cfg.get('texto', ''), '')
         if _bg:  css.append(f"--bg:{_bg};")
         if _sur: css.append(f"--surface:{_sur};--surface2:{_sur};")
         if _brd: css.append(f"--border:{_brd};")
         if _gld: css.append(f"--gold:{_gld};--gold-dim:{_gld}cc;--gold-hover:{_gld}dd;")
         if _txt: css.append(f"--text:{_txt};--text-muted:{_txt}88;--placeholder:{_txt}55;")
-        _tf_raw = re.sub(r'[^A-Za-z0-9 ]', '', tema_config.get('fonteTitulo', ''))[:50]
-        _cf_raw = re.sub(r'[^A-Za-z0-9 ]', '', tema_config.get('fonteCorpo', ''))[:50]
+        _tf_raw = re.sub(r'[^A-Za-z0-9 ]', '', cfg.get('fonteTitulo', ''))[:50]
+        _cf_raw = re.sub(r'[^A-Za-z0-9 ]', '', cfg.get('fonteCorpo', ''))[:50]
         if _tf_raw: css.append(f"--font-serif:'{_tf_raw}',Georgia,serif;")
         if _cf_raw: css.append(f"--font-sans:'{_cf_raw}',system-ui,sans-serif;")
-        _cr = _safe_radius(tema_config.get('cardRadius'), '')
+        _cr = _safe_radius(cfg.get('cardRadius'), '')
         if _cr: css.append(f"--radius:{_cr}px;")
         css.append('}')
-        tema_css = '<style>' + ''.join(css) + '</style>'
-        # Fontes customizadas do Google Fonts
+        css_str = '<style>' + ''.join(css) + '</style>'
         fonts_qs = []
-        tf = _tf_raw
-        cf = _cf_raw
-        if tf: fonts_qs.append(f"family={tf.replace(' ','+')}:wght@400;600;700")
-        if cf: fonts_qs.append(f"family={cf.replace(' ','+')}:wght@300;400;500")
-        if fonts_qs:
-            tema_font_link = f'<link href="https://fonts.googleapis.com/css2?{"&".join(fonts_qs)}&display=swap" rel="stylesheet">'
+        if _tf_raw: fonts_qs.append(f"family={_tf_raw.replace(' ','+')}:wght@400;600;700")
+        if _cf_raw: fonts_qs.append(f"family={_cf_raw.replace(' ','+')}:wght@300;400;500")
+        font_link = (f'<link href="https://fonts.googleapis.com/css2?{"&".join(fonts_qs)}&display=swap" rel="stylesheet">'
+                     if fonts_qs else '')
+        return css_str, font_link
+
+    # Gera CSS de variáveis do tema em Python (mais seguro que Jinja2)
+    tema_css, tema_font_link = _build_tema_css(tema_config)
+    # CSS separado para o painel de gestão (usa raw['gt'], não raw['ag'])
+    gt_tema_css, _ = _build_tema_css(_gt_raw if _gt_raw else tema_config)
     # JS para btnEstilo e heroUrl (não podem ser feitos só em CSS)
     tema_js = ''
     if tema_config:
@@ -2057,6 +2061,7 @@ def inject_tenant():
                 fab_maps_mostrar = False
 
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
+            'gt_tema_css': gt_tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
             'preview_identity': preview_identity,
             'gt_logo_url': _gt_logo_url, 'gt_nome_display': _gt_nome_display,
@@ -2065,7 +2070,7 @@ def inject_tenant():
 def _get_tenant_para_api():
     """Retorna o tenant a partir do token JWT-like do app Flutter."""
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    tid, _ = _extrair_tenant_token(token)
+    tid, *_ = _extrair_tenant_token(token)
     if tid:
         return db.session.get(Tenant, tid)
     return None
@@ -2107,15 +2112,17 @@ def api_tenant_config_put():
 @app.route('/api/categorias', methods=['GET'])
 def api_categorias_listar():
     try:
-        if session.get('is_preview'):
-            return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
-        tid = session.get('tenant_id') or session.get('path_tenant_id')
+        # Gestão owner e Bearer token têm prioridade — nunca mostrar preview a donos reais
+        tid = session.get('gestao_tenant_id') or verificar_token(request)
         if not tid:
-            t = _get_tenant_para_api()
-            tid = t.id if t else None
-        if not tid:
-            t = get_tenant_atual()
-            tid = t.id if t else None
+            # Preview mode (personalizar) — sem tenant real
+            if session.get('is_preview'):
+                return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
+            # Agendamento (cliente visitando o site)
+            tid = session.get('tenant_id') or session.get('path_tenant_id')
+            if not tid:
+                t = get_tenant_atual()
+                tid = t.id if t else None
         if not tid:
             return jsonify([])
         cats = Categoria.query.filter_by(ativo=True, tenant_id=tid).order_by(Categoria.ordem).all()
@@ -2157,15 +2164,17 @@ def api_categoria_detalhe(cid):
 @app.route('/api/servicos', methods=['GET'])
 def api_servicos_listar():
     try:
-        if session.get('is_preview'):
-            return jsonify(_PREVIEW_SVCS)
-        tid = session.get('tenant_id') or session.get('path_tenant_id')
+        # Gestão owner e Bearer token têm prioridade — nunca mostrar preview a donos reais
+        tid = session.get('gestao_tenant_id') or verificar_token(request)
         if not tid:
-            t = _get_tenant_para_api()
-            tid = t.id if t else None
-        if not tid:
-            t = get_tenant_atual()
-            tid = t.id if t else None
+            # Preview mode (personalizar) — sem tenant real
+            if session.get('is_preview'):
+                return jsonify(_PREVIEW_SVCS)
+            # Agendamento (cliente visitando o site)
+            tid = session.get('tenant_id') or session.get('path_tenant_id')
+            if not tid:
+                t = get_tenant_atual()
+                tid = t.id if t else None
         if not tid:
             return jsonify([])
         svs = Servico.query.filter_by(ativo=True, tenant_id=tid).order_by(Servico.categoria_id, Servico.ordem).all()
@@ -4777,6 +4786,8 @@ def api_cadastro_personalizar():
         db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
     _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
+    session.pop('is_preview', None)
+    session['onb_tenant_id'] = tenant.id
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'slug': slug, 'tenant_id': tenant.id})
 
@@ -4963,6 +4974,7 @@ def api_cadastro():
         db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
     _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
+    session.pop('is_preview', None)
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
 
