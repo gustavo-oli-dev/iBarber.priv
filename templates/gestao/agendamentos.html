@@ -559,6 +559,16 @@ function selPag(btn) {
 carregarServicos();
 buildDataStrip();
 
+fetch('/api/status-pagamentos', {headers:{'Authorization':'Bearer '+TOKEN}})
+  .then(r => r.json())
+  .then(d => {
+    if (!d.pix) {
+      var btnPix = document.querySelector('.pag-btn[data-pag="pix"]');
+      if (btnPix) btnPix.style.display = 'none';
+    }
+  })
+  .catch(() => {});
+
 // ── QR Code Pix ──────────────────────────────────────
 function fecharQrGestao() {
   document.getElementById('qrGestaoOverlay').style.display = 'none';

@@ -1013,7 +1013,11 @@
   }
   // ── Pagamento ─────────────────────────────────────────────
   let _statusPag = {pix: false, cartao: false};
-  fetch('/api/status-pagamentos').then(r => r.json()).then(d => { _statusPag = d; }).catch(() => {});
+  fetch('/api/status-pagamentos').then(r => r.json()).then(d => {
+    _statusPag = d;
+    if (!d.pix)    document.getElementById('pgBtnPix').style.display    = 'none';
+    if (!d.cartao) document.getElementById('pgBtnCartao').style.display = 'none';
+  }).catch(() => {});
 
   function abrirPagamento() {
     document.getElementById('pgSucesso').style.display   = 'none';
