@@ -2345,6 +2345,22 @@ def api_horarios_disponiveis():
         )
         return conflitos < capacidade
 
+    # Filtro de intervalo de descanso
+    _int_s = _get_setting('intervalos_descanso', _tid)
+    _intervalos = json.loads(_int_s.value) if _int_s and _int_s.value else {}
+    _dia_key_int = _DIAS_KEYS[data_obj.weekday()]
+    _int_cfg = _intervalos.get(_dia_key_int, {})
+    _int_ativo = _int_cfg.get('ativo', False)
+    if _int_ativo:
+        _int_ini = int(_int_cfg.get('inicio', '00:00')[:2]) * 60 + int(_int_cfg.get('inicio', '00:00')[3:])
+        _int_fim = int(_int_cfg.get('fim', '00:00')[:2]) * 60 + int(_int_cfg.get('fim', '00:00')[3:])
+        def _fora_intervalo(s):
+            s_min = int(s[:2]) * 60 + int(s[3:])
+            s_fim_slot = s_min + duracao_solicitada
+            # slot está dentro do intervalo se começa antes do fim E termina depois do início
+            return not (s_min < _int_fim and s_fim_slot > _int_ini)
+        todos_slots = [s for s in todos_slots if _fora_intervalo(s)]
+
     if data_obj == agora_brt.date():
         disponiveis = [
             s for s in todos_slots
@@ -2639,6 +2655,18 @@ def api_slots_predefinidos():
         return jsonify({'ok': True})
     ativo_s = _get_setting('slots_predefinidos_ativo', tid)
     return jsonify({'ativo': ativo_s.value == '1' if ativo_s else False})
+
+@app.route('/api/intervalos-descanso', methods=['GET', 'POST'])
+def api_intervalos_descanso():
+    tid = verificar_token(request)
+    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    if request.method == 'POST':
+        d = request.get_json() or {}
+        _upsert_setting('intervalos_descanso', json.dumps(d, ensure_ascii=False), tid)
+        db.session.commit()
+        return jsonify({'ok': True})
+    s = _get_setting('intervalos_descanso', tid)
+    return jsonify(json.loads(s.value) if s and s.value else {})
 
 @app.route('/api/agendamentos/<int:ag_id>/status', methods=['POST'])
 def api_agendamento_status(ag_id):

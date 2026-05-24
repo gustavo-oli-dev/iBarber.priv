@@ -8,6 +8,7 @@
 <!-- Tabs -->
 <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem;">
   <button type="button" class="g-tab g-tab-active" onclick="setTab('horarios',this)">Horários</button>
+  <button type="button" class="g-tab" onclick="setTab('intervalos',this)">Intervalos</button>
   <button type="button" class="g-tab" onclick="setTab('fechados',this)">Dias Fechados</button>
   <button type="button" class="g-tab" onclick="setTab('especiais',this)">Horários Especiais</button>
 </div>
@@ -83,7 +84,30 @@
   </div>
 </div>
 
-<!-- Tab 2: Dias fechados -->
+<!-- Tab 2: Intervalos de descanso -->
+<div id="tab-intervalos" style="display:none;">
+  <div class="g-section-title" style="margin-bottom:.4rem;">Intervalo por dia da semana</div>
+  <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem;">Defina o horário de almoço ou descanso de cada dia. Nenhum horário disponível será exibido dentro desse intervalo.</p>
+  <div style="display:grid;gap:.6rem;max-width:540px;margin-bottom:1.5rem;" id="listaIntervalos">
+    {% set dias = [('seg','Segunda'),('ter','Terça'),('qua','Quarta'),('qui','Quinta'),('sex','Sexta'),('sab','Sábado'),('dom','Domingo')] %}
+    {% for key, label in dias %}
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.65rem 1rem;">
+      <label class="toggle-switch" style="min-width:130px;flex-shrink:0;">
+        <input type="checkbox" id="int_ativo_{{ key }}" onchange="onIntervaloChange('{{ key }}')" />
+        <span class="toggle-track"></span>
+        <span style="font-size:.875rem;color:var(--text);">{{ label }}</span>
+      </label>
+      <div id="int_hr_{{ key }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;opacity:.35;pointer-events:none;">
+        <input class="g-input" type="time" id="int_ini_{{ key }}" value="12:00" style="width:110px;" onchange="salvarIntervalos()" />
+        <span style="color:var(--text-muted);font-size:.8rem;">às</span>
+        <input class="g-input" type="time" id="int_fim_{{ key }}" value="14:00" style="width:110px;" onchange="salvarIntervalos()" />
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Tab 3: Dias fechados -->
 <div id="tab-fechados" style="display:none;">
   <div class="g-section-title" style="margin-bottom:.75rem;">Dias Fechados</div>
   <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:1rem;">Selecione datas em que a barbearia não funcionará.</p>
@@ -242,9 +266,10 @@ async function verificarESalvarHorarios() {
 
   if (conflitos.length > 0) {
     document.getElementById('listaConflitoHorario').innerHTML = conflitos.map(c =>
-      `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
-        <span style="color:var(--text);">${c.nome}</span>
-        <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
+      `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid var(--border);">
+        <span style="color:var(--text);flex:1;">${c.nome}</span>
+        <button onclick="copiarNome('${c.nome.replace(/'/g,"\\'")}',this)" title="Copiar nome" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;font-size:.7rem;padding:.1rem .35rem;flex-shrink:0;">⎘</button>
+        <span style="color:var(--gold);font-weight:600;flex-shrink:0;">${c.hora}</span>
       </div>`
     ).join('');
     document.getElementById('modalConflitoHorario').style.display = 'flex';
@@ -261,7 +286,7 @@ function confirmarSalvarHorario(acao) {
 }
 
 function setTab(id, el) {
-  ['horarios','fechados','especiais'].forEach(t => {
+  ['horarios','intervalos','fechados','especiais'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? '' : 'none';
   });
   document.querySelectorAll('.g-tab').forEach(b=>b.classList.remove('g-tab-active'));
@@ -502,6 +527,59 @@ function calSel(iso) {
 
 renderFechados();
 renderEspeciais();
+
+function copiarNome(nome, btn) {
+  navigator.clipboard.writeText(nome).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    btn.style.color = 'var(--gold)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1500);
+  }).catch(() => {});
+}
+
+// ── Intervalos de descanso ──────────────────────────────
+const _DIAS_INT = ['seg','ter','qua','qui','sex','sab','dom'];
+
+function onIntervaloChange(key) {
+  const checked = document.getElementById('int_ativo_' + key).checked;
+  const hr = document.getElementById('int_hr_' + key);
+  hr.style.opacity = checked ? '1' : '.35';
+  hr.style.pointerEvents = checked ? '' : 'none';
+  salvarIntervalos();
+}
+
+async function salvarIntervalos() {
+  const data = {};
+  _DIAS_INT.forEach(k => {
+    data[k] = {
+      ativo:  document.getElementById('int_ativo_' + k).checked,
+      inicio: document.getElementById('int_ini_' + k).value,
+      fim:    document.getElementById('int_fim_' + k).value,
+    };
+  });
+  await fetch('/api/intervalos-descanso', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify(data)
+  }).catch(() => {});
+}
+
+fetch('/api/intervalos-descanso', {headers:{'Authorization':'Bearer '+TOKEN}})
+  .then(r => r.json())
+  .then(d => {
+    _DIAS_INT.forEach(k => {
+      const cfg = d[k] || {};
+      const tog = document.getElementById('int_ativo_' + k);
+      if (tog) {
+        tog.checked = !!cfg.ativo;
+        const hr = document.getElementById('int_hr_' + k);
+        hr.style.opacity = cfg.ativo ? '1' : '.35';
+        hr.style.pointerEvents = cfg.ativo ? '' : 'none';
+        if (cfg.inicio) document.getElementById('int_ini_' + k).value = cfg.inicio;
+        if (cfg.fim)    document.getElementById('int_fim_' + k).value = cfg.fim;
+      }
+    });
+  }).catch(() => {});
 
 // ── Slots pré-definidos ─────────────────────────────────
 function abrirInfoSlots() {
