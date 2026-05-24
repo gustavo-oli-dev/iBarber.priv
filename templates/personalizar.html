@@ -534,13 +534,13 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
             onblur="this.value=this.value.trim();onIdentidade('nomeDisplay',this.value);updateUrlBar()" />
           <span class="input-errmsg" id="err-nome">Informe o nome da barbearia para continuar</span>
         </div>
-        <div>
+        <div id="field-tagline">
           <div class="font-lbl">Slogan</div>
           <input class="font-sel" id="id-tagline" placeholder="Ex: Bem-vindo"
             oninput="onIdentidade('tagline',this.value)"
             onblur="this.value=this.value.trim();onIdentidade('tagline',this.value)" />
         </div>
-        <div>
+        <div id="field-cta">
           <div class="font-lbl">Botão principal</div>
           <input class="font-sel" id="id-cta" placeholder="Ex: Agende agora"
             oninput="onIdentidade('ctaTexto',this.value)"
@@ -558,7 +558,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
             <button class="img-upload-rm" id="rm-logo" style="display:none" onclick="removerImagem('logo')" title="Remover">×</button>
           </div>
         </div>
-        <div>
+        <div id="field-hero">
           <div class="font-lbl">Foto de capa</div>
           <div class="img-upload-wrap" id="wrap-hero">
             <img class="img-upload-thumb" id="thumb-hero" src="" alt="" style="display:none" />
@@ -1113,7 +1113,12 @@ function setSite(mode) {
   _updateSiteToggle();
   if(editMode === 'single') { syncPickers(); updateScopeLabel(); }
   showHideIframes();
-  renderScreensSidebar(); // re-renders with only the new site's screens
+  renderScreensSidebar();
+  const agOnly = ['field-tagline','field-cta','field-hero'];
+  agOnly.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (mode === 'gt') ? 'none' : '';
+  });
 }
 
 function setView(mode) {
