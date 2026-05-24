@@ -1934,13 +1934,21 @@ def inject_tenant():
         t = _MockTenant()
 
     tema_config = {}
+    _gt_logo_url = ''
+    _gt_nome_display = ''
     if t and getattr(t, 'tema', None):
         try:
             raw = json.loads(t.tema)
-            if isinstance(raw, dict) and 'ag' in raw and isinstance(raw.get('ag'), dict):
-                tema_config = raw['ag']
-            elif isinstance(raw, dict):
-                tema_config = raw
+            if isinstance(raw, dict):
+                if 'ag' in raw and isinstance(raw.get('ag'), dict):
+                    tema_config = raw['ag']
+                    _gt_raw = raw.get('gt', {})
+                else:
+                    tema_config = raw
+                    _gt_raw = raw
+                if isinstance(_gt_raw, dict):
+                    _gt_logo_url     = _gt_raw.get('logoUrl',     '') or ''
+                    _gt_nome_display = _gt_raw.get('nomeDisplay', '') or ''
         except Exception:
             pass
 
@@ -2037,6 +2045,7 @@ def inject_tenant():
     return {'tenant': t, 'tema_config': tema_config, 'tema_css': tema_css,
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
             'preview_identity': preview_identity,
+            'gt_logo_url': _gt_logo_url, 'gt_nome_display': _gt_nome_display,
             'fab_wpp_mostrar': fab_wpp_mostrar, 'fab_maps_mostrar': fab_maps_mostrar}
 
 def _get_tenant_para_api():
