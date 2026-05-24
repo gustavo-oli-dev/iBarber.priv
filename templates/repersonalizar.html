@@ -101,6 +101,15 @@ body{display:flex;flex-direction:column}
 .font-sel option{background:#111;color:#f5f5f5}
 .font-sample{font-size:.95rem;color:var(--muted);margin-top:.35rem;line-height:1.2}
 
+/* Image upload */
+.img-upload-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.img-upload-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0}
+.img-upload-btn{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px dashed var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:.8rem;cursor:pointer;transition:border-color .2s,background .2s;white-space:nowrap}
+.img-upload-btn:hover{border-color:var(--gold);background:rgba(201,169,110,.08)}
+.img-upload-rm{background:none;border:1px solid var(--border);color:var(--muted);font-size:1.1rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;transition:color .2s,border-color .2s}
+.img-upload-rm:hover{color:#e55}
+/* Screen selector */
+.screen-sel{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:.75rem;max-width:140px;cursor:pointer;outline:none}
 /* Geometry */
 .geo-lbl{font-size:.75rem;color:var(--muted);margin-bottom:.4rem;display:flex;justify-content:space-between}
 .geo-lbl b{color:var(--gold);font-weight:600}
@@ -402,6 +411,42 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
     </div>
 
+    <div class="p-sec">
+      <div class="p-title">Identidade</div>
+      <div class="font-list">
+        <div>
+          <div class="font-lbl">Nome exibido</div>
+          <input class="font-sel" id="id-nome" placeholder="Ex: BarberShop João"
+            oninput="onIdentidade('nomeDisplay',this.value)"
+            onblur="this.value=this.value.trim();onIdentidade('nomeDisplay',this.value)" />
+        </div>
+        <div>
+          <div class="font-lbl">Slogan</div>
+          <input class="font-sel" id="id-tagline" placeholder="Ex: Bem-vindo"
+            oninput="onIdentidade('tagline',this.value)"
+            onblur="this.value=this.value.trim();onIdentidade('tagline',this.value)" />
+        </div>
+        <div>
+          <div class="font-lbl">Logo</div>
+          <div class="img-upload-wrap" id="wrap-logo">
+            <img class="img-upload-thumb" id="thumb-logo" src="" alt="" style="display:none" />
+            <label class="img-upload-btn" for="file-logo"><span id="lbl-logo">Escolher imagem</span></label>
+            <input type="file" id="file-logo" accept="image/*" style="display:none" onchange="uploadImagem('logo',this)" />
+            <button class="img-upload-rm" id="rm-logo" style="display:none" onclick="removerImagem('logo')" title="Remover">×</button>
+          </div>
+        </div>
+        <div>
+          <div class="font-lbl">Foto de capa</div>
+          <div class="img-upload-wrap" id="wrap-hero">
+            <img class="img-upload-thumb" id="thumb-hero" src="" alt="" style="display:none" />
+            <label class="img-upload-btn" for="file-hero"><span id="lbl-hero">Escolher imagem</span></label>
+            <input type="file" id="file-hero" accept="image/*" style="display:none" onchange="uploadImagem('hero',this)" />
+            <button class="img-upload-rm" id="rm-hero" style="display:none" onclick="removerImagem('hero')" title="Remover">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Barra mobile -->
     <div id="mob-barra" style="padding:1rem;border-top:1px solid var(--border);display:none;flex-direction:column;gap:.5rem">
       <button onclick="abrirPreviewMobile()"
@@ -433,6 +478,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
         <button class="tg-btn active" id="site-ag" onclick="setSite('ag')">Agendamento</button>
         <button class="tg-btn" id="site-gt" onclick="setSite('gt')">Gestão</button>
       </div>
+      <select class="screen-sel" id="screen-sel" onchange="setScreen(this.value)"></select>
       <div class="canvas-url" id="canvas-url-bar">localhost:5000/</div>
       <div class="toggle-group">
         <button class="tg-btn active" id="mode-global" onclick="setEditMode('global')" title="Editar ambos os sites">🌐 Global</button>
@@ -637,7 +683,27 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 <div class="toast" id="toast">✓ Tema salvo com sucesso!</div>
 
 <script>
-const DEFAULT = {fundo:'#0c0c0c',superficie:'#161616',borda:'#252525',destaque:'#C9A96E',texto:'#F0ECE4',cardRadius:8,btnEstilo:'arredondado',fonteTitulo:'Playfair Display',fonteCorpo:'Inter'};
+const DEFAULT = {fundo:'#0c0c0c',superficie:'#161616',borda:'#252525',destaque:'#C9A96E',texto:'#F0ECE4',cardRadius:8,btnEstilo:'arredondado',fonteTitulo:'Playfair Display',fonteCorpo:'Inter',nomeDisplay:'',logoUrl:'',tagline:'',heroUrl:''};
+
+const AG_SCREENS = [
+  {id:'logado',       label:'Serviços / Carrinho', path: s => '/preview/ag/servicos?' + _agParams(s)},
+  {id:'inicio',       label:'Login',               path: s => '/preview/ag/inicio?' + _agParams(s)},
+  {id:'criar-conta',  label:'Criar conta',          path: s => '/preview/ag/sem-cadastro?' + _agParams(s)},
+  {id:'perfil',       label:'Perfil',               path: s => '/preview/ag/perfil?' + _agParams(s)},
+];
+const GT_SCREENS = [
+  {id:'dashboard',    label:'Dashboard'},
+  {id:'agendamentos', label:'Agenda'},
+  {id:'calendario',   label:'Calendário'},
+  {id:'clientes',     label:'Clientes'},
+  {id:'financeiro',   label:'Financeiro'},
+  {id:'funcionarios', label:'Funcionários'},
+  {id:'servicos',     label:'Serviços'},
+  {id:'horarios',     label:'Horários'},
+  {id:'credenciais',  label:'Credenciais'},
+];
+let agScreen = 'logado';
+let gtScreen = 'dashboard';
 
 const PRESETS = {
   classico: {fundo:'#0c0c0c',superficie:'#161616',borda:'#252525',destaque:'#C9A96E',texto:'#F0ECE4',cardRadius:8,btnEstilo:'arredondado',fonteTitulo:'Playfair Display',fonteCorpo:'Inter'},
@@ -706,6 +772,7 @@ async function entrar() {
     T.ag = {...DEFAULT};
     T.gt = {...DEFAULT};
     syncPickers();
+    renderScreenSel();
     document.getElementById('iframe-ag-desk').src = buildAgUrl();
     document.getElementById('iframe-ag-mob').src  = buildAgUrl();
     document.getElementById('iframe-gt-desk').src = buildGtUrl('dashboard');
@@ -752,7 +819,7 @@ function hubMostrar(panel) {
       <div class="hub-info-row">
         <span class="hub-info-label">App iBarber</span>
         <span class="hub-info-val" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-          <a class="hub-link-btn" href="/static/app/ibarber.apk" download style="background:rgba(100,160,255,.1);border-color:rgba(100,160,255,.4);color:#64a0ff;">📥 Baixar APK</a>
+          <a class="hub-link-btn" href="/static/ibarber.apk" download style="background:rgba(100,160,255,.1);border-color:rgba(100,160,255,.4);color:#64a0ff;">📥 Baixar APK</a>
           <span style="font-size:.68rem;color:var(--muted);text-align:right">Android · instale via fontes desconhecidas</span>
         </span>
       </div>
@@ -875,14 +942,20 @@ function copiarTexto(texto, btn) {
 }
 
 // ── Theme helpers ─────────────────────────────────────────────────────────────
-function buildAgUrl() {
-  const t = T.ag;
-  const base = tenantSlug ? '/' + tenantSlug : '/';
-  return base + '?' + new URLSearchParams({
-    p:'1', fundo:t.fundo, superficie:t.superficie, destaque:t.destaque,
+function _agParams(t) {
+  const p = {p:'1', fundo:t.fundo, superficie:t.superficie, destaque:t.destaque,
     texto:t.texto, borda:t.borda, fonteTitulo:t.fonteTitulo,
-    fonteCorpo:t.fonteCorpo, cardRadius:t.cardRadius, btnEstilo:t.btnEstilo
-  }).toString();
+    fonteCorpo:t.fonteCorpo, cardRadius:t.cardRadius, btnEstilo:t.btnEstilo};
+  if (t.nomeDisplay) p.nomeDisplay = t.nomeDisplay;
+  if (t.logoUrl)     p.logoUrl     = t.logoUrl;
+  if (t.tagline)     p.tagline     = t.tagline;
+  if (t.heroUrl)     p.heroUrl     = t.heroUrl;
+  return new URLSearchParams(p).toString();
+}
+
+function buildAgUrl() {
+  const s = AG_SCREENS.find(x => x.id === agScreen) || AG_SCREENS[0];
+  return s.path(T.ag);
 }
 
 function buildGtUrl(screen) {
@@ -890,7 +963,10 @@ function buildGtUrl(screen) {
   return '/preview/gt/' + screen + '?' + new URLSearchParams({
     fundo:t.fundo, superficie:t.superficie, borda:t.borda,
     destaque:t.destaque, texto:t.texto,
-    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo
+    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo,
+    cardRadius:t.cardRadius || 8, btnEstilo:t.btnEstilo || 'arredondado',
+    ...(t.logoUrl ? {logoUrl:t.logoUrl} : {}),
+    ...(t.nomeDisplay ? {nomeDisplay:t.nomeDisplay} : {})
   }).toString();
 }
 
@@ -943,6 +1019,83 @@ function syncPickers() {
   document.getElementById('smp-corpo').style.fontFamily  = `'${t.fonteCorpo}',sans-serif`;
   ['arredondado','pilula','angular'].forEach(s =>
     document.getElementById('bs-'+s).classList.toggle('sel', s===t.btnEstilo));
+  document.getElementById('id-nome').value    = t.nomeDisplay || '';
+  document.getElementById('id-tagline').value = t.tagline     || '';
+  ['logo','hero'].forEach(tipo => {
+    const key   = tipo === 'logo' ? 'logoUrl' : 'heroUrl';
+    const url   = t[key] || '';
+    const thumb = document.getElementById('thumb-' + tipo);
+    const rm    = document.getElementById('rm-'    + tipo);
+    const lbl   = document.getElementById('lbl-'   + tipo);
+    if (url) { thumb.src = url; thumb.style.display = 'block'; rm.style.display = 'inline'; lbl.textContent = 'Trocar'; }
+    else     { thumb.style.display = 'none'; rm.style.display = 'none'; lbl.textContent = 'Escolher imagem'; }
+  });
+}
+
+// ── Identidade ────────────────────────────────────────────────────────────────
+let _idTimer = null;
+function onIdentidade(key, val) {
+  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
+  else { cur()[key] = val; }
+  clearTimeout(_idTimer);
+  _idTimer = setTimeout(() => {
+    if(editMode === 'global' || siteMode === 'ag') { document.getElementById('iframe-ag-desk').src = buildAgUrl(); document.getElementById('iframe-ag-mob').src = buildAgUrl(); }
+    if(editMode === 'global' || siteMode === 'gt') { document.getElementById('iframe-gt-desk').src = buildGtUrl(gtScreen); document.getElementById('iframe-gt-mob').src = buildGtUrl(gtScreen); }
+  }, 600);
+}
+
+async function uploadImagem(tipo, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const lbl = document.getElementById('lbl-' + tipo);
+  const thumb = document.getElementById('thumb-' + tipo);
+  const rm = document.getElementById('rm-' + tipo);
+  lbl.textContent = 'Enviando…';
+  const fd = new FormData();
+  fd.append('imagem', file);
+  try {
+    const res = await fetch('/api/personalizar/upload', {method:'POST', body:fd});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.erro || 'erro');
+    thumb.src = data.url; thumb.style.display = 'block';
+    rm.style.display = 'inline'; lbl.textContent = 'Trocar';
+    onIdentidade(tipo === 'logo' ? 'logoUrl' : 'heroUrl', data.url);
+  } catch(e) {
+    lbl.textContent = 'Erro — tente de novo';
+    setTimeout(() => lbl.textContent = 'Escolher imagem', 2500);
+  }
+  input.value = '';
+}
+
+function removerImagem(tipo) {
+  const key = tipo === 'logo' ? 'logoUrl' : 'heroUrl';
+  document.getElementById('thumb-' + tipo).style.display = 'none';
+  document.getElementById('rm-'    + tipo).style.display = 'none';
+  document.getElementById('lbl-'   + tipo).textContent   = 'Escolher imagem';
+  onIdentidade(key, '');
+}
+
+// ── Screen selector ───────────────────────────────────────────────────────────
+function renderScreenSel() {
+  const sel = document.getElementById('screen-sel');
+  const screens = siteMode === 'ag' ? AG_SCREENS : GT_SCREENS;
+  const cur = siteMode === 'ag' ? agScreen : gtScreen;
+  sel.innerHTML = screens.map(s => `<option value="${s.id}"${s.id===cur?' selected':''}>${s.label}</option>`).join('');
+}
+
+function setScreen(id) {
+  if (siteMode === 'ag') {
+    agScreen = id;
+    const url = buildAgUrl();
+    document.getElementById('iframe-ag-desk').src = url;
+    document.getElementById('iframe-ag-mob').src  = url;
+  } else {
+    gtScreen = id;
+    const url = buildGtUrl(id);
+    document.getElementById('iframe-gt-desk').src = url;
+    document.getElementById('iframe-gt-mob').src  = url;
+  }
+  updateUrlBar();
 }
 
 function onColor(key, val) {
@@ -1016,6 +1169,7 @@ function setSite(mode) {
   document.getElementById('site-ag').classList.toggle('active', mode==='ag');
   document.getElementById('site-gt').classList.toggle('active', mode==='gt');
   if(editMode === 'single') { syncPickers(); updateScopeLabel(); }
+  renderScreenSel();
   updateUrlBar();
   showHideIframes();
 }
@@ -1033,11 +1187,19 @@ function showHideIframes() {
   document.getElementById('iframe-gt-mob').style.display  = siteMode==='gt' ? 'block' : 'none';
 }
 function updateUrlBar() {
-  const url = siteMode==='ag'
-    ? 'localhost:5000/' + (tenantSlug || '')
-    : 'localhost:5000/gestao';
-  document.getElementById('canvas-url-bar').textContent = url;
-  document.getElementById('desk-url-bar').textContent   = url;
+  const agPaths = {logado:'servicos','inicio':'','criar-conta':'','perfil':'perfil'};
+  let path = '';
+  if (siteMode === 'ag') {
+    path = agPaths[agScreen] ?? agScreen;
+    const base = (tenantSlug || 'sua-barbearia') + '.ibarber.shop';
+    const url = base + (path ? '/' + path : '');
+    document.getElementById('canvas-url-bar').textContent = url;
+    document.getElementById('desk-url-bar').textContent   = url;
+  } else {
+    const url = (tenantSlug || 'sua-barbearia') + '.ibarber.shop/gestao/' + gtScreen;
+    document.getElementById('canvas-url-bar').textContent = url;
+    document.getElementById('desk-url-bar').textContent   = url;
+  }
 }
 
 // ── Save / Payment ────────────────────────────────────────────────────────────
