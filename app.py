@@ -1987,7 +1987,20 @@ def inject_tenant():
         hero = tema_config.get('heroUrl', '')
         if hero:
             hero_safe = hero.replace('\\', '').replace('"', '').replace("'", '').replace('(', '').replace(')', '')
-            js_parts.append(f"var h=document.querySelector('.hero-central');if(h){{h.style.backgroundImage=\"url('{hero_safe}')\";h.style.backgroundSize='cover';h.style.backgroundPosition='center';}}")
+            js_parts.append(
+                f"var h=document.querySelector('.hero-central');"
+                f"if(h){{"
+                f"h.style.backgroundImage=\"url('{hero_safe}')\";"
+                f"h.style.backgroundSize='cover';"
+                f"h.style.backgroundPosition='center';"
+                f"document.body.style.backgroundImage='';"
+                f"}}else{{"
+                f"document.body.style.backgroundImage=\"url('{hero_safe}')\";"
+                f"document.body.style.backgroundSize='cover';"
+                f"document.body.style.backgroundPosition='center';"
+                f"document.body.style.backgroundAttachment='fixed';"
+                f"}}"
+            )
         js_parts.append('})();</script>')
         if len(js_parts) > 2:
             tema_js = ''.join(js_parts)
