@@ -87,7 +87,7 @@ body{display:flex;flex-direction:column}
 /* GLOW */
 .glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(201,169,110,.07) 0%,transparent 70%);pointer-events:none;z-index:0}
 @media(max-width:767px){.steps,.tb-sep{display:none!important}}
-@keyframes onbFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes onbFadeIn{from{opacity:0;filter:blur(8px);transform:scale(.98)}to{opacity:1;filter:blur(0);transform:scale(1)}}
 @keyframes sc-l{0%,100%{transform:rotate(-9deg)}40%,60%{transform:rotate(9deg)}}
 @keyframes sc-r{0%,100%{transform:rotate(9deg)}40%,60%{transform:rotate(-9deg)}}
 body{animation:onbFadeIn .45s cubic-bezier(.16,1,.3,1) both}

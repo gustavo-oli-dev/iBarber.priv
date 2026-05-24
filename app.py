@@ -213,7 +213,7 @@ class Assinatura(db.Model):
         return max(0, (self.vencimento - datetime.utcnow()).days)
 
     def esta_ativo(self):
-        return self.status == 'ativo' and self.vencimento > datetime.utcnow()
+        return self.status == 'ativo' and bool(self.vencimento) and self.vencimento > datetime.utcnow()
 
 class User(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
@@ -1817,7 +1817,7 @@ def _to_brt(dt):
 def meu_historico():
     if 'user_id' not in session:
         return jsonify({'historico': []})
-    _tid = session.get('path_tenant_id')
+    _tid = session.get('path_tenant_id') or session.get('tenant_id')
     q = Agendamento.query.filter_by(user_id=session['user_id'])
     if _tid:
         q = q.filter_by(tenant_id=_tid)
@@ -2000,36 +2000,42 @@ def inject_tenant():
     tema_css, tema_font_link = _build_tema_css(tema_config)
     # CSS separado para o painel de gestão (usa raw['gt'], não raw['ag'])
     gt_tema_css, _ = _build_tema_css(_gt_raw if _gt_raw else tema_config)
-    # JS para btnEstilo e heroUrl (não podem ser feitos só em CSS)
-    tema_js = ''
-    if tema_config:
-        js_parts = ['<script>(function(){']
-        bs = tema_config.get('btnEstilo', '')
-        cr = tema_config.get('cardRadius', 6)
+    def _build_tema_js(cfg, include_hero=True):
+        """Gera JS de btnEstilo/hero a partir de um dict de config de tema."""
+        if not cfg:
+            return ''
+        parts = ['<script>(function(){']
+        bs = cfg.get('btnEstilo', '')
+        cr = cfg.get('cardRadius', 6)
         if bs:
             br = '999px' if bs == 'pilula' else '0px' if bs == 'angular' else f'{cr}px'
-            js_parts.append(f"document.querySelectorAll('.btn,.btn-gold').forEach(function(el){{el.style.borderRadius='{br}';}});")
-        hero = tema_config.get('heroUrl', '')
-        if hero:
-            hero_safe = hero.replace('\\', '').replace('"', '').replace("'", '').replace('(', '').replace(')', '')
-            js_parts.append(
-                f"var h=document.querySelector('.hero-central');"
-                f"if(h){{"
-                f"h.style.backgroundImage=\"url('{hero_safe}')\";"
-                f"h.style.backgroundSize='cover';"
-                f"h.style.backgroundPosition='center';"
-                f"h.classList.add('has-hero');"
-                f"document.body.style.backgroundImage='';"
-                f"}}else{{"
-                f"document.body.style.backgroundImage=\"url('{hero_safe}')\";"
-                f"document.body.style.backgroundSize='cover';"
-                f"document.body.style.backgroundPosition='center';"
-                f"document.body.style.backgroundAttachment='fixed';"
-                f"}}"
-            )
-        js_parts.append('})();</script>')
-        if len(js_parts) > 2:
-            tema_js = ''.join(js_parts)
+            parts.append(f"document.querySelectorAll('.btn,.btn-gold,.g-btn,.g-btn-primary,.g-btn-outline').forEach(function(el){{el.style.borderRadius='{br}';}});")
+        if include_hero:
+            hero = cfg.get('heroUrl', '')
+            if hero:
+                hero_safe = hero.replace('\\', '').replace('"', '').replace("'", '').replace('(', '').replace(')', '')
+                parts.append(
+                    f"var h=document.querySelector('.hero-central');"
+                    f"if(h){{"
+                    f"h.style.backgroundImage=\"url('{hero_safe}')\";"
+                    f"h.style.backgroundSize='cover';"
+                    f"h.style.backgroundPosition='center';"
+                    f"h.classList.add('has-hero');"
+                    f"document.body.style.backgroundImage='';"
+                    f"}}else{{"
+                    f"document.body.style.backgroundImage=\"url('{hero_safe}')\";"
+                    f"document.body.style.backgroundSize='cover';"
+                    f"document.body.style.backgroundPosition='center';"
+                    f"document.body.style.backgroundAttachment='fixed';"
+                    f"}}"
+                )
+        parts.append('})();</script>')
+        return ''.join(parts) if len(parts) > 2 else ''
+
+    # JS para btnEstilo e heroUrl (site de agendamento)
+    tema_js    = _build_tema_js(tema_config, include_hero=True)
+    # JS para btnEstilo da gestão (sem hero — gestão não tem seção hero)
+    gt_tema_js = _build_tema_js(_gt_raw if _gt_raw else tema_config, include_hero=False)
 
     # Sobrescreve campos de identidade via URL params (modo preview)
     preview_identity = {}
@@ -2065,6 +2071,7 @@ def inject_tenant():
             'tema_font_link': tema_font_link, 'tema_js': tema_js,
             'preview_identity': preview_identity,
             'gt_logo_url': _gt_logo_url, 'gt_nome_display': _gt_nome_display,
+            'gt_tema_js': gt_tema_js,
             'fab_wpp_mostrar': fab_wpp_mostrar, 'fab_maps_mostrar': fab_maps_mostrar}
 
 def _get_tenant_para_api():
@@ -4039,8 +4046,15 @@ def _gestao_template_ctx():
 def _csrf_ok():
     """Verifica Origin/Referer em form POSTs para prevenir CSRF."""
     origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
-    host   = request.host  # ex: ibarber.shop ou slug.ibarber.shop
-    return not origin or (APP_DOMAIN in origin) or (host in origin)
+    host   = request.host.split(':')[0]
+    if not origin:
+        return True
+    try:
+        from urllib.parse import urlparse
+        o_host = urlparse(origin).hostname or ''
+    except Exception:
+        o_host = ''
+    return o_host == APP_DOMAIN or o_host.endswith('.' + APP_DOMAIN) or o_host == host
 
 @app.route('/gestao/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'])
@@ -4590,7 +4604,15 @@ def gestao_credenciais():
         nova_senha  = request.form.get('nova_senha', '')
         confirmar   = request.form.get('confirmar_senha', '')
         if nome: tenant.nome = nome
-        if email: tenant.email = email
+        if email:
+            if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+                flash('E-mail inválido.', 'error')
+                return redirect(url_for('gestao_credenciais'))
+            existing = Tenant.query.filter(Tenant.email == email, Tenant.id != tenant.id).first()
+            if existing:
+                flash('E-mail já está em uso por outra conta.', 'error')
+                return redirect(url_for('gestao_credenciais'))
+            tenant.email = email
         if nova_senha:
             if not check_password_hash(tenant.password, senha_atual):
                 flash('Senha atual incorreta.', 'error')
@@ -4763,16 +4785,19 @@ def api_cadastro_personalizar():
     if Tenant.query.filter_by(slug=slug).first():
         return jsonify({'erro': 'slug já em uso'}), 400
     email = d.get('email', '').strip().lower()
-    if not email:
-        return jsonify({'erro': 'e-mail obrigatório'}), 400
+    if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+        return jsonify({'erro': 'E-mail inválido'}), 400
     if Tenant.query.filter_by(email=email).first():
         return jsonify({'erro': 'e-mail já cadastrado'}), 400
+    nome = d.get('nome', '').strip()
+    if not nome:
+        return jsonify({'erro': 'nome obrigatório'}), 400
     senha = d.get('senha', '').strip()
     if len(senha) < 8:
         return jsonify({'erro': 'Senha deve ter ao menos 8 caracteres'}), 400
     tenant = Tenant(
         slug=slug,
-        nome=d.get('nome', '').strip(),
+        nome=nome,
         email=email,
         password=generate_password_hash(senha),
         whatsapp=d.get('whatsapp', '').strip() or None,

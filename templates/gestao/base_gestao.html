@@ -367,7 +367,8 @@
     </button>
     <a class="g-logo" href="{{ url_for('gestao_dashboard') }}">
       {% if gt_logo_url is defined and gt_logo_url %}
-        <img src="{{ gt_logo_url }}" alt="Logo" id="g-logo-img" style="height:24px;max-width:110px;object-fit:contain;display:block;">
+        <img src="{{ gt_logo_url }}" alt="Logo" id="g-logo-img" style="height:24px;max-width:110px;object-fit:contain;display:block;" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling.style.display='');">
+        <span style="display:none">{{ gt_nome_display or 'iBarber' }}</span>
       {% elif gt_nome_display is defined and gt_nome_display %}
         <span class="g-logo-mark">✦</span> {{ gt_nome_display }}
       {% else %}
@@ -551,6 +552,12 @@
       if (t.texto)      { r.setProperty('--text', t.texto); r.setProperty('--text-muted', t.texto + '66'); }
       if (t.fonteTitulo) r.setProperty('--font-serif', `'${t.fonteTitulo}', Georgia, serif`);
       if (t.fonteCorpo)  r.setProperty('--font-sans',  `'${t.fonteCorpo}', system-ui, sans-serif`);
+      if (t.cardRadius != null) r.setProperty('--radius', t.cardRadius + 'px');
+      if (t.btnEstilo) {
+        var cr = t.cardRadius != null ? t.cardRadius : 6;
+        var br = t.btnEstilo === 'pilula' ? '999px' : (t.btnEstilo === 'angular' ? '0px' : cr + 'px');
+        document.querySelectorAll('.g-btn,.g-btn-primary,.g-btn-outline').forEach(function(el) { el.style.borderRadius = br; });
+      }
       [t.fonteTitulo, t.fonteCorpo].filter(Boolean).forEach(function(font) {
         var id = 'gf-' + font.replace(/\s+/g, '-');
         if (!document.getElementById(id)) {
@@ -575,6 +582,7 @@
     });
   </script>
   <script src="/static/js/ibarber-forms.js"></script>
+  {% if gt_tema_js %}{{ gt_tema_js|safe }}{% endif %}
   {% block scripts %}{% endblock %}
 <script>document.addEventListener('touchmove',function(e){if(e.touches.length>1)e.preventDefault();},{passive:false});document.addEventListener('gesturestart',function(e){e.preventDefault();},{passive:false});</script>
 </body>
