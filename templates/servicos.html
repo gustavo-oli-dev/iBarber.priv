@@ -639,15 +639,6 @@
             verMais.style.display = 'none';
           }
         }
-        // Sem fotos: esconde seta e desativa accordion
-        const seta = ac.querySelector('.acordeao-seta');
-        if (fotos.length === 0) {
-          if (seta) seta.style.display = 'none';
-          btn.onclick = null;
-          btn.style.cursor = 'default';
-        } else {
-          if (seta) seta.style.display = '';
-        }
       });
     } catch(e) { console.error('Erro ao carregar fotos', e); }
   }
@@ -699,6 +690,15 @@
         } else {
           verMais.style.display = 'none';
         }
+      }
+      const seta = ac.querySelector('.acordeao-seta');
+      const mainBtn = ac.querySelector('[data-servico]');
+      if (fotos.length === 0) {
+        if (seta) seta.style.display = 'none';
+        if (mainBtn) { mainBtn.onclick = null; mainBtn.style.cursor = 'default'; }
+      } else {
+        if (seta) seta.style.display = '';
+        if (mainBtn) mainBtn.style.cursor = '';
       }
     });
   }
