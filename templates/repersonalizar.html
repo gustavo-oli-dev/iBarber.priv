@@ -976,13 +976,8 @@ function postTo(id, tema) {
 }
 
 function postTheme() {
-  if(editMode === 'global') {
-    postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag);
-    postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt);
-  } else {
-    if(siteMode === 'ag') { postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag); }
-    else { postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt); }
-  }
+  if(siteMode === 'ag') { postTo('iframe-ag-desk', T.ag); postTo('iframe-ag-mob', T.ag); }
+  else { postTo('iframe-gt-desk', T.gt); postTo('iframe-gt-mob', T.gt); }
 }
 
 function fwdScroll(e, idAg, idGt) {
@@ -1035,12 +1030,11 @@ function syncPickers() {
 // ── Identidade ────────────────────────────────────────────────────────────────
 let _idTimer = null;
 function onIdentidade(key, val) {
-  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
-  else { cur()[key] = val; }
+  cur()[key] = val;
   clearTimeout(_idTimer);
   _idTimer = setTimeout(() => {
-    if(editMode === 'global' || siteMode === 'ag') { document.getElementById('iframe-ag-desk').src = buildAgUrl(); document.getElementById('iframe-ag-mob').src = buildAgUrl(); }
-    if(editMode === 'global' || siteMode === 'gt') { document.getElementById('iframe-gt-desk').src = buildGtUrl(gtScreen); document.getElementById('iframe-gt-mob').src = buildGtUrl(gtScreen); }
+    if(siteMode === 'ag') { document.getElementById('iframe-ag-desk').src = buildAgUrl(); document.getElementById('iframe-ag-mob').src = buildAgUrl(); }
+    else { document.getElementById('iframe-gt-desk').src = buildGtUrl(gtScreen); document.getElementById('iframe-gt-mob').src = buildGtUrl(gtScreen); }
   }, 600);
 }
 
@@ -1099,21 +1093,18 @@ function setScreen(id) {
 }
 
 function onColor(key, val) {
-  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
-  else { cur()[key] = val; }
+  cur()[key] = val;
   const m = {fundo:'fundo',superficie:'surf',destaque:'dest',texto:'texto',borda:'borda'};
   document.getElementById('cpp-'+m[key]).style.background = val;
   postTheme();
 }
 function onRadius(val) {
-  if(editMode === 'global') { T.ag.cardRadius = +val; T.gt.cardRadius = +val; }
-  else { cur().cardRadius = +val; }
+  cur().cardRadius = +val;
   document.getElementById('radius-val').textContent = val+'px';
   postTheme();
 }
 function onBtnStyle(s) {
-  if(editMode === 'global') { T.ag.btnEstilo = s; T.gt.btnEstilo = s; }
-  else { cur().btnEstilo = s; }
+  cur().btnEstilo = s;
   ['arredondado','pilula','angular'].forEach(x =>
     document.getElementById('bs-'+x).classList.toggle('sel', x===s));
   postTheme();
@@ -1122,20 +1113,18 @@ function onFont(tipo, val) {
   const key = tipo==='titulo' ? 'fonteTitulo' : 'fonteCorpo';
   const smpId = tipo==='titulo' ? 'smp-titulo' : 'smp-corpo';
   const stack = tipo==='titulo' ? 'serif' : 'sans-serif';
-  if(editMode === 'global') { T.ag[key] = val; T.gt[key] = val; }
-  else { cur()[key] = val; }
+  cur()[key] = val;
   document.getElementById(smpId).style.fontFamily = `'${val}',${stack}`;
   postTheme();
 }
 
 function aplicarPreset(nome) {
-  if(editMode === 'global') { Object.assign(T.ag, PRESETS[nome]); Object.assign(T.gt, PRESETS[nome]); }
-  else { Object.assign(cur(), PRESETS[nome]); }
+  Object.assign(cur(), PRESETS[nome]);
   document.querySelectorAll('.preset').forEach(el => el.classList.remove('sel'));
   document.getElementById('pr-'+nome).classList.add('sel');
   syncPickers();
   if(!document.getElementById('login-overlay').classList.contains('hide')) return;
-  if(editMode === 'global' || siteMode === 'ag') {
+  if(siteMode === 'ag') {
     document.getElementById('iframe-ag-desk').src = buildAgUrl();
     document.getElementById('iframe-ag-mob').src  = buildAgUrl();
   }
@@ -1152,7 +1141,6 @@ function setEditMode(mode) {
     updateScopeLabel();
   } else {
     bar.style.display = 'none';
-    Object.assign(T.gt, T.ag);
     postTheme();
   }
   syncPickers();
