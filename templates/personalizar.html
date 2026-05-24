@@ -789,11 +789,15 @@ function buildAgRegisterUrl() {
 
 function buildGtUrl(screen) {
   const t = T.gt;
-  return '/preview/gt/' + screen + '?' + new URLSearchParams({
+  const p = {
     fundo:t.fundo, superficie:t.superficie, borda:t.borda,
     destaque:t.destaque, texto:t.texto,
-    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo
-  }).toString();
+    fonteTitulo:t.fonteTitulo, fonteCorpo:t.fonteCorpo,
+    cardRadius:t.cardRadius || 8
+  };
+  if (t.logoUrl)     p.logoUrl     = t.logoUrl;
+  if (t.nomeDisplay) p.nomeDisplay = t.nomeDisplay;
+  return '/preview/gt/' + screen + '?' + new URLSearchParams(p).toString();
 }
 
 // ── PostMessage helpers ───────────────────────────────────────────────────────

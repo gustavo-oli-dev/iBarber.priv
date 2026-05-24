@@ -1207,6 +1207,8 @@ def _gt_tema_override_css(args):
 def preview_gt(screen):
     gt_tema_override = _gt_tema_override_css(request.args)
     gt_preview_nome  = 'João Silva'
+    gt_logo_url      = request.args.get('logoUrl', '')[:300]
+    gt_nome_display  = request.args.get('nomeDisplay', '')[:60]
 
     hoje_dt = datetime.utcnow()
     hoje_str = hoje_dt.strftime('%Y-%m-%d')
@@ -1240,6 +1242,8 @@ def preview_gt(screen):
     ctx = dict(
         gt_tema_override=gt_tema_override,
         gt_preview_nome=gt_preview_nome,
+        gt_logo_url=gt_logo_url,
+        gt_nome_display=gt_nome_display,
         token='preview',
         gestao_is_owner=True,
         gestao_perms=_all_perms,

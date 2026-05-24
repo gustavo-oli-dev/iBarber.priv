@@ -366,7 +366,13 @@
       </svg>
     </button>
     <a class="g-logo" href="{{ url_for('gestao_dashboard') }}">
-      <span class="g-logo-mark">i</span>Barber
+      {% if gt_logo_url is defined and gt_logo_url %}
+        <img src="{{ gt_logo_url }}" alt="Logo" id="g-logo-img" style="height:24px;max-width:110px;object-fit:contain;display:block;">
+      {% elif gt_nome_display is defined and gt_nome_display %}
+        <span class="g-logo-mark">✦</span> {{ gt_nome_display }}
+      {% else %}
+        <span class="g-logo-mark">i</span>Barber
+      {% endif %}
     </a>
     <div class="g-header-spacer"></div>
     <div class="g-header-user">
@@ -554,6 +560,18 @@
           document.head.appendChild(l);
         }
       });
+      if ('logoUrl' in t || 'nomeDisplay' in t) {
+        var logoEl = document.querySelector('.g-logo');
+        if (logoEl) {
+          if (t.logoUrl) {
+            logoEl.innerHTML = '<img src="' + t.logoUrl + '" alt="Logo" style="height:24px;max-width:110px;object-fit:contain;display:block;">';
+          } else if (t.nomeDisplay) {
+            logoEl.innerHTML = '<span class="g-logo-mark" style="color:var(--gold)">✦</span> ' + t.nomeDisplay;
+          } else {
+            logoEl.innerHTML = '<span class="g-logo-mark">i</span>Barber';
+          }
+        }
+      }
     });
   </script>
   <script src="/static/js/ibarber-forms.js"></script>
