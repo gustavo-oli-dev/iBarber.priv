@@ -2718,19 +2718,24 @@ def api_credenciais_conta():
     tenant = db.session.get(Tenant, tid)
     if not tenant: return jsonify({'erro': 'não encontrado'}), 404
     data = request.get_json(silent=True) or {}
+    email_novo = data.get('email', '').strip().lower()
+    senha_nova = data.get('senha', '').strip()
     senha_atual = data.get('senha_atual', '').strip()
-    email_novo  = data.get('email', '').strip().lower()
-    senha_nova  = data.get('senha', '').strip()
-    if not check_password_hash(tenant.password, senha_atual):
-        return jsonify({'erro': 'Senha atual incorreta'}), 400
+    if not email_novo and not senha_nova:
+        return jsonify({'erro': 'Nada a atualizar'}), 400
+    # Senha atual só é exigida para trocar a senha
+    if senha_nova:
+        if not senha_atual or not check_password_hash(tenant.password, senha_atual):
+            return jsonify({'erro': 'Senha atual incorreta'}), 400
+        if len(senha_nova) < 8:
+            return jsonify({'erro': 'Nova senha deve ter mínimo 8 caracteres'}), 400
+        tenant.password = generate_password_hash(senha_nova)
     if email_novo and email_novo != tenant.email:
+        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email_novo):
+            return jsonify({'erro': 'E-mail inválido'}), 400
         if Tenant.query.filter(Tenant.email == email_novo, Tenant.id != tid).first():
             return jsonify({'erro': 'E-mail já em uso'}), 400
         tenant.email = email_novo
-    if senha_nova:
-        if len(senha_nova) < 8:
-            return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
-        tenant.password = generate_password_hash(senha_nova)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -3427,8 +3432,8 @@ def api_entrada_deletar(eid):
 
 @app.route('/api/fotos', methods=['GET'])
 def api_fotos_listar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = _api_tid()
+    if not tid: return jsonify({'erro': 'tenant não encontrado'}), 404
     categoria = request.args.get('categoria')
     q = FotoServico.query.filter_by(tenant_id=tid)
     if categoria:

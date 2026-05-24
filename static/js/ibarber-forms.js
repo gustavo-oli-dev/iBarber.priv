@@ -58,11 +58,10 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) { erroInline(input, 'E-mail inválido'); return false; }
     }
     if (tipo === 'nome') {
-      if (val.length < 3)          { erroInline(input, 'Mínimo 3 caracteres'); return false; }
-      if (/\d/.test(val))           { erroInline(input, 'Nome não pode conter números'); return false; }
+      if (val.length < 3) { erroInline(input, 'Mínimo 3 caracteres'); return false; }
     }
     if (tipo === 'senha') {
-      if (val.length < 6) { erroInline(input, 'Mínimo 6 caracteres'); return false; }
+      if (val.length < 8) { erroInline(input, 'Mínimo 8 caracteres'); return false; }
     }
     if (tipo === 'moeda' || input.dataset.mask === 'moeda') {
       const n = parseFloat(val.replace(',', '.'));

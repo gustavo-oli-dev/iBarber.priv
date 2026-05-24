@@ -60,10 +60,18 @@
       align-self: flex-start;
       margin-bottom: .5rem;
     }
-    /* Grid 2 colunas — tudo mais igual ao desktop */
+    /* Grid 2 colunas */
     .loja-grid {
       grid-template-columns: repeat(2, 1fr);
       gap: .75rem;
+      padding: 0 .75rem 2rem;
+    }
+  }
+  @media (max-width: 480px) {
+    /* Grid 1 coluna em telas muito pequenas */
+    .loja-grid {
+      grid-template-columns: 1fr;
+      gap: .65rem;
       padding: 0 .75rem 2rem;
     }
   }

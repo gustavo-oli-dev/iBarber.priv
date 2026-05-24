@@ -57,30 +57,36 @@
 
   <button type="button" class="g-btn g-btn-primary" onclick="salvarCredenciais()" style="width:100%;margin-bottom:2rem;">Salvar credenciais</button>
 
-  <!-- Conta -->
-  <div class="g-section" style="margin-bottom:1.5rem;">
-    <div class="g-section-title" style="margin-bottom:.75rem;">👤 Conta de acesso</div>
-    <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:1rem;">Altere o e-mail e/ou senha de login do painel. Informe a senha atual para confirmar.</p>
+  <!-- Alterar e-mail -->
+  <div class="g-section" style="margin-bottom:1.25rem;">
+    <div class="g-section-title" style="margin-bottom:.75rem;">📧 Alterar e-mail</div>
     <div class="g-form-group" style="margin-bottom:.75rem;">
       <label class="g-label">Novo e-mail</label>
       <input id="fEmail" class="g-input" type="email" placeholder="{{ tenant.email }}" autocapitalize="none" autocorrect="off" />
     </div>
+    <div id="err-email" style="font-size:.8rem;color:#f87171;display:none;margin-bottom:.75rem;"></div>
+    <button type="button" class="g-btn g-btn-outline" onclick="salvarEmail(this)" style="width:100%;">Salvar e-mail</button>
+  </div>
+
+  <!-- Alterar senha -->
+  <div class="g-section" style="margin-bottom:1.5rem;">
+    <div class="g-section-title" style="margin-bottom:.75rem;">🔒 Alterar senha</div>
     <div class="g-form-group" style="margin-bottom:.75rem;">
       <label class="g-label">Nova senha</label>
       <div style="position:relative;">
-        <input id="fSenhaNova" class="g-input" type="password" placeholder="Mín. 6 caracteres" style="padding-right:2.5rem;" />
+        <input id="fSenhaNova" class="g-input" type="password" placeholder="Mín. 8 caracteres" style="padding-right:2.5rem;" />
         <button type="button" onclick="toggleVer('fSenhaNova',this)" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
       </div>
     </div>
     <div class="g-form-group" style="margin-bottom:.75rem;">
-      <label class="g-label">Senha atual <span style="color:var(--text-muted)">(obrigatório)</span></label>
+      <label class="g-label">Senha atual</label>
       <div style="position:relative;">
         <input id="fSenhaAtual" class="g-input" type="password" placeholder="Confirme com sua senha atual" style="padding-right:2.5rem;" />
         <button type="button" onclick="toggleVer('fSenhaAtual',this)" style="position:absolute;right:.65rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;padding:0;line-height:1;">👁</button>
       </div>
     </div>
-    <div id="err-conta" style="font-size:.8rem;color:#f87171;display:none;margin-bottom:.75rem;"></div>
-    <button type="button" class="g-btn g-btn-outline" onclick="salvarConta()" style="width:100%;">Atualizar conta</button>
+    <div id="err-senha" style="font-size:.8rem;color:#f87171;display:none;margin-bottom:.75rem;"></div>
+    <button type="button" class="g-btn g-btn-outline" onclick="salvarSenha(this)" style="width:100%;">Salvar senha</button>
   </div>
 
 </div>
@@ -123,33 +129,47 @@ async function salvarCredenciais() {
   }
 }
 
-async function salvarConta() {
-  const email      = document.getElementById('fEmail').value.trim();
-  const senhaNova  = document.getElementById('fSenhaNova').value;
-  const senhaAtual = document.getElementById('fSenhaAtual').value;
-  const errEl      = document.getElementById('err-conta');
+async function salvarEmail(btn) {
+  const email = document.getElementById('fEmail').value.trim();
+  const errEl = document.getElementById('err-email');
   errEl.style.display = 'none';
-  if (!senhaAtual) { errEl.textContent = 'Informe a senha atual.'; errEl.style.display = 'block'; return; }
-  if (!email && !senhaNova) { errEl.textContent = 'Informe o novo e-mail ou a nova senha.'; errEl.style.display = 'block'; return; }
-  const body = { senha_atual: senhaAtual };
-  if (email)     body.email = email;
-  if (senhaNova) body.senha = senhaNova;
+  if (!email) { errEl.textContent = 'Informe o novo e-mail.'; errEl.style.display = 'block'; return; }
   const r = await fetch('/api/credenciais/conta', {
     method: 'POST',
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify(body)
+    body: JSON.stringify({email})
   });
   const d = await r.json();
   if (d.ok) {
     document.getElementById('fEmail').value = '';
-    document.getElementById('fSenhaNova').value = '';
-    document.getElementById('fSenhaAtual').value = '';
-    const btn = event.target;
-    const orig = btn.textContent;
-    btn.textContent = '✓ Atualizado!';
-    setTimeout(() => btn.textContent = orig, 2000);
+    btn.textContent = '✓ Salvo!';
+    setTimeout(() => btn.textContent = 'Salvar e-mail', 2000);
   } else {
-    errEl.textContent = d.erro || 'Erro ao atualizar.';
+    errEl.textContent = d.erro || 'Erro ao salvar.';
+    errEl.style.display = 'block';
+  }
+}
+
+async function salvarSenha(btn) {
+  const senhaNova  = document.getElementById('fSenhaNova').value;
+  const senhaAtual = document.getElementById('fSenhaAtual').value;
+  const errEl      = document.getElementById('err-senha');
+  errEl.style.display = 'none';
+  if (!senhaNova)  { errEl.textContent = 'Informe a nova senha.';   errEl.style.display = 'block'; return; }
+  if (!senhaAtual) { errEl.textContent = 'Informe a senha atual.';  errEl.style.display = 'block'; return; }
+  const r = await fetch('/api/credenciais/conta', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+    body: JSON.stringify({senha: senhaNova, senha_atual: senhaAtual})
+  });
+  const d = await r.json();
+  if (d.ok) {
+    document.getElementById('fSenhaNova').value  = '';
+    document.getElementById('fSenhaAtual').value = '';
+    btn.textContent = '✓ Salvo!';
+    setTimeout(() => btn.textContent = 'Salvar senha', 2000);
+  } else {
+    errEl.textContent = d.erro || 'Erro ao salvar.';
     errEl.style.display = 'block';
   }
 }

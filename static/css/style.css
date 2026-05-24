@@ -557,6 +557,7 @@ main { flex: 1; }
   padding: 2rem 1.5rem;
   gap: 2.5rem;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .servicos-header {
   text-align: center;
@@ -1007,8 +1008,8 @@ main { flex: 1; }
   width: min(340px, 90vw);
 }
 .qr-img {
-  width: 220px;
-  height: 220px;
+  width: min(220px, calc(90vw - 5rem));
+  height: min(220px, calc(90vw - 5rem));
   border-radius: var(--radius);
   margin-top: 1rem;
   border: 6px solid #fff;
@@ -1877,6 +1878,21 @@ img, video, iframe, table { max-width: 100%; }
   .cal-horarios-grid { grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
   .cal-dia-btn { min-width: 44px; padding: 0.35rem 0.4rem; }
   .tel-prefix { font-size: 0.82rem; padding: 0 0.6rem; }
+
+  /* Layout geral ultra-pequeno */
+  .servicos-section { padding: 1.5rem 1rem; gap: 1.5rem; }
+  .servicos-grid { max-width: 100%; }
+  .fab { left: 12px; bottom: 12px; }
+
+  /* Step nav — labels ocultos para não transbordar */
+  .step-label { display: none; }
+  .step-connector { width: 20px; }
+
+  /* Navbar */
+  .nav-logo { max-width: 45vw; }
+
+  /* Agendamento card */
+  .agendamento-card { padding: 1rem 0.85rem 2.8rem; }
 }
 
 /* ── Antialiasing & Smooth Rendering ──────────────────────── */
