@@ -814,11 +814,13 @@ def servicos():
     if 'user_id' not in session:
         return redirect(url_for('index'))
     agendamento_info = None
+    _tenant_servicos = get_tenant_atual()
+    _tid_servicos = _tenant_servicos.id if _tenant_servicos else None
     ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo')
+          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid_servicos)
           .filter(Agendamento.data_hora > _agora_brt())
           .order_by(Agendamento.data_hora.asc())
-          .first())
+          .first()) if _tid_servicos else None
     if ag:
         _forma_label = {'dinheiro': 'Pagar no local', 'pix': 'PIX', 'cartao': 'Cartão'}
         _, gestor_nome = _gestor_como_barbeiro(_api_tid())
@@ -1426,10 +1428,11 @@ def agendar():
     data = request.get_json() or {}
     pedido_id     = data.get('pedido_id')
     data_hora_str = data.get('data_hora', '')
-    # Garantir que o pedido pertence ao usuário logado
+    _tid_ag = _api_tid()
+    # Garantir que o pedido pertence ao usuário e ao tenant correto
     if pedido_id:
         _ped = db.session.get(Pedido, pedido_id)
-        if not _ped or _ped.user_id != session['user_id']:
+        if not _ped or _ped.user_id != session['user_id'] or _ped.tenant_id != _tid_ag:
             return jsonify({'erro': 'pedido inválido'}), 403
     try:
         data_hora = datetime.fromisoformat(data_hora_str)
@@ -1438,7 +1441,7 @@ def agendar():
     if data_hora <= _agora_brt():
         return jsonify({'erro': 'Data inválida. Escolha uma data futura.'}), 400
     existente = (Agendamento.query
-                 .filter_by(user_id=session['user_id'], status='ativo')
+                 .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid_ag)
                  .filter(Agendamento.data_hora > _agora_brt())
                  .first())
     if existente:
@@ -1754,11 +1757,12 @@ def _notificar_lista_espera(tenant_id, data_str):
 def meu_agendamento():
     if 'user_id' not in session:
         return jsonify({'agendamento': None})
-    _tid = session.get('path_tenant_id')
-    q = Agendamento.query.filter_by(user_id=session['user_id'], status='ativo')
-    if _tid:
-        q = q.filter_by(tenant_id=_tid)
-    ag = q.order_by(Agendamento.data_hora.desc()).first()
+    _tid = _api_tid()
+    if not _tid:
+        return jsonify({'agendamento': None})
+    ag = (Agendamento.query
+          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid)
+          .order_by(Agendamento.data_hora.desc()).first())
     if not ag:
         return jsonify({'agendamento': None})
     if ag.funcionario_id == 0:
@@ -1781,11 +1785,12 @@ def atualizar_forma_pagamento():
     forma = data.get('forma', '')
     if forma not in ('dinheiro', 'pix', 'cartao'):
         return jsonify({'erro': 'forma inválida'}), 400
-    _tid = session.get('path_tenant_id')
-    q = Agendamento.query.filter_by(user_id=session['user_id'], status='ativo')
-    if _tid:
-        q = q.filter_by(tenant_id=_tid)
-    ag = q.filter(Agendamento.data_hora > _agora_brt()).first()
+    _tid = _api_tid()
+    if not _tid:
+        return jsonify({'erro': 'tenant não identificado'}), 400
+    ag = (Agendamento.query
+          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid)
+          .filter(Agendamento.data_hora > _agora_brt()).first())
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
     ag.forma_pagamento = forma
@@ -1817,11 +1822,13 @@ def _to_brt(dt):
 def meu_historico():
     if 'user_id' not in session:
         return jsonify({'historico': []})
-    _tid = session.get('path_tenant_id') or session.get('tenant_id')
-    q = Agendamento.query.filter_by(user_id=session['user_id'])
-    if _tid:
-        q = q.filter_by(tenant_id=_tid)
-    ags = q.options(joinedload(Agendamento.funcionario)).order_by(Agendamento.data_hora.desc()).limit(20).all()
+    _tid = _api_tid()
+    if not _tid:
+        return jsonify({'historico': []})
+    ags = (Agendamento.query
+           .filter_by(user_id=session['user_id'], tenant_id=_tid)
+           .options(joinedload(Agendamento.funcionario))
+           .order_by(Agendamento.data_hora.desc()).limit(20).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
     pedidos = (
         {p.id: p for p in
