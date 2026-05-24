@@ -64,16 +64,6 @@
       <button type="button" onclick="abrirInfoSlots()" style="background:none;border:1px solid var(--border);border-radius:50%;width:22px;height:22px;color:var(--text-muted);font-size:.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">ⓘ</button>
     </div>
 
-    <!-- Área de gestão de slots pré-definidos -->
-    <div id="areaSlotsFixos" style="display:none;max-width:480px;margin-bottom:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;">
-      <div class="g-section-title" style="margin-bottom:.75rem;font-size:.8rem;">Horários disponíveis</div>
-      <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.75rem;">
-        <input type="time" id="inputSlotNovo" class="g-input" style="width:130px;" />
-        <button type="button" class="g-btn g-btn-primary" style="padding:.4rem .85rem;" onclick="adicionarSlot()">+ Adicionar</button>
-      </div>
-      <div id="listaSlotsFixos" style="display:flex;flex-wrap:wrap;gap:.4rem;min-height:32px;"></div>
-    </div>
-
     <button type="button" class="g-btn g-btn-primary" onclick="verificarESalvarHorarios()">Salvar horários</button>
     <input type="hidden" name="_confirmar" id="confirmarHorarios" value="">
   </form>
@@ -198,19 +188,13 @@
     <span style="font-weight:700;font-size:1rem;color:var(--text);">Slots pré-definidos</span>
     <button onclick="fecharInfoSlots()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);">×</button>
   </div>
-  <p style="font-size:.85rem;color:var(--text-muted);line-height:1.65;margin-bottom:1rem;">
-    Com esta opção <strong style="color:var(--text);">ativada</strong>, os clientes só verão os horários que você cadastrou manualmente — independente do horário de abertura e fechamento.
-  </p>
-  <p style="font-size:.85rem;color:var(--text-muted);line-height:1.65;margin-bottom:1rem;">
-    Quando um horário for marcado, ele some da lista disponível até ser liberado.
-  </p>
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:1rem;">
-    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">MODO ABERTO (padrão)</div>
-    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">O sistema gera os horários automaticamente entre abertura e fechamento, ajustando pela duração de cada serviço.</p>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:.85rem;">
+    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">DESATIVADO — Dinâmico</div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">O sistema gera os horários ajustando pela duração exata de cada serviço escolhido. Se um cliente marca às 07:00 e o serviço dura 50 min, o próximo horário disponível aparece às 07:50.</p>
   </div>
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;">
-    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">MODO PRÉ-DEFINIDO</div>
-    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">Você define exatamente quais horários estarão disponíveis. Ideal para agendas com horários irregulares ou intervalos fixos não uniformes.</p>
+    <div style="font-size:.75rem;font-weight:700;color:var(--gold);margin-bottom:.4rem;">ATIVADO — Grade fixa</div>
+    <p style="font-size:.8rem;color:var(--text-muted);margin:0;line-height:1.55;">Os horários são gerados em intervalos fixos de acordo com a <strong style="color:var(--text);">Duração do slot</strong> configurada (ex: 40 min → 08:00, 08:40, 09:20...). Clássico e previsível.</p>
   </div>
 </div>
 
@@ -224,8 +208,6 @@
 .esp-card-info{flex:1;min-width:0;}
 .esp-card-date{font-weight:600;font-size:.9rem;}
 .esp-card-hrs{font-size:.8rem;color:var(--text-muted);margin-top:.15rem;}
-.slot-tag{background:var(--surface2,var(--surface));border:1px solid var(--border);border-radius:6px;padding:.25rem .55rem;font-size:.82rem;display:flex;align-items:center;gap:.35rem;color:var(--text);}
-.slot-tag button{background:none;border:none;cursor:pointer;color:var(--error);font-size:.85rem;padding:0;line-height:1;}
 </style>
 
 <script>
@@ -522,8 +504,6 @@ renderFechados();
 renderEspeciais();
 
 // ── Slots pré-definidos ─────────────────────────────────
-let _slotsFixos = [];
-
 function abrirInfoSlots() {
   document.getElementById('infoSlotsOverlay').style.display = 'block';
   const p = document.getElementById('infoSlotsPanel');
@@ -536,52 +516,17 @@ function fecharInfoSlots() {
   setTimeout(() => { p.style.display = 'none'; document.getElementById('infoSlotsOverlay').style.display = 'none'; }, 250);
 }
 
-function renderSlotsFixos() {
-  const box = document.getElementById('listaSlotsFixos');
-  if (!_slotsFixos.length) { box.innerHTML = '<span style="font-size:.8rem;color:var(--text-muted);">Nenhum horário adicionado.</span>'; return; }
-  box.innerHTML = _slotsFixos.map(s =>
-    `<div class="slot-tag">${s}<button onclick="removerSlot('${s}')">✕</button></div>`
-  ).join('');
-}
-
-function adicionarSlot() {
-  const v = document.getElementById('inputSlotNovo').value;
-  if (!v || _slotsFixos.includes(v)) return;
-  _slotsFixos.push(v);
-  _slotsFixos.sort();
-  renderSlotsFixos();
-  salvarSlotsFixos();
-}
-
-function removerSlot(s) {
-  _slotsFixos = _slotsFixos.filter(x => x !== s);
-  renderSlotsFixos();
-  salvarSlotsFixos();
-}
-
-function onToggleSlotsPre(checked) {
-  document.getElementById('areaSlotsFixos').style.display = checked ? '' : 'none';
-  salvarSlotsFixos();
-}
-
-async function salvarSlotsFixos() {
-  const ativo = document.getElementById('toggleSlotsPre').checked;
+async function onToggleSlotsPre(checked) {
   await fetch('/api/slots-predefinidos', {
     method: 'POST',
     headers: {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-    body: JSON.stringify({ativo, slots: _slotsFixos})
+    body: JSON.stringify({ativo: checked})
   }).catch(() => {});
 }
 
-// Carrega estado inicial
 fetch('/api/slots-predefinidos', {headers:{'Authorization':'Bearer '+TOKEN}})
   .then(r => r.json())
-  .then(d => {
-    _slotsFixos = d.slots || [];
-    const tog = document.getElementById('toggleSlotsPre');
-    tog.checked = !!d.ativo;
-    document.getElementById('areaSlotsFixos').style.display = d.ativo ? '' : 'none';
-    renderSlotsFixos();
-  }).catch(() => {});
+  .then(d => { document.getElementById('toggleSlotsPre').checked = !!d.ativo; })
+  .catch(() => {});
 </script>
 {% endblock %}
