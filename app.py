@@ -95,20 +95,28 @@ def _security_headers(response):
     return response
 
 def _processar_imagem(arquivo, max_px=1400, quality=82):
-    """Validate, strip EXIF, resize, return (BytesIO, error_str)."""
+    """Validate, strip EXIF, resize, return (BytesIO, error_str, ext)."""
     try:
         img = Image.open(arquivo)
         img.verify()
         arquivo.seek(0)
         img = Image.open(arquivo)
     except Exception:
-        return None, 'arquivo de imagem inválido'
-    img = img.convert('RGB')
-    img.thumbnail((max_px, max_px), Image.LANCZOS)
+        return None, 'arquivo de imagem inválido', None
+    has_alpha = img.mode in ('RGBA', 'LA', 'PA') or (img.mode == 'P' and 'transparency' in img.info)
     buf = io.BytesIO()
-    img.save(buf, format='JPEG', quality=quality, optimize=True)
+    if has_alpha:
+        img = img.convert('RGBA')
+        img.thumbnail((max_px, max_px), Image.LANCZOS)
+        img.save(buf, format='PNG', optimize=True)
+        ext = 'png'
+    else:
+        img = img.convert('RGB')
+        img.thumbnail((max_px, max_px), Image.LANCZOS)
+        img.save(buf, format='JPEG', quality=quality, optimize=True)
+        ext = 'jpg'
     buf.seek(0)
-    return buf, None
+    return buf, None, ext
 
 MAIL_HOST     = 'smtp.gmail.com'
 MAIL_PORT     = 587
@@ -1949,6 +1957,11 @@ def inject_tenant():
                 if isinstance(_gt_raw, dict):
                     _gt_logo_url     = _gt_raw.get('logoUrl',     '') or ''
                     _gt_nome_display = _gt_raw.get('nomeDisplay', '') or ''
+                # Fallback: se gt não tem logo/nome, herda do ag
+                if not _gt_logo_url:
+                    _gt_logo_url = tema_config.get('logoUrl', '') or ''
+                if not _gt_nome_display:
+                    _gt_nome_display = tema_config.get('nomeDisplay', '') or ''
         except Exception:
             pass
 
@@ -3358,10 +3371,10 @@ def api_fotos_upload():
         return jsonify({'erro': 'nenhum arquivo enviado'}), 400
     if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
-    buf, err = _processar_imagem(arquivo)
+    buf, err, ext = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
-    filename = f"{uuid.uuid4().hex}.jpg"
+    filename = f"{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
     foto = FotoServico(categoria=categoria, servico=servico or None, filename=filename, tenant_id=tid)
@@ -3866,13 +3879,13 @@ def api_funcionario_foto(fid):
         return jsonify({'erro': 'nenhum arquivo'}), 400
     if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
-    buf, err = _processar_imagem(arquivo)
+    buf, err, ext = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
     if f.foto:
         old = os.path.join(UPLOAD_FOLDER, f.foto)
         if os.path.exists(old): os.remove(old)
-    filename = f"func_{fid}_{uuid.uuid4().hex}.jpg"
+    filename = f"func_{fid}_{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
     f.foto = filename
@@ -3897,14 +3910,14 @@ def api_gestor_foto():
         return jsonify({'erro': 'nenhum arquivo'}), 400
     if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
-    buf, err = _processar_imagem(arquivo)
+    buf, err, ext = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
     s = _get_setting('gestor_foto', _tid)
     if s and s.value:
         old = os.path.join(UPLOAD_FOLDER, s.value)
         if os.path.exists(old): os.remove(old)
-    filename = f"gestor_{uuid.uuid4().hex}.jpg"
+    filename = f"gestor_{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
     _upsert_setting('gestor_foto', filename, _tid)
@@ -4371,13 +4384,13 @@ def api_gestao_produto_criar():
         db.session.rollback()
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     if arquivo and arquivo.filename:
-        buf, err = _processar_imagem(arquivo)
+        buf, err, ext = _processar_imagem(arquivo)
         if err:
             db.session.rollback()
             return jsonify({'erro': err}), 400
         pasta = os.path.join(UPLOAD_FOLDER, str(tid), 'produtos')
         os.makedirs(pasta, exist_ok=True)
-        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.jpg"
+        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.{ext}"
         with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
             fh.write(buf.read())
         p.foto = filename
@@ -4418,7 +4431,7 @@ def api_gestao_produto(pid):
     if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
     if arquivo and arquivo.filename:
-        buf, err = _processar_imagem(arquivo)
+        buf, err, ext = _processar_imagem(arquivo)
         if err:
             return jsonify({'erro': err}), 400
         if p.foto:
@@ -4427,7 +4440,7 @@ def api_gestao_produto(pid):
                 os.remove(old)
         pasta = os.path.join(UPLOAD_FOLDER, str(tid), 'produtos')
         os.makedirs(pasta, exist_ok=True)
-        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.jpg"
+        filename = f"{tid}/produtos/prod_{p.id}_{uuid.uuid4().hex}.{ext}"
         with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
             fh.write(buf.read())
         p.foto = filename
@@ -4648,10 +4661,10 @@ def api_personalizar_upload():
         return jsonify({'erro': 'nenhum arquivo'}), 400
     if arquivo and request.content_length and request.content_length > 10 * 1024 * 1024:
         return jsonify({'erro': 'Imagem muito grande. Máximo 10 MB.'}), 413
-    buf, err = _processar_imagem(arquivo)
+    buf, err, ext = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
-    filename = f"pers_{uuid.uuid4().hex}.jpg"
+    filename = f"pers_{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
     return jsonify({'ok': True, 'url': f'/static/uploads/{filename}'})
