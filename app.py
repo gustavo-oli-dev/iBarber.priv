@@ -4160,7 +4160,7 @@ def gestao_dashboard():
         hoje_mes=MESES_ABREV[hoje.month - 1],
         proximos_dias=proximos_dias,
         agendamentos_json=_safe_json(ags_json),
-        token=_gerar_token(tenant.id, 0),
+        token=_gerar_token(tenant.id, 0, tenant.token_version or 0),
     )
 
 @app.route('/gestao/agendamentos', methods=['GET'])
@@ -4171,7 +4171,7 @@ def gestao_agendamentos():
     if perm: return perm
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
     clientes_json = _safe_json([
         {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
@@ -4220,7 +4220,7 @@ def gestao_pedidos():
     perm = _gestao_perm_required('pedidos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     pedidos = (Pedido.query
                .filter_by(tenant_id=tenant.id)
                .options(joinedload(Pedido.usuario), joinedload(Pedido.itens))
@@ -4240,7 +4240,7 @@ def gestao_clientes():
     perm = _gestao_perm_required('clientes')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
     clientes_json = _safe_json([{
         'id': c.id, 'name': c.name, 'email': c.email,
@@ -4255,7 +4255,7 @@ def gestao_cliente_detalhe(uid):
     perm = _gestao_perm_required('clientes')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     return render_template('gestao/cliente_detalhe.html', active='clientes', uid=uid, token=token)
 
 @app.route('/gestao/entradas', methods=['GET', 'POST'])
@@ -4321,7 +4321,7 @@ def gestao_funcionarios():
     perm = _gestao_owner_required()
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     return render_template('gestao/funcionarios.html', active='funcionarios', token=token)
 
 @app.route('/gestao/servicos')
@@ -4331,7 +4331,7 @@ def gestao_servicos():
     perm = _gestao_perm_required('servicos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     return render_template('gestao/servicos.html', active='servicos', token=token)
 
 @app.route('/gestao/precos', methods=['GET', 'POST'])
@@ -4343,7 +4343,7 @@ def gestao_precos():
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).all()
     if request.method == 'POST':
         for s in servicos:
@@ -4363,7 +4363,7 @@ def gestao_fotos():
     perm = _gestao_perm_required('fotos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     return render_template('gestao/fotos.html', active='fotos', token=token)
 
 @app.route('/gestao/loja')
@@ -4495,7 +4495,7 @@ def gestao_horarios():
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0)
+    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
     if request.method == 'POST':
         DIAS_KEYS = ['seg','ter','qua','qui','sex','sab','dom']
         horarios = {}
@@ -4628,7 +4628,7 @@ def gestao_credenciais():
     def _sv(key): s = _get_setting(key, tenant.id); return s.value if s else ''
     return render_template('gestao/credenciais.html',
         active='credenciais', tenant=tenant,
-        token=_gerar_token(tenant.id, 0),
+        token=_gerar_token(tenant.id, 0, tenant.token_version or 0),
         pix_chave=_sv('pix_chave'),
         mp_token=_sv('mp_token'),
         mp_public_key=_sv('mp_public_key'),
@@ -4645,7 +4645,7 @@ def gestao_graficos():
     tenant = _gestao_tenant()
     return render_template('gestao/graficos.html',
         active='graficos',
-        token=_gerar_token(tenant.id, 0))
+        token=_gerar_token(tenant.id, 0, tenant.token_version or 0))
 
 @app.route('/gestao/calendario')
 def gestao_calendario():
@@ -4656,7 +4656,7 @@ def gestao_calendario():
     tenant = _gestao_tenant()
     return render_template('gestao/calendario.html',
         active='calendario',
-        token=_gerar_token(tenant.id, 0))
+        token=_gerar_token(tenant.id, 0, tenant.token_version or 0))
 
 @app.route('/personalizar')
 def personalizar():
