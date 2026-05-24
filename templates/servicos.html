@@ -639,6 +639,15 @@
             verMais.style.display = 'none';
           }
         }
+        // Sem fotos: esconde seta e desativa accordion
+        const seta = ac.querySelector('.acordeao-seta');
+        if (fotos.length === 0) {
+          if (seta) seta.style.display = 'none';
+          btn.onclick = null;
+          btn.style.cursor = 'default';
+        } else {
+          if (seta) seta.style.display = '';
+        }
       });
     } catch(e) { console.error('Erro ao carregar fotos', e); }
   }
