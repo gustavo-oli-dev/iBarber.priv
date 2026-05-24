@@ -129,13 +129,17 @@
       }
       if ('heroUrl' in t) {
         const heroEl = document.querySelector('.hero-central');
-        // Imagem sempre no hero-central — body sem background-image (evita bleeding no footer e seções)
-        document.body.style.backgroundImage = '';
-        document.body.style.backgroundAttachment = '';
         if (heroEl) {
           heroEl.style.backgroundImage    = t.heroUrl ? `url('${t.heroUrl}')` : '';
           heroEl.style.backgroundSize     = t.heroUrl ? 'cover' : '';
           heroEl.style.backgroundPosition = t.heroUrl ? 'center' : '';
+          document.body.style.backgroundImage = '';
+          document.body.style.backgroundAttachment = '';
+        } else {
+          document.body.style.backgroundImage    = t.heroUrl ? `url('${t.heroUrl}')` : '';
+          document.body.style.backgroundSize     = t.heroUrl ? 'cover' : '';
+          document.body.style.backgroundPosition = t.heroUrl ? 'center' : '';
+          document.body.style.backgroundAttachment = t.heroUrl ? 'fixed' : '';
         }
       }
     }
