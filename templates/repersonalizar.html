@@ -329,10 +329,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
 
   <!-- LEFT PANEL -->
   <aside class="panel">
-    <div id="edit-scope-bar" style="padding:.55rem 1.25rem;background:rgba(201,169,110,.07);border-bottom:1px solid rgba(201,169,110,.15);font-size:.7rem;color:#C9A96E;font-weight:600;display:none;align-items:center;gap:.4rem">
-      <span>✏️</span> <span id="edit-scope-label">Editando: Site de Agendamento</span>
-    </div>
-    <div class="p-sec">
+<div class="p-sec">
       <div class="p-title">Temas Prontos</div>
       <div class="presets">
         <div class="preset sel" onclick="aplicarPreset('classico')" id="pr-classico">
@@ -480,11 +477,7 @@ input[type=range]{width:100%;accent-color:var(--gold);cursor:pointer}
       </div>
       <select class="screen-sel" id="screen-sel" onchange="setScreen(this.value)"></select>
       <div class="canvas-url" id="canvas-url-bar">localhost:5000/</div>
-      <div class="toggle-group">
-        <button class="tg-btn active" id="mode-global" onclick="setEditMode('global')" title="Editar ambos os sites">🌐 Global</button>
-        <button class="tg-btn" id="mode-single" onclick="setEditMode('single')" title="Editar apenas o site visível">✏️ Tela atual</button>
-      </div>
-      <div class="toggle-group">
+<div class="toggle-group">
         <button class="tg-btn active" id="view-desk" onclick="setView('desk')">🖥</button>
         <button class="tg-btn" id="view-mob" onclick="setView('mob')">📱</button>
       </div>
