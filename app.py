@@ -12,7 +12,7 @@ import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
 from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
-from collections import Counter
+from collections import Counter  # noqa: F401 — mantido para uso futuro
 from urllib.parse import urlencode
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -2286,8 +2286,7 @@ def api_horarios_disponiveis():
     def _ag_min(ag): return ag.data_hora.hour * 60 + ag.data_hora.minute
     def _ag_dur(ag): return ag.duracao_total or duracao
 
-    slot_counts   = Counter(ag.data_hora.strftime('%H:%M') for ag in agendados)
-    todos_tomados = list(slot_counts.keys())
+    agendados_times = {ag.data_hora.strftime('%H:%M') for ag in agendados}
 
     fechamento_str = '18:00'
     abertura_str   = '08:00'
@@ -2369,6 +2368,9 @@ def api_horarios_disponiveis():
         ]
     else:
         disponiveis = [s for s in todos_slots if _slot_disponivel(s)]
+
+    disponiveis_set = set(disponiveis)
+    todos_tomados = sorted(agendados_times - disponiveis_set)
 
     return jsonify({'disponiveis': disponiveis, 'tomados': todos_tomados, 'fechado': False})
 
