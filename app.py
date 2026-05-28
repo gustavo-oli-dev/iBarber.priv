@@ -48,10 +48,13 @@ def _gestao_trial_ctx():
     }
 _cors_raw = os.environ.get('CORS_ORIGINS', '')
 _cors_origins = [o.strip() for o in _cors_raw.split(',') if o.strip()] if _cors_raw else None
+_is_debug = os.environ.get('FLASK_DEBUG', '0') == '1'
 if _cors_origins:
     CORS(app, origins=_cors_origins, supports_credentials=True)
-else:
+elif _is_debug:
     CORS(app, origins='*', supports_credentials=False)
+else:
+    CORS(app, origins=['https://ibarber.shop', 'https://ibarber.app.br'], supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY')
 _DB_URL = os.environ.get('DATABASE_URL')
 if not _DB_URL:
@@ -5064,7 +5067,6 @@ def api_cadastro():
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
         assinatura_ativa=True,
-        trial_expira=datetime.utcnow() + timedelta(days=7),
     )
     db.session.add(tenant)
     db.session.flush()
@@ -5148,13 +5150,16 @@ def api_pagamento_cartao():
         return jsonify({'ok': True, 'status': status, 'slug': tenant.slug})
     return jsonify({'erro': data.get('message', 'Pagamento recusado'), 'status': status}), 402
 
-@app.route('/admin/painel')
+@app.route('/admin/painel', methods=['GET', 'POST'])
 @limiter.limit('20 per minute')
 def admin_painel():
-    senha = request.args.get('key', '')
-    if senha != API_TOKEN:
+    if request.method == 'POST':
+        if request.form.get('key', '') == API_TOKEN:
+            session['admin_ok'] = True
+        return redirect(url_for('admin_painel'))
+    if not session.get('admin_ok') or API_TOKEN == '':
         return '''<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-        <form method="get" style="text-align:center">
+        <form method="post" style="text-align:center">
           <h2 style="color:#C9A96E;margin-bottom:1.5rem">✦ Admin — iBarber</h2>
           <input name="key" type="password" placeholder="Token de acesso"
             style="padding:10px 16px;border-radius:6px;border:1px solid #333;background:#1e1e1e;color:#f0ece4;font-size:15px;width:260px">
