@@ -12,7 +12,6 @@ import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
 from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
-from collections import Counter  # noqa: F401 — mantido para uso futuro
 from urllib.parse import urlencode
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -130,7 +129,6 @@ API_TOKEN            = os.environ.get('API_TOKEN', '')
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.shop/auth/google/callback')
-ADMIN_EMAIL   = os.environ.get('ADMIN_EMAIL', '')
 APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.shop')
 CF_TOKEN      = os.environ.get('CF_TOKEN', '')
 CF_ZONE_ID    = os.environ.get('CF_ZONE_ID', '')
