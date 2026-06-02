@@ -25,6 +25,20 @@ load_dotenv()
 
 APP_VERSION = '1.2.0'
 
+_SESSION_USER_ID = 'user_id'
+_SESSION_USER_NAME = 'user_name'
+_SESSION_USER_EMAIL = 'user_email'
+_SESSION_PATH_TENANT_ID = 'path_tenant_id'
+_SESSION_GESTAO_TENANT_ID = 'gestao_tenant_id'
+_SESSION_REPERSON_TID = 'reperson_tid'
+_SESSION_TENANT_ID = 'tenant_id'
+_SESSION_IS_GUEST = 'is_guest'
+_SESSION_IS_PREVIEW = 'is_preview'
+
+_SESSION_GESTAO_NOME = 'gestao_nome'
+_SESSION_GESTAO_FUNC_ID = 'gestao_func_id'
+_SESSION_ONB_TENANT_ID = 'onb_tenant_id'
+_SESSION_ADMIN_OK = 'admin_ok'
 if not os.environ.get('SECRET_KEY'):
     raise RuntimeError('SECRET_KEY não definida no ambiente')
 
@@ -36,7 +50,7 @@ app.jinja_env.globals['APP_VERSION'] = APP_VERSION
 
 @app.context_processor
 def _gestao_trial_ctx():
-    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
     if not tid:
         return {}
     tenant = db.session.get(Tenant, tid)
@@ -97,9 +111,32 @@ def _security_headers(response):
     )
     return response
 
+_MAGIC_IMAGES = {
+    b'\xff\xd8\xff': 'jpg',
+    b'\x89PNG\r\n\x1a\n': 'png',
+    b'GIF87a': 'gif',
+    b'GIF89a': 'gif',
+    b'RIFF': 'webp',
+    b'#define ': 'xpm',
+    b'BM': 'bmp',
+}
+
+def _magic_image_type(buf: bytes) -> str | None:
+    head = buf[:12]
+    if head[:4] == b'RIFF' and head[8:12] == b'WEBP':
+        return 'webp'
+    for sig, ext in _MAGIC_IMAGES.items():
+        if head.startswith(sig):
+            return ext
+    return None
+
 def _processar_imagem(arquivo, max_px=1400, quality=82):
     """Validate, strip EXIF, resize, return (BytesIO, error_str, ext)."""
     try:
+        head = arquivo.read(16)
+        if not head or _magic_image_type(head) is None:
+            return None, 'arquivo de imagem inválido', None
+        arquivo.seek(0)
         img = Image.open(arquivo)
         img.verify()
         arquivo.seek(0)
@@ -271,11 +308,11 @@ def _upsert_setting(key, value, tenant_id=None):
 
 def _gestao_tid():
     """Retorna tenant_id do gestor ou repersonalizador logado, ou None."""
-    return session.get('gestao_tenant_id') or session.get('reperson_tid')
+    return session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
 
 def _api_tid():
     """Retorna tenant_id a partir do contexto atual (gestão session, Bearer token ou path)."""
-    tid = session.get('gestao_tenant_id')
+    tid = session.get(_SESSION_GESTAO_TENANT_ID)
     if tid:
         return tid
     token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
@@ -670,9 +707,9 @@ def serve_admin_web(path):
 def index():
     tenant = get_tenant_atual()
     if tenant:
-        session['path_tenant_id'] = tenant.id
+        session[_SESSION_PATH_TENANT_ID] = tenant.id
         session.pop('is_preview', None)
-        user = db.session.get(User, session['user_id']) if 'user_id' in session else None
+        user = db.session.get(User, session[_SESSION_USER_ID]) if 'user_id' in session else None
         auto_rapido = bool(not user and request.args.get('agendar'))
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
@@ -697,14 +734,14 @@ def login_rapido():
         observation=alergia or None,
         receber_lembretes=False,
         guest=True,
-        tenant_id=session.get('path_tenant_id') or _api_tid(),
+        tenant_id=session.get(_SESSION_PATH_TENANT_ID) or _api_tid(),
     )
     db.session.add(user)
     db.session.commit()
-    session['user_id']   = user.id
-    session['user_name'] = nome
-    session['user_email'] = email
-    session['is_guest']  = True
+    session[_SESSION_USER_ID]   = user.id
+    session[_SESSION_USER_NAME] = nome
+    session[_SESSION_USER_EMAIL] = email
+    session[_SESSION_IS_GUEST]  = True
     return redirect(url_for('servicos'))
 
 @app.route('/api/auth/telefone', methods=['POST'])
@@ -714,15 +751,15 @@ def api_auth_telefone():
     tel  = ''.join(c for c in data.get('telefone', '') if c.isdigit())
     if len(tel) < 10:
         return jsonify({'erro': 'Telefone inválido'}), 400
-    tid  = session.get('path_tenant_id') or _api_tid()
+    tid  = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
     user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if user:
-        _ptid = session.get('path_tenant_id')
+        _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
-        session['user_id']    = user.id
-        session['user_name']  = user.name
-        session['user_email'] = user.email
-        if _ptid: session['path_tenant_id'] = _ptid
+        session[_SESSION_USER_ID]    = user.id
+        session[_SESSION_USER_NAME]  = user.name
+        session[_SESSION_USER_EMAIL] = user.email
+        if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
         return jsonify({'ok': True, 'nome': user.name})
     return jsonify({'novo': True})
 
@@ -738,15 +775,15 @@ def api_auth_criar_telefone():
     lembretes = bool(data.get('lembretes')) and bool(email_opt)
     if not nome or len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
-    tid = session.get('path_tenant_id') or _api_tid()
+    tid = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
     existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
     if existing:
-        _ptid = session.get('path_tenant_id')
+        _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
-        session['user_id']    = existing.id
-        session['user_name']  = existing.name
-        session['user_email'] = existing.email
-        if _ptid: session['path_tenant_id'] = _ptid
+        session[_SESSION_USER_ID]    = existing.id
+        session[_SESSION_USER_NAME]  = existing.name
+        session[_SESSION_USER_EMAIL] = existing.email
+        if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
         return jsonify({'ok': True, 'nome': existing.name})
     if email_opt and User.query.filter_by(email=email_opt, tenant_id=tid).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
@@ -762,22 +799,22 @@ def api_auth_criar_telefone():
     )
     db.session.add(user)
     db.session.commit()
-    _ptid = session.get('path_tenant_id')
+    _ptid = session.get(_SESSION_PATH_TENANT_ID)
     session.clear()
-    session['user_id']    = user.id
-    session['user_name']  = nome
-    session['user_email'] = email
-    if _ptid: session['path_tenant_id'] = _ptid
+    session[_SESSION_USER_ID]    = user.id
+    session[_SESSION_USER_NAME]  = nome
+    session[_SESSION_USER_EMAIL] = email
+    if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
     return jsonify({'ok': True, 'nome': nome})
 
 @app.route('/api/auth/lembretes', methods=['POST'])
 def api_auth_lembretes():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data      = request.get_json(force=True) or {}
     ativo     = bool(data.get('ativo'))
     email_opt = data.get('email', '').strip().lower() or None
-    user      = db.session.get(User, session['user_id'])
+    user      = db.session.get(User, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if ativo and not email_opt and user.email.endswith('@ibarber.local'):
@@ -787,7 +824,7 @@ def api_auth_lembretes():
         if conflito:
             return jsonify({'erro': 'E-mail já em uso'}), 400
         user.email = email_opt
-        session['user_email'] = email_opt
+        session[_SESSION_USER_EMAIL] = email_opt
     user.receber_lembretes = ativo
     db.session.commit()
     return jsonify({'ok': True})
@@ -800,7 +837,7 @@ def servicos():
     _tenant_servicos = get_tenant_atual()
     _tid_servicos = _tenant_servicos.id if _tenant_servicos else None
     ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid_servicos)
+          .filter_by(user_id=session[_SESSION_USER_ID], status='ativo', tenant_id=_tid_servicos)
           .filter(Agendamento.data_hora > _agora_brt())
           .order_by(Agendamento.data_hora.asc())
           .first()) if _tid_servicos else None
@@ -894,7 +931,7 @@ def auth_google_callback():
     if not google_id or not email:
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
-    tid = tid_from_state or session.get('path_tenant_id') or _api_tid()
+    tid = tid_from_state or session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
     user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
         user = User.query.filter_by(email=email, tenant_id=tid).first()
@@ -922,10 +959,10 @@ def auth_google_callback():
                     return redirect(url_for('index'))
     # M1: atribuição direta em vez de session.clear() para preservar path_tenant_id
     # e outros dados úteis já presentes na sessão antes do callback OAuth
-    session['user_id']       = user.id
-    session['user_name']     = user.name
-    session['user_email']    = user.email
-    session['path_tenant_id'] = tid
+    session[_SESSION_USER_ID]       = user.id
+    session[_SESSION_USER_NAME]     = user.name
+    session[_SESSION_USER_EMAIL]    = user.email
+    session[_SESSION_PATH_TENANT_ID] = tid
     # C4: só redirecionar para subdomínios conhecidos do APP_DOMAIN (evita open redirect)
     _base = ''
     if oauth_host and oauth_host != request.host:
@@ -946,23 +983,23 @@ def google_contato():
         if len(tel) < 10:
             erro = 'Telefone inválido — mínimo 10 dígitos.'
         else:
-            user = db.session.get(User, session['user_id'])
+            user = db.session.get(User, session[_SESSION_USER_ID])
             # H3: garantir que o user pertence ao tenant da sessão atual
-            if user and user.tenant_id != session.get('path_tenant_id'):
+            if user and user.tenant_id != session.get(_SESSION_PATH_TENANT_ID):
                 return redirect(url_for('index'))
             if user:
                 user.contact = tel
                 user.receber_lembretes = request.form.get('lembretes', '1') != '0'
                 db.session.commit()
             return redirect(url_for('servicos'))
-    user = db.session.get(User, session['user_id'])
+    user = db.session.get(User, session[_SESSION_USER_ID])
     return render_template('google_contato.html', user=user, erro=erro)
 
 # ── Perfil — atualização de campo individual ──────────────────────────────────
 
 @app.route('/api/perfil/update', methods=['POST'])
 def api_perfil_update():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data  = request.get_json(force=True) or {}
     campo = data.get('campo', '').strip()
@@ -970,7 +1007,7 @@ def api_perfil_update():
     _CAMPOS_PERMITIDOS = {'telefone', 'email', 'nome'}  # H1: whitelist — name/contact/receber_lembretes
     if campo not in _CAMPOS_PERMITIDOS:
         return jsonify({'erro': 'Campo inválido'}), 400
-    user  = db.session.get(User, session['user_id'])
+    user  = db.session.get(User, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if campo == 'telefone':
@@ -986,12 +1023,12 @@ def api_perfil_update():
         if conflito:
             return jsonify({'erro': 'E-mail já está em uso'}), 400
         user.email = email
-        session['user_email'] = email
+        session[_SESSION_USER_EMAIL] = email
     elif campo == 'nome':
         if len(valor) < 2:
             return jsonify({'erro': 'Nome muito curto'}), 400
         user.name = valor
-        session['user_name'] = valor
+        session[_SESSION_USER_NAME] = valor
     else:
         return jsonify({'erro': 'Campo inválido'}), 400
     db.session.commit()
@@ -1001,7 +1038,7 @@ def api_perfil_update():
 def perfil():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session['user_id'])
+    user = db.session.get(User, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     return render_template('perfil.html', user=user, hide_fabs=True)
@@ -1010,7 +1047,7 @@ def perfil():
 def salvar_observacao():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session['user_id'])
+    user = db.session.get(User, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     user.observation = request.form.get('observation', '').strip() or None
@@ -1021,7 +1058,7 @@ def salvar_observacao():
 def salvar_lembretes():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session['user_id'])
+    user = db.session.get(User, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     user.receber_lembretes = request.form.get('receber_lembretes') == '1'
@@ -1332,11 +1369,11 @@ def preview_ag_register():
 @app.route('/preview/ag/servicos')
 def preview_ag_servicos():
     tema_override = _build_ag_tema_override(request.args)
-    session['user_id']    = 9991
-    session['user_name']  = 'Carlos Silva'
-    session['user_email'] = 'carlos@preview.com'
-    session['is_preview'] = True
-    session.pop('is_guest', None)
+    session[_SESSION_USER_ID]    = 9991
+    session[_SESSION_USER_NAME]  = 'Carlos Silva'
+    session[_SESSION_USER_EMAIL] = 'carlos@preview.com'
+    session[_SESSION_IS_PREVIEW] = True
+    session.pop(_SESSION_IS_GUEST, None)
     resp = make_response(render_template('servicos.html',
         agendamento_info=None, dias_agenda=20, tema_override=tema_override,
         preview_mode=True, hide_fabs=True, preview_cats=_PREVIEW_CATS))
@@ -1347,10 +1384,10 @@ def preview_ag_servicos():
 def preview_demo_login():
     if request.args.get('origem') != 'editor':
         return '', 403
-    session['user_id']   = 9991
-    session['user_name'] = 'Cliente Demo'
-    session['tenant_id'] = 999
-    session['is_preview'] = True
+    session[_SESSION_USER_ID]   = 9991
+    session[_SESSION_USER_NAME] = 'Cliente Demo'
+    session[_SESSION_TENANT_ID] = 999
+    session[_SESSION_IS_PREVIEW] = True
     _next = request.args.get('next', '/servicos')
     if not _next.startswith('/') or _next.startswith('//'):
         _next = '/servicos'
@@ -1364,12 +1401,12 @@ def preview_demo_logout():
 @app.route('/confirmar-pedido', methods=['POST'])
 @limiter.limit('20 per minute')
 def confirmar_pedido():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
 
     data  = request.get_json()
     itens = data.get('itens', [])
-    _tid  = session.get('path_tenant_id') or session.get('tenant_id') or _api_tid()
+    _tid  = session.get(_SESSION_PATH_TENANT_ID) or session.get(_SESSION_TENANT_ID) or _api_tid()
 
     # validate type
     if not isinstance(itens, list):
@@ -1388,7 +1425,7 @@ def confirmar_pedido():
             total_calculado += _sf(item.get('preco', 0))
     total = total_calculado
 
-    pedido = Pedido(user_id=session['user_id'], total=total,
+    pedido = Pedido(user_id=session[_SESSION_USER_ID], total=total,
                     tenant_id=_tid)
     db.session.add(pedido)
     db.session.flush()
@@ -1406,7 +1443,7 @@ def confirmar_pedido():
 @app.route('/agendar', methods=['POST'])
 @limiter.limit('5 per minute')
 def agendar():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data = request.get_json() or {}
     pedido_id     = data.get('pedido_id')
@@ -1415,7 +1452,7 @@ def agendar():
     # Garantir que o pedido pertence ao usuário e ao tenant correto
     if pedido_id:
         _ped = db.session.get(Pedido, pedido_id)
-        if not _ped or _ped.user_id != session['user_id'] or _ped.tenant_id != _tid_ag:
+        if not _ped or _ped.user_id != session[_SESSION_USER_ID] or _ped.tenant_id != _tid_ag:
             return jsonify({'erro': 'pedido inválido'}), 403
     try:
         data_hora = datetime.fromisoformat(data_hora_str)
@@ -1424,7 +1461,7 @@ def agendar():
     if data_hora <= _agora_brt():
         return jsonify({'erro': 'Data inválida. Escolha uma data futura.'}), 400
     existente = (Agendamento.query
-                 .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid_ag)
+                 .filter_by(user_id=session[_SESSION_USER_ID], status='ativo', tenant_id=_tid_ag)
                  .filter(Agendamento.data_hora > _agora_brt())
                  .first())
     if existente:
@@ -1477,14 +1514,14 @@ def agendar():
         livres = [f for f in ativos if f['id'] not in ocupados_ids]
         if livres:
             funcionario_id = random.choice(livres)['id']
-    ag = Agendamento(user_id=session['user_id'], pedido_id=pedido_id,
+    ag = Agendamento(user_id=session[_SESSION_USER_ID], pedido_id=pedido_id,
                      data_hora=data_hora, funcionario_id=funcionario_id,
                      duracao_total=int(duracao_total) if duracao_total else None,
-                     tenant_id=session.get('path_tenant_id') or session.get('tenant_id') or _api_tid())
+                     tenant_id=session.get(_SESSION_PATH_TENANT_ID) or session.get(_SESSION_TENANT_ID) or _api_tid())
     db.session.add(ag)
     db.session.commit()
 
-    user = db.session.get(User, session['user_id'])
+    user = db.session.get(User, session[_SESSION_USER_ID])
     if user:
         _enviar_confirmacao_agendamento(user, data_hora)
 
@@ -1492,11 +1529,11 @@ def agendar():
 
 @app.route('/cancelar-agendamento/<int:ag_id>', methods=['POST'])
 def cancelar_agendamento(ag_id):
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
-    tid_cliente = session.get('path_tenant_id')
+    tid_cliente = session.get(_SESSION_PATH_TENANT_ID)
     ag = db.session.get(Agendamento, ag_id)
-    if not ag or ag.user_id != session['user_id']:
+    if not ag or ag.user_id != session[_SESSION_USER_ID]:
         return jsonify({'erro': 'não encontrado'}), 404
     if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -1543,7 +1580,7 @@ def cancelar_agendamento(ag_id):
 @app.route('/reagendar-agendamento', methods=['POST'])
 @limiter.limit('10 per minute')
 def reagendar_agendamento():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data = request.get_json(silent=True) or {}
     ag_id        = data.get('ag_id')
@@ -1551,9 +1588,9 @@ def reagendar_agendamento():
     barbeiro_id  = data.get('barbeiro_id')
     if not ag_id or not nova_dh_str:
         return jsonify({'erro': 'dados inválidos'}), 400
-    tid_cliente = session.get('path_tenant_id')
+    tid_cliente = session.get(_SESSION_PATH_TENANT_ID)
     ag = db.session.get(Agendamento, ag_id)
-    if not ag or ag.user_id != session['user_id']:
+    if not ag or ag.user_id != session[_SESSION_USER_ID]:
         return jsonify({'erro': 'não encontrado'}), 404
     if tid_cliente and ag.tenant_id != tid_cliente:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -1654,7 +1691,7 @@ def api_gestao_reagendar():
 
 @app.route('/api/lista-espera', methods=['POST'])
 def api_lista_espera_entrar():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data    = request.get_json(silent=True) or {}
     data_dh = data.get('data')
@@ -1667,21 +1704,21 @@ def api_lista_espera_entrar():
     if not tid:
         return jsonify({'erro': 'tenant inválido'}), 400
     existente = ListaEspera.query.filter_by(
-        tenant_id=tid, user_id=session['user_id'], data=data_dh).first()
+        tenant_id=tid, user_id=session[_SESSION_USER_ID], data=data_dh).first()
     if existente:
         return jsonify({'ok': True, 'ja_inscrito': True})
-    db.session.add(ListaEspera(tenant_id=tid, user_id=session['user_id'], data=data_dh))
+    db.session.add(ListaEspera(tenant_id=tid, user_id=session[_SESSION_USER_ID], data=data_dh))
     db.session.commit()
     return jsonify({'ok': True})
 
 @app.route('/api/lista-espera', methods=['DELETE'])
 def api_lista_espera_sair():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data_dh = request.args.get('data')
     tid = _api_tid()
     le = ListaEspera.query.filter_by(
-        tenant_id=tid, user_id=session['user_id'], data=data_dh).first()
+        tenant_id=tid, user_id=session[_SESSION_USER_ID], data=data_dh).first()
     if le:
         db.session.delete(le)
         db.session.commit()
@@ -1694,7 +1731,7 @@ def api_lista_espera_status():
     data_dh = request.args.get('data')
     tid = _api_tid()
     inscrito = ListaEspera.query.filter_by(
-        tenant_id=tid, user_id=session['user_id'], data=data_dh).first() is not None
+        tenant_id=tid, user_id=session[_SESSION_USER_ID], data=data_dh).first() is not None
     return jsonify({'inscrito': inscrito})
 
 def _notificar_lista_espera(tenant_id, data_str):
@@ -1744,7 +1781,7 @@ def meu_agendamento():
     if not _tid:
         return jsonify({'agendamento': None})
     ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid)
+          .filter_by(user_id=session[_SESSION_USER_ID], status='ativo', tenant_id=_tid)
           .order_by(Agendamento.data_hora.desc()).first())
     if not ag:
         return jsonify({'agendamento': None})
@@ -1762,7 +1799,7 @@ def meu_agendamento():
 
 @app.route('/atualizar-forma-pagamento', methods=['POST'])
 def atualizar_forma_pagamento():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data = request.get_json() or {}
     forma = data.get('forma', '')
@@ -1772,7 +1809,7 @@ def atualizar_forma_pagamento():
     if not _tid:
         return jsonify({'erro': 'tenant não identificado'}), 400
     ag = (Agendamento.query
-          .filter_by(user_id=session['user_id'], status='ativo', tenant_id=_tid)
+          .filter_by(user_id=session[_SESSION_USER_ID], status='ativo', tenant_id=_tid)
           .filter(Agendamento.data_hora > _agora_brt()).first())
     if not ag:
         return jsonify({'erro': 'agendamento não encontrado'}), 404
@@ -1781,7 +1818,7 @@ def atualizar_forma_pagamento():
     if ag.pedido_id and forma != 'cartao':
         EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
         pedido = db.session.get(Pedido, ag.pedido_id)
-        user   = db.session.get(User, session['user_id'])
+        user   = db.session.get(User, session[_SESSION_USER_ID])
         if pedido:
             _forma_map = {'dinheiro': 'dinheiro', 'pix': 'pix'}
             servicos = ', '.join(i.nome for i in pedido.itens) if pedido.itens else 'Serviço'
@@ -1806,7 +1843,7 @@ def meu_historico():
     if not _tid:
         return jsonify({'historico': []})
     ags = (Agendamento.query
-           .filter_by(user_id=session['user_id'], tenant_id=_tid)
+           .filter_by(user_id=session[_SESSION_USER_ID], tenant_id=_tid)
            .options(joinedload(Agendamento.funcionario))
            .order_by(Agendamento.data_hora.desc()).limit(20).all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
@@ -1901,7 +1938,7 @@ def get_tenant_atual():
             return tenant
 
     # 2. Rota por caminho (dev / domínio único) via session
-    tid = session.get('path_tenant_id')
+    tid = session.get(_SESSION_PATH_TENANT_ID)
     if tid:
         tenant = db.session.get(Tenant, tid)
         if tenant and tenant.assinatura_ativa:
@@ -1917,7 +1954,7 @@ def inject_tenant():
         t = None
 
     # Fallback: gestão ou repersonalizar logados
-    _fallback_tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
+    _fallback_tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
     if t is None and _fallback_tid:
         try:
             t = db.session.get(Tenant, _fallback_tid)
@@ -1925,7 +1962,7 @@ def inject_tenant():
             t = None
 
     # Fallback para preview sem banco
-    if t is None and session.get('is_preview'):
+    if t is None and session.get(_SESSION_IS_PREVIEW):
         t = _MockTenant()
 
     tema_config = {}
@@ -2039,7 +2076,7 @@ def inject_tenant():
     # FAB visibility — número/URL é pré-requisito; 'mostrar' só pode esconder, nunca mostrar sem dado
     fab_wpp_mostrar = False
     fab_maps_mostrar = False
-    if t and not session.get('is_preview'):
+    if t and not session.get(_SESSION_IS_PREVIEW):
         if t.whatsapp:
             try:
                 wpp_cfg = json.loads(t.fab_wpp) if t.fab_wpp else {}
@@ -2107,13 +2144,13 @@ def api_tenant_config_put():
 def api_categorias_listar():
     try:
         # Gestão owner e Bearer token têm prioridade — nunca mostrar preview a donos reais
-        tid = session.get('gestao_tenant_id') or verificar_token(request)
+        tid = session.get(_SESSION_GESTAO_TENANT_ID) or verificar_token(request)
         if not tid:
             # Preview mode (personalizar) — sem tenant real
-            if session.get('is_preview'):
+            if session.get(_SESSION_IS_PREVIEW):
                 return jsonify([{'id': c['id'], 'nome': c['nome'], 'icone': c['icone'], 'ordem': i} for i, c in enumerate(_PREVIEW_CATS)])
             # Agendamento (cliente visitando o site)
-            tid = session.get('tenant_id') or session.get('path_tenant_id')
+            tid = session.get(_SESSION_TENANT_ID) or session.get(_SESSION_PATH_TENANT_ID)
             if not tid:
                 t = get_tenant_atual()
                 tid = t.id if t else None
@@ -2159,13 +2196,13 @@ def api_categoria_detalhe(cid):
 def api_servicos_listar():
     try:
         # Gestão owner e Bearer token têm prioridade — nunca mostrar preview a donos reais
-        tid = session.get('gestao_tenant_id') or verificar_token(request)
+        tid = session.get(_SESSION_GESTAO_TENANT_ID) or verificar_token(request)
         if not tid:
             # Preview mode (personalizar) — sem tenant real
-            if session.get('is_preview'):
+            if session.get(_SESSION_IS_PREVIEW):
                 return jsonify(_PREVIEW_SVCS)
             # Agendamento (cliente visitando o site)
-            tid = session.get('tenant_id') or session.get('path_tenant_id')
+            tid = session.get(_SESSION_TENANT_ID) or session.get(_SESSION_PATH_TENANT_ID)
             if not tid:
                 t = get_tenant_atual()
                 tid = t.id if t else None
@@ -2738,7 +2775,7 @@ def api_status_pagamentos():
 @app.route('/api/criar-pagamento', methods=['POST'])
 @limiter.limit('10 per minute')
 def criar_pagamento():
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     data      = request.get_json(silent=True) or {}
     metodo    = data.get('metodo', 'pix')
@@ -2819,7 +2856,7 @@ def criar_pagamento():
 @app.route('/api/verificar-pagamento/<int:mp_payment_id>', methods=['GET'])
 @limiter.limit('30 per minute')
 def verificar_pagamento(mp_payment_id):
-    if 'user_id' not in session:
+    if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     pedido_id  = request.args.get('pedido_id', type=int)
     mp_token_s = _get_setting('mp_token', _api_tid())
@@ -2948,7 +2985,7 @@ def api_usuarios():
         db.session.add(user)
         db.session.commit()
         return jsonify({'ok': True, 'id': user.id, 'usuario': user_dict(user)})
-    usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).all()
+    usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).limit(5000).all()
     return jsonify([user_dict(u) for u in usuarios])
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
@@ -2967,7 +3004,9 @@ def api_usuario(uid):
     ags = (Agendamento.query
            .filter_by(user_id=uid, tenant_id=tid)
            .options(joinedload(Agendamento.funcionario), joinedload(Agendamento.pedido))
-           .order_by(Agendamento.data_hora.desc()).all())
+           .order_by(Agendamento.data_hora.desc())
+           .limit(500)
+           .all())
     agendamentos = []
     for ag in ags:
         if ag.funcionario_id == 0:
@@ -2996,7 +3035,10 @@ def api_usuario(uid):
 def api_pedidos():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.filter_by(tenant_id=tid).order_by(Pedido.criado_em.desc()).all()
+    pedidos = (Pedido.query
+               .filter_by(tenant_id=tid)
+               .order_by(Pedido.criado_em.desc())
+               .limit(5000).all())
     return jsonify([pedido_dict(p) for p in pedidos])
 
 @app.route('/api/pedidos/<int:pid>', methods=['GET'])
@@ -3026,9 +3068,9 @@ def api_pedido_status(pid):
 def api_stats_servicos():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True, tenant_id=tid).all()}
+    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True, tenant_id=tid).limit(1000).all()}
     contagem = {}
-    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').all()
+    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').limit(5000).all()
     for p in pedidos:
         for i in p.itens:
             nome = (i.nome or '').strip()
@@ -3074,7 +3116,7 @@ def api_stats_barbeiros():
 def api_stats_ags_mes():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').all()
+    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').limit(5000).all()
     contagem = {}
     for ag in ags:
         chave = ag.data_hora.strftime('%Y-%m')
@@ -3087,7 +3129,7 @@ def api_stats_ags_dia():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
     dias_pt = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').all()
+    ags = Agendamento.query.filter(Agendamento.tenant_id == tid, Agendamento.status != 'cancelado').limit(5000).all()
     contagem = {d: 0 for d in dias_pt}
     for ag in ags:
         contagem[dias_pt[ag.data_hora.weekday()]] += 1
@@ -3102,7 +3144,7 @@ def api_stats_formas():
         Agendamento.tenant_id == tid,
         Agendamento.status != 'cancelado',
         Agendamento.forma_pagamento.isnot(None)
-    ).all()
+    ).limit(5000).all()
     contagem = {}
     for ag in ags:
         f = (ag.forma_pagamento or 'não informado').strip()
@@ -3116,7 +3158,7 @@ def api_stats_formas():
 def api_stats_receita_mes():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).limit(5000).all()
     contagem = {}
     for e in entradas:
         chave = e.criado_em.strftime('%Y-%m')
@@ -3128,7 +3170,7 @@ def api_stats_receita_mes():
 def api_stats_receita_forma():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).limit(5000).all()
     contagem = {}
     for e in entradas:
         f = (e.forma or 'dinheiro').strip()
@@ -3141,7 +3183,7 @@ def api_stats_receita_forma():
 def api_stats_pedidos_status():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.filter_by(tenant_id=tid).all()
+    pedidos = Pedido.query.filter_by(tenant_id=tid).limit(5000).all()
     contagem = {}
     for p in pedidos:
         s = p.status or 'pendente'
@@ -3154,7 +3196,7 @@ def api_stats_pedidos_status():
 def api_stats_categorias():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').all()
+    pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').limit(5000).all()
     contagem = {}
     for p in pedidos:
         for i in p.itens:
@@ -3164,6 +3206,8 @@ def api_stats_categorias():
     resultado = sorted([{'categoria': k, 'total': v} for k, v in contagem.items()],
                        key=lambda x: x['total'], reverse=True)
     return jsonify(resultado)
+
+CSV_LIMIT = 500
 
 @app.route('/api/export', methods=['GET'])
 def api_export():
@@ -3203,7 +3247,7 @@ def api_export():
         q = Agendamento.query.filter(Agendamento.tenant_id == tid)
         if d_ini: q = q.filter(Agendamento.data_hora >= d_ini)
         if d_fim: q = q.filter(Agendamento.data_hora <= d_fim)
-        for ag in q.order_by(Agendamento.data_hora.desc()).all():
+        for ag in q.order_by(Agendamento.data_hora.desc()).limit(CSV_LIMIT).all():
             user   = db.session.get(User, ag.user_id)
             pedido = db.session.get(Pedido, ag.pedido_id) if ag.pedido_id else None
             servs  = ', '.join(i.nome for i in pedido.itens) if pedido else '—'
@@ -3218,14 +3262,14 @@ def api_export():
         q = EntradaMonetaria.query.filter(EntradaMonetaria.tenant_id == tid)
         if d_ini: q = q.filter(EntradaMonetaria.criado_em >= d_ini)
         if d_fim: q = q.filter(EntradaMonetaria.criado_em <= d_fim)
-        for e in q.order_by(EntradaMonetaria.criado_em.desc()).all():
+        for e in q.order_by(EntradaMonetaria.criado_em.desc()).limit(CSV_LIMIT).all():
             w.writerow([e.criado_em.strftime('%d/%m/%Y'), e.descricao,
                         f'{e.valor:.2f}'.replace('.',','), FORMA_MAP.get(e.forma or '', e.forma or '—')])
 
     elif tipo == 'clientes':
         w.writerow(['Nome','Email','Contato','Cadastrado em'])
         q = User.query.filter(User.tenant_id == tid)
-        for c in q.order_by(User.name).all():
+        for c in q.order_by(User.name).limit(CSV_LIMIT).all():
             w.writerow([c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
 
     elif tipo == 'servicos':
@@ -3233,7 +3277,7 @@ def api_export():
         q = Pedido.query.filter(Pedido.tenant_id == tid)
         if d_ini: q = q.filter(Pedido.criado_em >= d_ini)
         if d_fim: q = q.filter(Pedido.criado_em <= d_fim)
-        for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).all():
+        for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).limit(CSV_LIMIT).all():
             for item in p.itens:
                 w.writerow([p.criado_em.strftime('%d/%m/%Y'),
                             p.usuario.name if p.usuario else '—',
@@ -3336,12 +3380,13 @@ def api_agendamentos():
            .filter_by(tenant_id=tid)
            .options(joinedload(Agendamento.usuario), joinedload(Agendamento.funcionario))
            .order_by(Agendamento.data_hora.asc())
+           .limit(2000)
            .all())
     pedido_ids = [ag.pedido_id for ag in ags if ag.pedido_id]
     pedidos = (
         {p.id: p for p in
          Pedido.query.filter(Pedido.tenant_id == tid, Pedido.id.in_(pedido_ids))
-                     .options(joinedload(Pedido.itens)).all()}
+                     .options(joinedload(Pedido.itens)).limit(2000).all()}
         if pedido_ids else {}
     )
     _, gestor_nome = _gestor_como_barbeiro(tid)
@@ -3373,7 +3418,7 @@ def api_agendamentos():
 def api_entradas():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).order_by(EntradaMonetaria.criado_em.desc()).all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).order_by(EntradaMonetaria.criado_em.desc()).limit(5000).all()
     return jsonify([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
         'forma': e.forma, 'criado_em': e.criado_em.isoformat(),
@@ -3420,7 +3465,7 @@ def api_fotos_listar():
     q = FotoServico.query.filter_by(tenant_id=tid)
     if categoria:
         q = q.filter_by(categoria=categoria)
-    fotos = q.order_by(FotoServico.criado_em.desc()).all()
+    fotos = q.order_by(FotoServico.criado_em.desc()).limit(1000).all()
     return jsonify([{
         'id': f.id,
         'categoria': f.categoria,
@@ -3816,7 +3861,7 @@ def api_funcionarios_login():
 def api_funcionarios_listar():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    funs = Funcionario.query.filter_by(tenant_id=tid, ativo=True).order_by(Funcionario.nome).all()
+    funs = Funcionario.query.filter_by(tenant_id=tid, ativo=True).order_by(Funcionario.nome).limit(5000).all()
     return jsonify([f.to_dict() for f in funs])
 
 @app.route('/api/funcionarios', methods=['POST'])
@@ -4037,7 +4082,7 @@ def termos():
 
 def _gestao_login_required():
     """Retorna None se ok, ou um redirect se não autenticado."""
-    tid = session.get('gestao_tenant_id') or session.get('reperson_tid')
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
     if not tid:
         return redirect(url_for('gestao_login'))
     if not db.session.get(Tenant, tid):
@@ -4046,7 +4091,7 @@ def _gestao_login_required():
     return None
 
 def _gestao_tenant():
-    return db.session.get(Tenant, session.get('gestao_tenant_id') or session.get('reperson_tid'))
+    return db.session.get(Tenant, session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID))
 
 def _gestao_is_owner():
     return not session.get('gestao_func_id')
@@ -4091,7 +4136,7 @@ def _gestao_owner_required():
 
 @app.context_processor
 def _gestao_template_ctx():
-    if session.get('gestao_tenant_id') or session.get('reperson_tid'):
+    if session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID):
         return {'gestao_is_owner': _gestao_is_owner(), 'gestao_perms': _gestao_perms()}
     return {}
 
@@ -4110,7 +4155,7 @@ def _csrf_ok():
 @app.route('/gestao/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'])
 def gestao_login():
-    if session.get('gestao_tenant_id'):
+    if session.get(_SESSION_GESTAO_TENANT_ID):
         return redirect(url_for('gestao_dashboard'))
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
@@ -4119,8 +4164,8 @@ def gestao_login():
         if tenant and check_password_hash(tenant.password, senha):
             session.clear()
             session.permanent = True
-            session['gestao_tenant_id'] = tenant.id
-            session['gestao_nome'] = tenant.nome
+            session[_SESSION_GESTAO_TENANT_ID] = tenant.id
+            session[_SESSION_GESTAO_NOME] = tenant.nome
             return redirect(url_for('gestao_dashboard'))
         # Tenta login como funcionário (checa senha em todos os candidatos para evitar ambiguidade de tenant)
         func = next((c for c in Funcionario.query.filter_by(email=email, ativo=True).all()
@@ -4130,9 +4175,9 @@ def gestao_login():
             if t and t.ativo:
                 session.clear()
                 session.permanent = True
-                session['gestao_tenant_id'] = func.tenant_id
-                session['gestao_func_id']   = func.id
-                session['gestao_nome']      = func.nome
+                session[_SESSION_GESTAO_TENANT_ID] = func.tenant_id
+                session[_SESSION_GESTAO_FUNC_ID]   = func.id
+                session[_SESSION_GESTAO_NOME]      = func.nome
                 return redirect(url_for('gestao_dashboard'))
         flash('E-mail ou senha incorretos.', 'error')
     return render_template('gestao/login.html')
@@ -4223,7 +4268,7 @@ def gestao_agendamentos():
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
     token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
+    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
     clientes_json = _safe_json([
         {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
         for c in clientes
@@ -4292,7 +4337,7 @@ def gestao_clientes():
     if perm: return perm
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).all()
+    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
     clientes_json = _safe_json([{
         'id': c.id, 'name': c.name, 'email': c.email,
         'contact': c.contact or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
@@ -4344,7 +4389,7 @@ def gestao_entradas():
                 'total': p.total,
                 'usuario': ag.usuario.name if ag.usuario else '—',
             })
-    entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).all()
+    entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).limit(5000).all()
     entradas_json = _safe_json([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
         'forma': e.forma or 'dinheiro', 'criado_em': e.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
@@ -4395,7 +4440,7 @@ def gestao_precos():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
     token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
-    servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).all()
+    servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).limit(1000).all()
     if request.method == 'POST':
         for s in servicos:
             val = request.form.get(f'preco_{s.id}', '').strip()
@@ -4589,7 +4634,7 @@ def gestao_horarios():
     dias_ag_s = _get_setting('dias_agenda', _tid)
     dias_fechados_s = _get_setting('dias_fechados', _tid)
     dias_fechados = json.loads(dias_fechados_s.value) if dias_fechados_s and dias_fechados_s.value else []
-    especiais = HorarioEspecial.query.filter_by(tenant_id=tenant.id).order_by(HorarioEspecial.data).all()
+    especiais = HorarioEspecial.query.filter_by(tenant_id=tenant.id).order_by(HorarioEspecial.data).limit(1000).all()
     config_geral = {
         'slot_minutos': int(slot_s.value) if slot_s and slot_s.value else 40,
         'dias_agenda': int(dias_ag_s.value) if dias_ag_s and dias_ag_s.value else 20,
@@ -4673,7 +4718,7 @@ def gestao_credenciais():
                 return redirect(url_for('gestao_credenciais'))
             tenant.password = generate_password_hash(nova_senha)
         db.session.commit()
-        session['gestao_nome'] = tenant.nome
+        session[_SESSION_GESTAO_NOME] = tenant.nome
         flash('Dados atualizados.', 'success')
         return redirect(url_for('gestao_credenciais'))
     def _sv(key): s = _get_setting(key, tenant.id); return s.value if s else ''
@@ -4863,7 +4908,7 @@ def api_cadastro_personalizar():
     _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     session.pop('is_preview', None)
-    session['onb_tenant_id'] = tenant.id
+    session[_SESSION_ONB_TENANT_ID] = tenant.id
     threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
     return jsonify({'ok': True, 'slug': slug, 'tenant_id': tenant.id})
 
@@ -4893,7 +4938,7 @@ def api_repersonalizar_auth():
     if not tenant.assinatura_ativa:
         return jsonify({'erro': 'Conta sem assinatura ativa'}), 403
     tema = json.loads(tenant.tema) if tenant.tema else {}
-    session['reperson_tid'] = tenant.id
+    session[_SESSION_REPERSON_TID] = tenant.id
     return jsonify({
         'ok': True,
         'tenant_id': tenant.id,
@@ -4909,7 +4954,7 @@ def api_repersonalizar_auth():
 def api_repersonalizar_credenciais():
     d = request.get_json(force=True) or {}
     tid_req = d.get('tenant_id')
-    if not tid_req or session.get('reperson_tid') != tid_req:
+    if not tid_req or session.get(_SESSION_REPERSON_TID) != tid_req:
         return jsonify({'erro': 'Sessão inválida'}), 403
     tenant = db.session.get(Tenant, tid_req)
     if not tenant or not tenant.assinatura_ativa:
@@ -4946,7 +4991,7 @@ def api_repersonalizar_credenciais():
 def api_repersonalizar_salvar():
     d = request.get_json(force=True) or {}
     tid_req = d.get('tenant_id')
-    if not tid_req or session.get('reperson_tid') != tid_req:
+    if not tid_req or session.get(_SESSION_REPERSON_TID) != tid_req:
         return jsonify({'erro': 'Sessão inválida'}), 403
     tenant = db.session.get(Tenant, tid_req)
     if not tenant:
@@ -4975,7 +5020,7 @@ def api_repersonalizar_status():
 def api_pagamento_criar_tema():
     d = request.get_json(force=True) or {}
     tid_req = d.get('tenant_id')
-    if not tid_req or session.get('reperson_tid') != tid_req:
+    if not tid_req or session.get(_SESSION_REPERSON_TID) != tid_req:
         return jsonify({'erro': 'Sessão inválida'}), 403
     tenant = db.session.get(Tenant, tid_req)
     if not tenant:
@@ -5130,7 +5175,7 @@ def api_pagamento_cartao():
 def admin_painel():
     if request.method == 'POST':
         if request.form.get('key', '') == API_TOKEN:
-            session['admin_ok'] = True
+            session[_SESSION_ADMIN_OK] = True
         return redirect(url_for('admin_painel'))
     if not session.get('admin_ok') or API_TOKEN == '':
         return '''<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
@@ -5141,7 +5186,7 @@ def admin_painel():
           <br><br>
           <button type="submit" style="padding:10px 28px;background:#C9A96E;color:#000;border:none;border-radius:6px;font-weight:bold;cursor:pointer">Entrar</button>
         </form></body></html>''', 401
-    tenants = Tenant.query.order_by(Tenant.id.desc()).all()
+    tenants = Tenant.query.order_by(Tenant.id.desc()).limit(5000).all()
     mp_pub  = _get_setting('admin_mp_public_key')
 
     now = datetime.utcnow()
@@ -5332,8 +5377,8 @@ def admin_entrar_gestao(tid):
     t = db.session.get(Tenant, tid)
     if not t:
         return 'Tenant não encontrado', 404
-    session['gestao_tenant_id'] = t.id
-    session['gestao_nome'] = t.nome
+    session[_SESSION_GESTAO_TENANT_ID] = t.id
+    session[_SESSION_GESTAO_NOME] = t.nome
     return redirect(url_for('gestao_dashboard'))
 
 @app.route('/api/pagamento/criar', methods=['POST'])
@@ -5551,11 +5596,11 @@ def tenant_loja(slug):
     tenant = get_tenant_by_slug(slug)
     if not tenant or not tenant.assinatura_ativa or not getattr(tenant, 'loja_ativa', False):
         return redirect(url_for('tenant_site', slug=slug))
-    if session.get('user_id') and session.get('path_tenant_id') and session['path_tenant_id'] != tenant.id:
+    if session.get(_SESSION_USER_ID) and session.get(_SESSION_PATH_TENANT_ID) and session[_SESSION_PATH_TENANT_ID] != tenant.id:
         session.pop('user_id', None)
         session.pop('user_name', None)
         session.pop('user_email', None)
-    session['path_tenant_id'] = tenant.id
+    session[_SESSION_PATH_TENANT_ID] = tenant.id
     produtos = Produto.query.filter_by(tenant_id=tenant.id).order_by(Produto.criado_em.desc()).all()
     return render_template('loja.html', tenant=tenant, produtos=produtos,
                            preview_mode=False, tema_override=None, hide_fabs=False)
@@ -5577,11 +5622,11 @@ def tenant_site(slug):
                 f'<div><h2 style="color:#C9A96E">✦ {tenant.nome}</h2>'
                 '<p style="color:#888;margin-top:.5rem">Site em ativação — aguardando confirmação do pagamento.</p>'
                 '</div></body></html>', 402)
-    if session.get('user_id') and session.get('path_tenant_id') and session['path_tenant_id'] != tenant.id:
+    if session.get(_SESSION_USER_ID) and session.get(_SESSION_PATH_TENANT_ID) and session[_SESSION_PATH_TENANT_ID] != tenant.id:
         session.pop('user_id', None)
         session.pop('user_name', None)
         session.pop('user_email', None)
-    session['path_tenant_id'] = tenant.id
+    session[_SESSION_PATH_TENANT_ID] = tenant.id
     session.pop('is_preview', None)
     session.pop('tenant_id', None)
     if request.args.get('p') == '1':
@@ -5589,7 +5634,7 @@ def tenant_site(slug):
         return render_template('index.html', user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True)
     user = None
     if 'user_id' in session:
-        user = db.session.get(User, session['user_id'])
+        user = db.session.get(User, session[_SESSION_USER_ID])
     return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
 
 @app.errorhandler(413)
