@@ -924,6 +924,7 @@ main { flex: 1; }
 .carrinho-lista {
   list-style: none;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 0.8rem 0;
 }
@@ -965,9 +966,11 @@ main { flex: 1; }
 }
 .carrinho-rodape {
   padding: 1rem 1.4rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 0.8rem;
 }
 .carrinho-total {
