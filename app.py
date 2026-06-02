@@ -5220,7 +5220,7 @@ def admin_painel():
     receita_total = sum(float(asn.valor_total or 0) for t in tenants for asn in t.assinaturas if asn.status == 'ativo')
 
     return render_template('admin_painel.html',
-        tenants=tenants, key=senha,
+        tenants=tenants, key=API_TOKEN,
         mp_public_key=mp_pub.value if mp_pub else '',
         mp_token_set=bool(get_mp_token()),
         chart_data=chart_data,
