@@ -440,6 +440,9 @@ with app.app_context():
     for _tbl in db.metadata.sorted_tables:
         if _tbl.name not in _existing:
             _tbl.create(db.engine)
+    # Re-inspeciona após criar tabelas novas (colunas já existem nelas)
+    _inspector = _inspect(db.engine)
+    _existing = set(_inspector.get_table_names())
     # auto-migrate: add new columns if missing
     _tenant_cols = {c['name'] for c in _inspector.get_columns('tenant')} if 'tenant' in _existing else set()
     for _col, _type in [
