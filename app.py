@@ -714,6 +714,13 @@ def index():
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
 
+@app.route('/register')
+def register():
+    return redirect(url_for('index'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    return redirect(url_for('index'))
 
 @app.route('/login-rapido', methods=['POST'])
 @limiter.limit('15 per minute')
