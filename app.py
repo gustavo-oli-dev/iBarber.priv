@@ -1,9 +1,10 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, make_response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, make_response, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from sqlalchemy.orm import joinedload
+from sqlalchemy import inspect as _sa_inspect
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
@@ -12,11 +13,11 @@ import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
 from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
+from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timedelta, timezone
-from werkzeug.utils import secure_filename
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from PIL import Image
 
@@ -432,14 +433,13 @@ class Produto(db.Model):
 
 
 with app.app_context():
-    from sqlalchemy import inspect as _inspect
-    _inspector = _inspect(db.engine)
+    _inspector = _sa_inspect(db.engine)
     _existing = set(_inspector.get_table_names())
     for _tbl in db.metadata.sorted_tables:
         if _tbl.name not in _existing:
             _tbl.create(db.engine)
     # Re-inspeciona após criar tabelas novas (colunas já existem nelas)
-    _inspector = _inspect(db.engine)
+    _inspector = _sa_inspect(db.engine)
     _existing = set(_inspector.get_table_names())
     # auto-migrate: add new columns if missing
     _tenant_cols = {c['name'] for c in _inspector.get_columns('tenant')} if 'tenant' in _existing else set()
@@ -593,19 +593,7 @@ _DIAS_KEYS = ['seg','ter','qua','qui','sex','sab','dom']
 MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho',
             'julho','agosto','setembro','outubro','novembro','dezembro']
 
-DOMINIOS_VALIDOS = {
-    'gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com',
-    'icloud.com', 'live.com', 'msn.com', 'bol.com.br',
-    'uol.com.br', 'terra.com.br', 'globo.com', 'protonmail.com',
-}
 
-_MANHA = ['08:00','08:40','09:20','10:00','10:40','11:20']
-_TARDE = ['14:20','15:00','15:40','16:20','17:00','17:40','18:20','19:00']
-SLOTS_PADRAO = {
-    0: _MANHA,                 # Seg – só manhã
-    **{i: _MANHA + _TARDE for i in range(1, 6)},
-    6: [],                     # Dom – fechado
-}
 
 def _safe_json(data):
     """json.dumps seguro para embedding em <script>: escapa <, > e & para evitar XSS."""
@@ -666,7 +654,6 @@ def _gerar_slots(abertura='08:00', fechamento='18:00', duracao=40):
 
 @app.route('/manifest.json')
 def manifest():
-    from flask import send_from_directory
     return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
 
 _ADMIN_WEB = os.path.join(os.path.dirname(__file__), 'admin_web')
@@ -674,7 +661,6 @@ _ADMIN_WEB = os.path.join(os.path.dirname(__file__), 'admin_web')
 @app.route('/admin', defaults={'path': ''})
 @app.route('/admin/<path:path>')
 def serve_admin_web(path):
-    from flask import send_from_directory
     target = os.path.join(_ADMIN_WEB, path)
     if path and os.path.isfile(target):
         return send_from_directory(_ADMIN_WEB, path)
@@ -691,13 +677,6 @@ def index():
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
 
-@app.route('/register')
-def register():
-    return redirect(url_for('index'))
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    return redirect(url_for('index'))
 
 @app.route('/login-rapido', methods=['POST'])
 @limiter.limit('15 per minute')
@@ -1818,9 +1797,6 @@ def atualizar_forma_pagamento():
     db.session.commit()
     return jsonify({'ok': True})
 
-def _to_brt(dt):
-    """Converte datetime UTC para BRT (UTC-3) para exibição."""
-    return dt - timedelta(hours=3) if dt else dt
 
 @app.route('/meu-historico')
 def meu_historico():
@@ -3007,7 +2983,7 @@ def api_usuario(uid):
             total = ag.pedido.total
         agendamentos.append({
             'id':        ag.id,
-            'data_hora': _to_brt(ag.data_hora).isoformat() if ag.data_hora else None,
+            'data_hora': (ag.data_hora - timedelta(hours=3)).isoformat() if ag.data_hora else None,
             'status':    ag.status,
             'barbeiro':  barbeiro,
             'servicos':  servicos,
@@ -3706,7 +3682,6 @@ def enviar_retorno_automatico():
 def _migrate_db():
     """Adiciona colunas novas sem quebrar instâncias existentes."""
     try:
-        from sqlalchemy import text
         with db.engine.connect() as conn:
             conn.execute(text(
                 "ALTER TABLE tenant ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"
@@ -4127,7 +4102,6 @@ def _csrf_ok():
     if not origin:
         return True
     try:
-        from urllib.parse import urlparse
         o_host = urlparse(origin).hostname or ''
     except Exception:
         o_host = ''
@@ -5170,7 +5144,6 @@ def admin_painel():
     tenants = Tenant.query.order_by(Tenant.id.desc()).all()
     mp_pub  = _get_setting('admin_mp_public_key')
 
-    from collections import defaultdict
     now = datetime.utcnow()
     chart_data = []
     for i in range(11, -1, -1):
@@ -5628,6 +5601,5 @@ def erro_rate_limit(e):
     return jsonify({'erro': 'Muitas tentativas. Aguarde um momento.'}), 429
 
 if __name__ == '__main__':
-    import threading
     threading.Thread(target=_udp_broadcast, daemon=True).start()
     app.run(host='0.0.0.0', debug=True)
