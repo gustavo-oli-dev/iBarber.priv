@@ -851,7 +851,7 @@ def servicos():
     if ag:
         _forma_label = {'dinheiro': 'Pagar no local', 'pix': 'PIX', 'cartao': 'Cartão'}
         _, gestor_nome = _gestor_como_barbeiro(_api_tid())
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             _barb_nome = gestor_nome or 'Gestor'
         elif ag.funcionario:
             _barb_nome = ag.funcionario.nome
@@ -1515,6 +1515,8 @@ def agendar():
         funcionario_id = int(funcionario_id)
         if funcionario_id not in _ativos_ids:
             return jsonify({'erro': 'funcionário inválido'}), 400
+        if funcionario_id == 0:
+            funcionario_id = None  # proprietário não tem registro em funcionario
     else:
         # Auto-atribuir funcionário livre
         ocupados_ids = {ag.funcionario_id for ag in ags_slot if ag.funcionario_id}
@@ -1635,7 +1637,7 @@ def reagendar_agendamento():
         _ativos_ids_r = {f['id'] for f in ativos} | {0}
         if int(barbeiro_id) not in _ativos_ids_r:
             return jsonify({'erro': 'funcionário inválido'}), 400
-        ag.funcionario_id = int(barbeiro_id)
+        ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento
     user = db.session.get(User, ag.user_id)
@@ -1688,7 +1690,7 @@ def api_gestao_reagendar():
         _ativos_ids_g = {f['id'] for f in ativos} | {0}
         if int(barbeiro_id) not in _ativos_ids_g:
             return jsonify({'erro': 'funcionário inválido'}), 400
-        ag.funcionario_id = int(barbeiro_id)
+        ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento pela gestão
     user = db.session.get(User, ag.user_id)
@@ -1792,7 +1794,7 @@ def meu_agendamento():
           .order_by(Agendamento.data_hora.desc()).first())
     if not ag:
         return jsonify({'agendamento': None})
-    if ag.funcionario_id == 0:
+    if ag.funcionario_id in (0, None):
         _, func_nome = _gestor_como_barbeiro(ag.tenant_id)
     else:
         func_nome = ag.funcionario.nome if ag.funcionario else None
@@ -1864,7 +1866,7 @@ def meu_historico():
     resultado = []
     for ag in ags:
         p = pedidos.get(ag.pedido_id)
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             barbeiro = gestor_nome or 'Gestor'
         elif ag.funcionario:
             barbeiro = ag.funcionario.nome
@@ -3016,7 +3018,7 @@ def api_usuario(uid):
            .all())
     agendamentos = []
     for ag in ags:
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             barbeiro = gestor_nome or 'Proprietário'
         elif ag.funcionario:
             barbeiro = ag.funcionario.nome
@@ -3104,7 +3106,7 @@ def api_stats_barbeiros():
            .options(joinedload(Agendamento.funcionario), joinedload(Agendamento.pedido))
            .all())
     for ag in ags:
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             nome = gestor_nome or 'Gestor'
         elif ag.funcionario:
             nome = ag.funcionario.nome
@@ -3401,7 +3403,7 @@ def api_agendamentos():
     for ag in ags:
         u = ag.usuario
         p = pedidos.get(ag.pedido_id)
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             barbeiro = gestor_nome or 'Gestor'
         elif ag.funcionario:
             barbeiro = ag.funcionario.nome
@@ -4222,7 +4224,7 @@ def gestao_dashboard():
     for ag in ags:
         u = ag.usuario
         p = pedidos_map.get(ag.pedido_id)
-        if ag.funcionario_id == 0:
+        if ag.funcionario_id in (0, None):
             barbeiro = gestor_nome or 'Gestor'
         elif ag.funcionario:
             barbeiro = ag.funcionario.nome
