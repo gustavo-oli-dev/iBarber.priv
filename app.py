@@ -1076,7 +1076,7 @@ def salvar_lembretes():
     db.session.commit()
     return redirect(url_for('perfil'))
 
-def _enviar_email(dest, assunto, html):
+def _enviar_email(dest, assunto, _corpo):
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = assunto
@@ -1098,7 +1098,7 @@ def _enviar_confirmacao_agendamento(user, data_hora):
         return
     data_fmt = f"{DIAS_PT[data_hora.weekday()]}, {data_hora.day} de {MESES_PT[data_hora.month-1]}"
     hora_fmt = data_hora.strftime('%H:%M')
-    html = f"""
+    _corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Agendamento Confirmado!</h2>
@@ -1114,14 +1114,14 @@ def _enviar_confirmacao_agendamento(user, data_hora):
       </p>
     </div>
     """
-    _enviar_email(user.email, 'Agendamento confirmado — Barbearia', html)
+    _enviar_email(user.email, 'Agendamento confirmado — Barbearia', _corpo)
 
 def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
     if not user or not getattr(user, 'email', None):
         return
     data_fmt = f"{DIAS_PT[data_hora.weekday()]}, {data_hora.day} de {MESES_PT[data_hora.month-1]}"
     hora_fmt = data_hora.strftime('%H:%M')
-    html = f"""
+    _corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#f87171;margin-top:0;">⚠️ Agendamento Cancelado</h2>
@@ -1140,7 +1140,7 @@ def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
       <p style="color:#888;font-size:13px;">— {tenant_nome}</p>
     </div>
     """
-    _enviar_email(user.email, f'Agendamento cancelado — {tenant_nome}', html)
+    _enviar_email(user.email, f'Agendamento cancelado — {tenant_nome}', _corpo)
 
 def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
     """Retorna agendamentos futuros ativos filtrados por data e/ou funcionario_id."""
@@ -1176,7 +1176,7 @@ def _enviar_comprovante_pagamento(user, pedido):
         f'R$ {i.preco:.2f}</td></tr>'
         for i in pedido.itens
     ])
-    html = f"""
+    _corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Pagamento Confirmado!</h2>
@@ -1192,7 +1192,7 @@ def _enviar_comprovante_pagamento(user, pedido):
       <p style="color:#888;font-size:13px;">Obrigado por escolher nossa barbearia!</p>
     </div>
     """
-    _enviar_email(user.email, 'Comprovante de pagamento — Barbearia', html)
+    _enviar_email(user.email, 'Comprovante de pagamento — Barbearia', _corpo)
 
 @app.route('/logout')
 def logout():
@@ -1765,7 +1765,7 @@ def _notificar_lista_espera(tenant_id, data_str):
             data_fmt = f"{DIAS_PT[data_obj.weekday()]}, {data_obj.day} de {MESES_PT[data_obj.month-1]}"
         except Exception:
             data_fmt = data_str
-        html = f"""
+        _corpo = f"""
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#C9A96E;margin-top:0;">Abriu uma vaga!</h2>
@@ -1781,7 +1781,7 @@ def _notificar_lista_espera(tenant_id, data_str):
           <p style="color:#888;font-size:12px;">Corra, as vagas são limitadas!</p>
         </div>
         """
-        ok = _enviar_email(user.email, f'Vaga disponível — {nome_barbearia}', html)
+        ok = _enviar_email(user.email, f'Vaga disponível — {nome_barbearia}', _corpo)
         if ok:
             le.notificado_em = datetime.utcnow()
     db.session.commit()
@@ -3730,7 +3730,7 @@ def enviar_retorno_automatico():
                 tenant = db.session.get(Tenant, ag.tenant_id)
                 nome_b = tenant.nome if tenant else 'Barbearia'
                 slug   = tenant.slug if tenant else ''
-                html = f"""
+                _corpo = f"""
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
@@ -3749,7 +3749,7 @@ def enviar_retorno_automatico():
                   </p>
                 </div>
                 """
-                ok = _enviar_email(user.email, f'Hora de renovar — {nome_b}', html)
+                ok = _enviar_email(user.email, f'Hora de renovar — {nome_b}', _corpo)
                 if ok:
                     db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo='retorno'))
                     db.session.commit()
