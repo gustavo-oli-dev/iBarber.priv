@@ -1384,7 +1384,7 @@ main { flex: 1; }
 .cal-dia-btn:hover { border-color: var(--gold-dim); }
 .cal-dia-btn.selecionado {
   border-color: var(--gold);
-  background: rgba(201,169,110,0.10);
+  background: var(--gold);
 }
 .cal-dia-semana {
   font-size: 0.72rem;
@@ -1405,7 +1405,7 @@ main { flex: 1; }
 .cal-dia-btn.selecionado .cal-dia-num,
 .cal-dia-btn.selecionado .cal-dia-semana,
 .cal-dia-btn.selecionado .cal-dia-mes {
-  color: var(--gold);
+  color: #111;
 }
 .cal-horarios-grid {
   display: grid;
