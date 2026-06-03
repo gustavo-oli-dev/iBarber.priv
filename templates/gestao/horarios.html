@@ -45,15 +45,13 @@
         <label class="g-label">Duração do slot (min)</label>
         <input class="g-input no-spin" type="number" name="slot_minutos"
                min="5" max="120" step="5" inputmode="numeric"
-               value="{{ config_geral.get('slot_minutos',40)|int }}"
-               oninput="this.value=Math.min(120,Math.max(5,+this.value||5))" />
+               value="{{ config_geral.get('slot_minutos',40)|int }}" />
       </div>
       <div class="g-form-group">
         <label class="g-label">Dias de antecedência</label>
         <input class="g-input no-spin" type="number" name="dias_agenda"
                min="1" max="90" inputmode="numeric"
-               value="{{ config_geral.get('dias_agenda',20)|int }}"
-               oninput="this.value=Math.min(90,Math.max(1,+this.value||1))" />
+               value="{{ config_geral.get('dias_agenda',20)|int }}" />
       </div>
     </div>
 
