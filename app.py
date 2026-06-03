@@ -850,13 +850,17 @@ def servicos():
           .first()) if _tid_servicos else None
     if ag:
         _forma_label = {'dinheiro': 'Pagar no local', 'pix': 'PIX', 'cartao': 'Cartão'}
-        _, gestor_nome = _gestor_como_barbeiro(_api_tid())
-        if ag.funcionario_id in (0, None):
-            _barb_nome = gestor_nome or 'Gestor'
-        elif ag.funcionario:
-            _barb_nome = ag.funcionario.nome
-        else:
+        _tem_func = Funcionario.query.filter_by(tenant_id=_tid_servicos, ativo=True).count() > 0
+        if not _tem_func:
             _barb_nome = None
+        else:
+            _, gestor_nome = _gestor_como_barbeiro(_api_tid())
+            if ag.funcionario_id in (0, None):
+                _barb_nome = gestor_nome or 'Gestor'
+            elif ag.funcionario:
+                _barb_nome = ag.funcionario.nome
+            else:
+                _barb_nome = None
         agendamento_info = {
             'id': ag.id,
             'dia': f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}",
@@ -1794,7 +1798,11 @@ def meu_agendamento():
           .order_by(Agendamento.data_hora.desc()).first())
     if not ag:
         return jsonify({'agendamento': None})
-    if ag.funcionario_id in (0, None):
+    # Só mostra barbeiro se houver 2+ pessoas (proprietário + funcionários)
+    _tem_funcionarios = Funcionario.query.filter_by(tenant_id=ag.tenant_id, ativo=True).count() > 0
+    if not _tem_funcionarios:
+        func_nome = None
+    elif ag.funcionario_id in (0, None):
         _, func_nome = _gestor_como_barbeiro(ag.tenant_id)
     else:
         func_nome = ag.funcionario.nome if ag.funcionario else None
@@ -2399,6 +2407,22 @@ def api_horarios_disponiveis():
     todos_tomados = sorted(agendados_times - disponiveis_set)
 
     return jsonify({'disponiveis': disponiveis, 'tomados': todos_tomados, 'fechado': False})
+
+@app.route('/api/barbeiros-lista')
+def api_barbeiros_lista():
+    """Lista todos os barbeiros ativos do tenant (sem filtro de horário — para preferência)."""
+    _tid = _api_tid()
+    funs = Funcionario.query.filter_by(tenant_id=_tid, ativo=True).all()
+    result = []
+    gestor_ativo, gestor_nome = _gestor_como_barbeiro(_tid)
+    if gestor_ativo:
+        gf = _get_setting('gestor_foto', _tid)
+        foto_url = f'/static/uploads/{gf.value}' if gf and gf.value else None
+        result.append({'id': 0, 'nome': gestor_nome or 'Proprietário', 'foto_url': foto_url})
+    for f in funs:
+        foto = f'/static/uploads/{f.foto}' if f.foto else None
+        result.append({'id': f.id, 'nome': f.nome, 'foto_url': foto})
+    return jsonify({'funcionarios': result})
 
 @app.route('/api/barbeiros-disponiveis')
 def api_barbeiros_disponiveis():

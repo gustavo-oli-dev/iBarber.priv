@@ -807,7 +807,59 @@
     if (data.erro) { alert(data.erro); return; }
     pedidoAtual = { id: data.pedido_id, total };
     fecharCarrinho();
-    abrirCalendario();
+    await _abrirEscolhaBarbeiro();
+  }
+
+  async function _abrirEscolhaBarbeiro() {
+    calBarbeiroSel       = null;
+    _barbeiroJaEscolhido = false;
+    let funcionarios = [];
+    try {
+      const res = await fetch('/api/barbeiros-lista');
+      const data = await res.json();
+      funcionarios = data.funcionarios || [];
+    } catch(_) {}
+    // Se só há 1 ou nenhum barbeiro, pula direto pro calendário
+    if (funcionarios.length <= 1) {
+      if (funcionarios.length === 1) calBarbeiroSel = funcionarios[0].id;
+      abrirCalendario();
+      return;
+    }
+    // Monta modal de barbeiros
+    const grid = document.getElementById('barbeiroGrid');
+    grid.innerHTML = '';
+    document.getElementById('barbeiroSubtitulo').textContent = 'Escolha seu barbeiro preferido';
+    document.getElementById('barbeiroConfirmarBtn').style.display = 'none';
+    // Botão "Sem preferência"
+    const btnSem = document.createElement('button');
+    btnSem.className = 'btn btn-outline btn-full';
+    btnSem.style.cssText = 'font-size:0.9rem;padding:0.6rem;';
+    btnSem.textContent = 'Sem preferência';
+    btnSem.onclick = () => _selecionarBarbeiro(null, btnSem);
+    grid.appendChild(btnSem);
+    funcionarios.forEach(f => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-outline btn-full';
+      btn.style.cssText = 'font-size:0.9rem;padding:0.5rem 0.8rem;display:flex;align-items:center;gap:0.75rem;';
+      if (f.foto_url) {
+        const img = document.createElement('img');
+        img.src = f.foto_url;
+        img.style.cssText = 'width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--gold);';
+        btn.appendChild(img);
+      } else {
+        const av = document.createElement('div');
+        av.style.cssText = 'width:40px;height:40px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.1rem;color:var(--gold);';
+        av.textContent = f.nome.charAt(0).toUpperCase();
+        btn.appendChild(av);
+      }
+      const nome = document.createElement('span');
+      nome.textContent = f.nome;
+      btn.appendChild(nome);
+      btn.onclick = () => _selecionarBarbeiro(f.id, btn);
+      grid.appendChild(btn);
+    });
+    _abrirModal('barbeiroModal', 'barbeiroOverlay');
+    document.body.style.overflow = 'hidden';
   }
   // ── Calendário ────────────────────────────────────────────
   const DIAS_PT  = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -844,8 +896,7 @@
       }
       cursor.setDate(cursor.getDate() + 1);
     }
-    document.getElementById('calOverlay').style.display = 'block';
-    document.getElementById('calModal').style.display   = 'flex';
+    _abrirModal('calModal', 'calOverlay');
     document.body.style.overflow = 'hidden';
   }
   async function selecionarDia(dia, btnEl) {
@@ -900,13 +951,18 @@
     }
     document.getElementById('calModal').scrollTo({ top: 999, behavior: 'smooth' });
   }
-  let calBarbeiroSel = null;
+  let calBarbeiroSel      = null;
+  let _barbeiroJaEscolhido = false; // true após etapa de escolha de barbeiro
   async function selecionarHora(hora, btnEl) {
-    calHoraSel     = hora;
-    calBarbeiroSel = null;
+    calHoraSel = hora;
     document.querySelectorAll('.cal-hora-btn').forEach(b => b.classList.remove('selecionado'));
     btnEl.classList.add('selecionado');
-    // Mostrar loading e buscar barbeiros
+    // Barbeiro já escolhido na etapa anterior — confirma direto
+    if (_barbeiroJaEscolhido) {
+      await confirmarAgendamento();
+      return;
+    }
+    // Sem preferência definida: verifica disponibilidade de barbeiros para o slot
     document.getElementById('calLoadingBarbeiro').style.display = 'block';
     const d = new Date(calDiaSel);
     const dataHoraISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${hora}`;
@@ -981,17 +1037,35 @@
   }
 
   function _selecionarBarbeiro(id, btnEl) {
-    calBarbeiroSel = id;
-    document.querySelectorAll('#barbeiroGrid button').forEach(b => b.classList.remove('selecionado'));
-    if (btnEl) btnEl.classList.add('selecionado');
-    document.getElementById('barbeiroConfirmarBtn').style.display = 'block';
+    calBarbeiroSel       = id;
+    _barbeiroJaEscolhido = true;
+    _fecharModal('barbeiroModal', 'barbeiroOverlay');
+    if (!calDiaSel) {
+      abrirCalendario();
+    } else {
+      confirmarAgendamento();
+    }
   }
 
+  function _fecharModal(modalId, overlayId) {
+    const m = document.getElementById(modalId);
+    const o = document.getElementById(overlayId);
+    if (m) { m.style.animation = 'none'; m.style.display = 'none'; }
+    if (o) o.style.display = 'none';
+  }
+  function _abrirModal(modalId, overlayId) {
+    const m = document.getElementById(modalId);
+    const o = document.getElementById(overlayId);
+    if (o) { o.style.display = 'block'; }
+    if (m) { m.style.animation = ''; m.style.display = 'flex'; }
+  }
   function fecharBarbeiro() {
-    document.getElementById('barbeiroModal').style.display   = 'none';
-    document.getElementById('barbeiroOverlay').style.display = 'none';
-    // Reabrir calModal na hora já selecionada
-    document.getElementById('calModal').style.display = 'flex';
+    _fecharModal('barbeiroModal', 'barbeiroOverlay');
+    if (!calDiaSel) {
+      abrirCalendario();
+    } else {
+      _abrirModal('calModal', 'calOverlay');
+    }
   }
   async function confirmarAgendamento() {
     if (!calDiaSel || !calHoraSel || !pedidoAtual) return;
