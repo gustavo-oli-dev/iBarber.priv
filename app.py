@@ -160,9 +160,11 @@ def _processar_imagem(arquivo, max_px=1400, quality=82):
 
 MAIL_HOST     = 'smtp.gmail.com'
 MAIL_PORT     = 587
-MAIL_USER     = os.environ.get('MAIL_USER', 'ibarbeariaaa@gmail.com')
+MAIL_USER     = os.environ.get('MAIL_USER')
 MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
-MAIL_FROM     = 'Barbearia <ibarbeariaaa@gmail.com>'
+MAIL_FROM     = os.environ.get('MAIL_FROM', '')
+if not MAIL_USER or not MAIL_PASSWORD or not MAIL_FROM:
+    raise RuntimeError('MAIL_USER, MAIL_PASSWORD e MAIL_FROM devem estar definidos no ambiente')
 API_TOKEN            = os.environ.get('API_TOKEN', '')
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
@@ -475,56 +477,59 @@ with app.app_context():
     for _tbl in db.metadata.sorted_tables:
         if _tbl.name not in _existing:
             _tbl.create(db.engine)
-    # Re-inspeciona após criar tabelas novas (colunas já existem nelas)
     _inspector = _sa_inspect(db.engine)
     _existing = set(_inspector.get_table_names())
-    # auto-migrate: add new columns if missing
+    _ALLOWED_TENANT_COLS = {
+        'fab_wpp', 'fab_maps', 'whatsapp', 'maps_url',
+        'tema_editacoes', 'tema_pendente', 'trial_expira', 'loja_ativa',
+    }
+    _ALLOWED_USER_COLS = {'guest', 'tenant_id'}
+    _ALLOWED_SERV_COLS = {'categoria_id'}
+    _ALLOWED_ENTRADA_COLS = {'pedido_id'}
+    _ALLOWED_PEDIDO_COLS = {'tenant_id'}
+    _ALLOWED_AG_COLS = {'tenant_id', 'duracao_total', 'funcionario_id', 'criado_em'}
+    _TENANT_COL_TYPES = {
+        'fab_wpp': 'TEXT', 'fab_maps': 'TEXT', 'whatsapp': 'VARCHAR(20)',
+        'maps_url': 'VARCHAR(500)', 'tema_editacoes': 'INTEGER DEFAULT 0',
+        'tema_pendente': 'TEXT', 'trial_expira': 'DATETIME', 'loja_ativa': 'BOOLEAN DEFAULT 0',
+    }
+    _USER_COL_TYPES = {'guest': 'INTEGER DEFAULT 0', 'tenant_id': 'INTEGER'}
+    _SERV_COL_TYPES = {'categoria_id': 'INTEGER'}
+    _ENTRADA_COL_TYPES = {'pedido_id': 'INTEGER'}
+    _PEDIDO_COL_TYPES = {'tenant_id': 'INTEGER'}
+    _AG_COL_TYPES = {'tenant_id': 'INTEGER', 'duracao_total': 'INTEGER', 'funcionario_id': 'INTEGER', 'criado_em': 'DATETIME'}
     _tenant_cols = {c['name'] for c in _inspector.get_columns('tenant')} if 'tenant' in _existing else set()
-    for _col, _type in [
-        ('fab_wpp',        'TEXT'),
-        ('fab_maps',       'TEXT'),
-        ('whatsapp',       'VARCHAR(20)'),
-        ('maps_url',       'VARCHAR(500)'),
-        ('tema_editacoes', 'INTEGER DEFAULT 0'),
-        ('tema_pendente',  'TEXT'),
-        ('trial_expira',   'DATETIME'),
-        ('loja_ativa',     'BOOLEAN DEFAULT 0'),
-    ]:
+    for _col, _type in [(k, _TENANT_COL_TYPES[k]) for k in _ALLOWED_TENANT_COLS]:
         if _col not in _tenant_cols:
             with db.engine.connect() as _conn:
                 _conn.execute(db.text(f'ALTER TABLE tenant ADD COLUMN {_col} {_type}'))
                 _conn.commit()
     _user_cols = {c['name'] for c in _inspector.get_columns('user')} if 'user' in _existing else set()
-    if 'guest' not in _user_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE `user` ADD COLUMN guest INTEGER DEFAULT 0'))
-            _conn.commit()
+    for _col, _type in [(k, _USER_COL_TYPES[k]) for k in _ALLOWED_USER_COLS]:
+        if _col not in _user_cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(db.text(f'ALTER TABLE `user` ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     _serv_cols = {c['name'] for c in _inspector.get_columns('servico')} if 'servico' in _existing else set()
-    if 'categoria_id' not in _serv_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE servico ADD COLUMN categoria_id INTEGER'))
-            _conn.commit()
+    for _col, _type in [(k, _SERV_COL_TYPES[k]) for k in _ALLOWED_SERV_COLS]:
+        if _col not in _serv_cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(db.text(f'ALTER TABLE servico ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     _entrada_cols = {c['name'] for c in _inspector.get_columns('entrada_monetaria')} if 'entrada_monetaria' in _existing else set()
-    if 'pedido_id' not in _entrada_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE entrada_monetaria ADD COLUMN pedido_id INTEGER'))
-            _conn.commit()
-    if 'tenant_id' not in _user_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE `user` ADD COLUMN tenant_id INTEGER'))
-            _conn.commit()
+    for _col, _type in [(k, _ENTRADA_COL_TYPES[k]) for k in _ALLOWED_ENTRADA_COLS]:
+        if _col not in _entrada_cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(db.text(f'ALTER TABLE entrada_monetaria ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     _pedido_cols = {c['name'] for c in _inspector.get_columns('pedido')} if 'pedido' in _existing else set()
-    if 'tenant_id' not in _pedido_cols:
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text('ALTER TABLE pedido ADD COLUMN tenant_id INTEGER'))
-            _conn.commit()
+    for _col, _type in [(k, _PEDIDO_COL_TYPES[k]) for k in _ALLOWED_PEDIDO_COLS]:
+        if _col not in _pedido_cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(db.text(f'ALTER TABLE pedido ADD COLUMN {_col} {_type}'))
+                _conn.commit()
     _ag_cols = {c['name'] for c in _inspector.get_columns('agendamento')} if 'agendamento' in _existing else set()
-    for _col, _type in [
-        ('tenant_id',      'INTEGER'),
-        ('duracao_total',  'INTEGER'),
-        ('funcionario_id', 'INTEGER'),
-        ('criado_em',      'DATETIME'),
-    ]:
+    for _col, _type in [(k, _AG_COL_TYPES[k]) for k in _ALLOWED_AG_COLS]:
         if _col not in _ag_cols:
             with db.engine.connect() as _conn:
                 _conn.execute(db.text(f'ALTER TABLE agendamento ADD COLUMN {_col} {_type}'))
@@ -2847,7 +2852,7 @@ def criar_pagamento():
             timeout=15,
         )
         if r.status_code not in (200, 201):
-            return jsonify({'erro': 'Erro ao gerar QR Code', 'detalhe': r.text}), 502
+            return jsonify({'erro': 'Erro ao gerar QR Code'}), 502
         d  = r.json()
         td = d.get('point_of_interaction', {}).get('transaction_data', {})
         return jsonify({
@@ -2867,11 +2872,11 @@ def criar_pagamento():
             'items': [{'title': 'Barbearia – Serviços', 'quantity': 1,
                        'unit_price': round(total, 2), 'currency_id': 'BRL'}],
             'external_reference': str(pedido_id or ''),
-            'back_urls': {
-                'success': f'{_base}/retorno-pagamento?pedido_id={pedido_id}',
-                'failure': f'{_base}/{_slug}',
-                'pending': f'{_base}/{_slug}',
-            },
+        'back_urls': {
+            'success': _base,
+            'failure': _base,
+            'pending': _base,
+        },
             'auto_return': 'approved',
         }
         r = req_http.post(
@@ -2882,7 +2887,7 @@ def criar_pagamento():
             timeout=15,
         )
         if r.status_code not in (200, 201):
-            return jsonify({'erro': 'Erro MP', 'detalhe': r.text}), 502
+            return jsonify({'erro': 'Erro MP'}), 502
         d = r.json()
         return jsonify({'checkout_url': d.get('init_point', '')})
 
