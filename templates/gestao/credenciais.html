@@ -125,7 +125,7 @@ async function salvarCredenciais() {
     btn.textContent = '✓ Salvo!';
     setTimeout(() => btn.textContent = orig, 2000);
   } else {
-    alert('Erro ao salvar credenciais.');
+    _notify('Erro ao salvar credenciais.','err');
   }
 }
 

@@ -316,7 +316,7 @@ let _pendingDia = null;
 async function addFechado() {
   const d = document.getElementById('novoFechado').value;
   if (!d) return;
-  if (diasFechados.includes(d)) { alert('Data já adicionada'); return; }
+  if (diasFechados.includes(d)) { _notify('Data já adicionada','err'); return; }
   // Verifica conflitos antes de fechar o dia
   const cr = await fetch(`/api/dias-fechados/conflitos?data=${d}`, {
     headers:{'Authorization':'Bearer '+TOKEN}
@@ -353,7 +353,7 @@ async function _executarFechado(d, cancelar) {
     body: JSON.stringify({data:d, cancelar})
   });
   if (r.ok) { diasFechados.push(d); diasFechados.sort(); renderFechados(); document.getElementById('novoFechado').value=''; }
-  else alert('Erro ao adicionar');
+  else _notify('Erro ao adicionar','err');
 }
 
 async function removeFechado(d) {
@@ -362,7 +362,7 @@ async function removeFechado(d) {
     body: JSON.stringify({data:d})
   });
   if (r.ok) { diasFechados = diasFechados.filter(x=>x!==d); renderFechados(); }
-  else alert('Erro ao remover');
+  else _notify('Erro ao remover','err');
 }
 
 // ── Especiais ──
@@ -402,7 +402,7 @@ async function addEspecial() {
   const data      = document.getElementById('eData').value;
   const abertura  = document.getElementById('eAbertura').value;
   const fechamento= document.getElementById('eFechamento').value;
-  if (!data || !abertura || !fechamento) { alert('Preencha todos os campos'); return; }
+  if (!data || !abertura || !fechamento) { _notify('Preencha todos os campos','err'); return; }
   await _salvarEspecial(data, abertura, fechamento, '');
 }
 
@@ -425,7 +425,7 @@ async function _salvarEspecial(data, abertura, fechamento, acao) {
     abrirModalConflito(body.conflitos || []);
   } else {
     const err = await r.json().catch(() => ({}));
-    alert(err.erro || 'Erro ao adicionar');
+    _notify(err.erro || 'Erro ao adicionar','err');
   }
 }
 
@@ -451,10 +451,10 @@ async function confirmarEspecial(acao) {
 }
 
 async function removeEspecial(id) {
-  if (!confirm('Remover horário especial?')) return;
+  if (!await _confirmAsync('Remover horário especial?')) return;
   const r = await fetch(`/api/horarios-especiais/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
   if (r.ok) { especiais = especiais.filter(e=>e.id!==id); renderEspeciais(); renderCal(); }
-  else alert('Erro ao remover');
+  else _notify('Erro ao remover','err');
 }
 
 function atualizarLabelData(inputId, labelId) {

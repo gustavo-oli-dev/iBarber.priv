@@ -109,7 +109,7 @@ async function salvarEntrada() {
   const desc = document.getElementById('fDesc').value.trim();
   const valor = parseFloat(document.getElementById('fValor').value||0);
   const forma = document.getElementById('fForma').value;
-  if (!desc || valor <= 0) { alert('Preencha descrição e valor'); return; }
+  if (!desc || valor <= 0) { _notify('Preencha descrição e valor','err'); return; }
   const r = await fetch('/api/entradas', {
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
     body: JSON.stringify({descricao:desc, valor, forma})
@@ -120,17 +120,17 @@ async function salvarEntrada() {
     ENTRADAS.unshift({id:d.id, descricao:desc, valor, forma, criado_em:now});
     fecharForm();
     renderAll();
-  } else { alert('Erro ao salvar'); }
+  } else { _notify('Erro ao salvar','err'); }
 }
 
 async function deletarEntrada(id, btn) {
-  if (!confirm('Remover entrada?')) return;
+  if (!await _confirmAsync('Remover entrada?')) return;
   btn.disabled = true;
   const r = await fetch(`/api/entradas/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
   if (r.ok) {
     ENTRADAS = ENTRADAS.filter(e => e.id !== id);
     renderAll();
-  } else { btn.disabled = false; alert('Erro ao remover'); }
+  } else { btn.disabled = false; _notify('Erro ao remover','err'); }
 }
 
 function setPeriodo(p, el) {

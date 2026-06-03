@@ -546,7 +546,7 @@ async function salvarNovoCliente() {
     document.getElementById('novoNome').value = '';
     document.getElementById('novoContato').value = '';
   } else {
-    alert(body.erro || 'Erro ao criar cliente.');
+    _notify(body.erro || 'Erro ao criar cliente.','err');
   }
 }
 

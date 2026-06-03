@@ -184,11 +184,11 @@ async function marcarPago(pid, btn) {
     const p = PEDIDOS.find(x=>x.id===pid);
     if (p) p.status = 'pago';
     renderPedidos();
-  } else { btn.disabled=false; alert('Erro ao atualizar pedido'); }
+  } else { btn.disabled=false; _notify('Erro ao atualizar pedido','err'); }
 }
 
 async function naoCompareceu(pid, btn) {
-  if (!confirm('Marcar como não compareceu?')) return;
+  if (!await _confirmAsync('Marcar como não compareceu?')) return;
   btn.disabled = true;
   const r = await fetch(`/api/pedidos/${pid}/status`, {
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
@@ -198,11 +198,11 @@ async function naoCompareceu(pid, btn) {
     const p = PEDIDOS.find(x=>x.id===pid);
     if (p) p.status = 'nao_compareceu';
     renderPedidos();
-  } else { btn.disabled=false; alert('Erro ao atualizar pedido'); }
+  } else { btn.disabled=false; _notify('Erro ao atualizar pedido','err'); }
 }
 
 async function cancelar(pid, btn) {
-  if (!confirm('Cancelar este pedido?')) return;
+  if (!await _confirmAsync('Cancelar este pedido?')) return;
   btn.disabled = true;
   const r = await fetch(`/api/pedidos/${pid}/status`, {
     method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
@@ -212,7 +212,7 @@ async function cancelar(pid, btn) {
     const p = PEDIDOS.find(x=>x.id===pid);
     if (p) p.status = 'cancelado';
     renderPedidos();
-  } else { btn.disabled=false; alert('Erro ao cancelar pedido'); }
+  } else { btn.disabled=false; _notify('Erro ao cancelar pedido','err'); }
 }
 
 function renderStats() {

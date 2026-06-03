@@ -277,7 +277,7 @@ async function salvarFuncionario() {
     const funcId = id ? parseInt(id) : data.id;
     if (funcId) await _enviarFotoFunc(funcId);
     fecharModal(); await carregar();
-  } else { const d=await r.json(); alert(d.erro||'Erro ao salvar'); }
+  } else { const d=await r.json(); _notify(d.erro||'Erro ao salvar','err'); }
 }
 
 let _pendingBarbeiro = null; // {tipo: 'func'|'gestor', id, cancelar}
@@ -365,7 +365,7 @@ async function _executarDesativarFunc(id, cancelar) {
     body: JSON.stringify({cancelar})
   });
   if (r.ok) { fecharModal(); await carregar(); }
-  else { const d = await r.json().catch(()=>({})); alert(d.erro||'Erro ao desativar funcionário'); }
+  else { const d = await r.json().catch(()=>({})); _notify(d.erro||'Erro ao desativar funcionário','err'); }
 }
 
 function toggleSenhaFunc() {

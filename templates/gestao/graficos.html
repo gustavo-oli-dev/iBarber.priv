@@ -404,12 +404,12 @@ function confirmarExport() {
   const params = new URLSearchParams({ tipo: expTipo, _token: TOKEN });
   if (expPer === 'mes') {
     const mes = document.getElementById('exp-mes').value;
-    if (!mes) { alert('Selecione o mês'); return; }
+    if (!mes) { _notify('Selecione o mês','err'); return; }
     params.set('mes', mes);
   } else if (expPer === 'periodo') {
     const ini = document.getElementById('exp-inicio').value;
     const fim = document.getElementById('exp-fim').value;
-    if (!ini || !fim) { alert('Informe início e fim'); return; }
+    if (!ini || !fim) { _notify('Informe início e fim','err'); return; }
     params.set('inicio', ini);
     params.set('fim', fim);
   }

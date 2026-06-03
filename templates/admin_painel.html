@@ -298,32 +298,32 @@ const KEY = '{{ key }}';
 
 // ── Ativar ───────────────────────────────────────────────────────────────────
 async function ativarManual(id) {
-  if (!confirm('Ativar assinatura manualmente?')) return;
+  if (!await _confirmAsync('Ativar assinatura manualmente?')) return;
   const r = await fetch(`/api/admin/ativar/${id}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({key: KEY})
   });
   const d = await r.json();
   if (d.ok) location.reload();
-  else alert('Erro: ' + (d.erro || 'desconhecido'));
+  else _notify('Erro: ' + (d.erro || 'desconhecido','err'));
 }
 
 // ── Desativar ────────────────────────────────────────────────────────────────
 async function desativar(id) {
-  if (!confirm('Desativar assinatura? O site do cliente ficará fora do ar.')) return;
+  if (!await _confirmAsync('Desativar assinatura? O site do cliente ficará fora do ar.')) return;
   const r = await fetch(`/api/admin/desativar/${id}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({key: KEY})
   });
   const d = await r.json();
   if (d.ok) location.reload();
-  else alert('Erro: ' + (d.erro || 'desconhecido'));
+  else _notify('Erro: ' + (d.erro || 'desconhecido','err'));
 }
 
 // ── Excluir ──────────────────────────────────────────────────────────────────
 async function excluir(id, nome) {
-  if (!confirm(`Excluir permanentemente "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
-  if (!confirm('Tem certeza? Todos os dados serão removidos.')) return;
+  if (!await _confirmAsync(`Excluir permanentemente "${nome}"?\n\nEsta ação não pode ser desfeita.`)) return;
+  if (!await _confirmAsync('Tem certeza? Todos os dados serão removidos.')) return;
   const r = await fetch(`/api/admin/excluir/${id}`, {
     method:'DELETE', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({key: KEY})
@@ -331,7 +331,7 @@ async function excluir(id, nome) {
   const d = await r.json();
   if (d.ok) {
     document.getElementById('row-' + id)?.remove();
-  } else alert('Erro: ' + (d.erro || 'desconhecido'));
+  } else _notify('Erro: ' + (d.erro || 'desconhecido','err'));
 }
 
 // ── Modal vencimento ─────────────────────────────────────────────────────────
@@ -360,7 +360,7 @@ async function salvarVencimento() {
   });
   const d = await r.json();
   if (d.ok) { fecharVencimento(); location.reload(); }
-  else alert('Erro: ' + (d.erro || 'desconhecido'));
+  else _notify('Erro: ' + (d.erro || 'desconhecido','err'));
 }
 
 // Fechar modal clicando fora

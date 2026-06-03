@@ -141,14 +141,14 @@ async function salvarCategoria() {
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify({nome})});
   if (r.ok) { fecharModalCat(); await carregar(); }
-  else { const d = await r.json().catch(()=>({})); alert('Erro ao salvar categoria: ' + (d.erro || r.status)); }
+  else { const d = await r.json().catch(()=>({})); _notify('Erro ao salvar categoria: ' + (d.erro || r.status,'err')); }
 }
 async function deletarCategoria() {
   const id = document.getElementById('catId').value;
-  if (!id || !confirm('Excluir categoria? Serviços ficarão sem categoria.')) return;
+  if (!id || !await _confirmAsync('Excluir categoria? Serviços ficarão sem categoria.')) return;
   const r = await fetch(`/api/categorias/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
   if (r.ok) { fecharModalCat(); await carregar(); }
-  else alert('Erro ao excluir');
+  else _notify('Erro ao excluir','err');
 }
 
 // ── Serviço ──
@@ -194,14 +194,14 @@ async function salvarServico() {
   const method = id ? 'PUT' : 'POST';
   const r = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}, body:JSON.stringify(body)});
   if (r.ok) { fecharModalServico(); await carregar(); }
-  else { const d = await r.json().catch(()=>({})); alert('Erro ao salvar serviço: ' + (d.erro || r.status)); }
+  else { const d = await r.json().catch(()=>({})); _notify('Erro ao salvar serviço: ' + (d.erro || r.status,'err')); }
 }
 async function deletarServico() {
   const id = document.getElementById('servicoId').value;
-  if (!id || !confirm('Excluir serviço?')) return;
+  if (!id || !await _confirmAsync('Excluir serviço?')) return;
   const r = await fetch(`/api/servicos/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
   if (r.ok) { fecharModalServico(); await carregar(); }
-  else alert('Erro ao excluir');
+  else _notify('Erro ao excluir','err');
 }
 
 carregar();

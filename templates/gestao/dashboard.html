@@ -439,7 +439,7 @@ async function executarCancelar() {
   } else {
     btn.disabled = false;
     btn.textContent = 'Cancelar agendamento';
-    alert('Erro ao cancelar. Tente novamente.');
+    _notify('Erro ao cancelar. Tente novamente.','err');
   }
 }
 
@@ -455,7 +455,7 @@ async function marcarNaoCompareceu(agId, idx, btn) {
     renderLista();
   } else {
     if (btn) btn.disabled = false;
-    alert('Erro ao atualizar status.');
+    _notify('Erro ao atualizar status.','err');
   }
 }
 

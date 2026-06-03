@@ -33,14 +33,14 @@
   bottom: 0.9rem;
   right: 1rem;
   background: transparent;
-  border: 1px solid #c0392b;
-  color: #c0392b;
+  border: 1px solid var(--error);
+  color: var(--error);
   border-radius: 8px;
   padding: 0.35rem 0.9rem;
   font-size: 0.8rem;
   cursor: pointer;
 }
-.btn-cancelamento:hover { background: #c0392b; color: #fff; }
+.btn-cancelamento:hover { background: var(--error); color: #fff; }
 
 /* ── Histórico sidebar ── */
 
@@ -132,7 +132,7 @@
 }
 .hist-status.ativo     { background: rgba(76,175,130,.15); color: #4caf82; }
 .hist-status.concluido { background: rgba(201,169,110,.12); color: #C9A96E; }
-.hist-status.cancelado { background: rgba(192,57,43,.15);  color: #c0392b; }
+.hist-status.cancelado { background: rgba(192,57,43,.15);  color: var(--error); }
 
 .hist-svcs { margin-bottom: .4rem; }
 .hist-svc-row {
@@ -187,7 +187,7 @@
         </button>
         <div style="display:flex;gap:.5rem;align-items:center;">
           <button onclick="abrirReagendar({{ agendamento_info.id }})" style="background:transparent;border:1px solid #C9A96E;color:#C9A96E;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Reagendar</button>
-          <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid #c0392b;color:#c0392b;border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Cancelar</button>
+          <button onclick="abrirConfirmacaoCancelamento()" style="background:transparent;border:1px solid var(--error);color:var(--error);border-radius:8px;padding:0.28rem 0.8rem;font-size:0.78rem;cursor:pointer;">Cancelar</button>
         </div>
       </div>
     </div>
@@ -799,7 +799,7 @@
       const dtAg  = new Date(ag.data_hora);
       const agora = new Date();
       if (dtAg > agora) {
-        alert('Você já tem um agendamento marcado.');
+        _notify('Você já tem um agendamento marcado.','');
         return;
       }
     }
@@ -810,7 +810,7 @@
       body: JSON.stringify({ itens: carrinho, total })
     });
     const data = await res.json();
-    if (data.erro) { alert(data.erro); return; }
+    if (data.erro) { _notify(data.erro,'err'); return; }
     pedidoAtual = { id: data.pedido_id, total };
     fecharCarrinho();
     await _abrirEscolhaBarbeiro();
@@ -1085,11 +1085,11 @@
       res  = await fetch('/agendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       data = await res.json();
     } catch(e) {
-      alert('Erro de conexão. Tente novamente.');
+      _notify('Erro de conexão. Tente novamente.','err');
       return;
     }
     if (!res.ok) {
-      alert(data.erro || 'Erro ao agendar. Tente novamente.');
+      _notify(data.erro || 'Erro ao agendar. Tente novamente.','err');
       return;
     }
     fecharCal();
@@ -1159,13 +1159,13 @@
         });
         data = await res.json();
       } catch(e) {
-        alert('Erro de conexão ao gerar PIX.');
+        _notify('Erro de conexão ao gerar PIX.','err');
         document.getElementById('qrLoading').style.display = 'none';
         return;
       }
       if (data.erro) {
         // Não abre QR modal — mostra erro dentro do modal de pagamento
-        alert(data.erro);
+        _notify(data.erro,'err');
         document.getElementById('qrLoading').style.display = 'none';
         return;
       }
@@ -1196,9 +1196,9 @@
           body: JSON.stringify({total: pedidoAtual.total, metodo: 'cartao', pedido_id: pedidoAtual.id}),
         });
         const data = await res.json();
-        if (data.erro) { alert(data.erro); return; }
+        if (data.erro) { _notify(data.erro,'err'); return; }
         if (data.checkout_url) { _salvarFormaPagamento('cartao'); window.open(data.checkout_url, '_blank'); }
-      } catch(e) { alert('Erro de conexão.'); return; }
+      } catch(e) { _notify('Erro de conexão.','err'); return; }
       return;
     }
     // dinheiro
@@ -1315,11 +1315,11 @@
       conteudo.appendChild(avisoP);
     }
   }
-  async function cancelarAgendamento(id) {
-    if (!confirm('Deseja cancelar seu agendamento?')) return;
+  async async function cancelarAgendamento(id) {
+    if (!await _confirmAsync('Deseja cancelar seu agendamento?')) return;
     const res  = await fetch(`/cancelar-agendamento/${id}`, { method: 'POST' });
     const data = await res.json();
-    if (data.erro) { alert(data.erro); return; }
+    if (data.erro) { _notify(data.erro,'err'); return; }
     fecharMeuAgendamento();
   }
   function abrirConfirmacaoCancelamento() {
@@ -1338,7 +1338,7 @@
     if (!data.agendamento) { fecharConfirmacaoCancelamento(); location.reload(); return; }
     const res2 = await fetch(`/cancelar-agendamento/${data.agendamento.id}`, { method: 'POST' });
     const d2   = await res2.json();
-    if (d2.erro) { alert(d2.erro); return; }
+    if (d2.erro) { _notify(d2.erro,'err'); return; }
     fecharConfirmacaoCancelamento();
     location.reload();
   }
@@ -1614,7 +1614,7 @@
       } else {
         btn.disabled = false;
         btn.textContent = 'Entrar na lista de espera';
-        if (msg) { msg.style.color = '#c0392b'; msg.textContent = body.erro || 'Erro.'; }
+        if (msg) { msg.style.color = 'var(--error)'; msg.textContent = body.erro || 'Erro.'; }
       }
     } catch {
       btn.disabled = false;
@@ -1691,7 +1691,7 @@
       const res  = await fetch(`/api/horarios-disponiveis?data=${iso}`);
       const body = await res.json();
       if (body.fechado || !(body.disponiveis||[]).length) {
-        area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Sem horários disponíveis.</p>';
+        area.innerHTML = '<p style="color:var(--error);font-size:.85rem;">Sem horários disponíveis.</p>';
         return;
       }
       const slotsWrapper = document.createElement('div');
@@ -1707,7 +1707,7 @@
       area.innerHTML = '';
       area.appendChild(slotsWrapper);
     } catch {
-      area.innerHTML = '<p style="color:#c0392b;font-size:.85rem;">Erro ao carregar.</p>';
+      area.innerHTML = '<p style="color:var(--error);font-size:.85rem;">Erro ao carregar.</p>';
     }
   }
 
@@ -1779,12 +1779,12 @@
         fecharReagendar2();
         location.reload();
       } else {
-        msg.style.color = '#c0392b';
+        msg.style.color = 'var(--error)';
         msg.textContent = body.erro || 'Erro ao reagendar.';
         btn.disabled = false;
       }
     } catch {
-      msg.style.color = '#c0392b';
+      msg.style.color = 'var(--error)';
       msg.textContent = 'Erro de conexão.';
       btn.disabled = false;
     }
@@ -1810,7 +1810,7 @@
     <p id="reagBarbeiroLabel2" style="display:none;font-size:.75rem;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.07em;margin:.75rem 0 .4rem;">Barbeiro</p>
     <div id="reagBarbeiroSel2" style="display:none;flex-wrap:wrap;gap:6px;margin-bottom:.5rem;"></div>
 
-    <div id="reagMsg2" style="font-size:.8rem;color:#c0392b;margin-top:.5rem;min-height:.9rem;"></div>
+    <div id="reagMsg2" style="font-size:.8rem;color:var(--error);margin-top:.5rem;min-height:.9rem;"></div>
     <div style="display:flex;gap:.75rem;margin-top:1rem;">
       <button onclick="fecharReagendar2()" style="flex:1;padding:.6rem;border-radius:8px;border:1px solid #2a2a2a;background:none;color:#aaa;font-size:.9rem;cursor:pointer;">Cancelar</button>
       <button id="btnReag2" disabled onclick="confirmarReagendar2()"

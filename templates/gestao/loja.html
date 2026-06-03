@@ -207,7 +207,7 @@ let _editId = null;
 document.getElementById('lojaToggle').addEventListener('change', async function() {
   const r = await fetch('/api/gestao/loja/toggle', { method: 'POST' });
   const d = await r.json();
-  if (!r.ok) { this.checked = !this.checked; alert(d.erro || 'Erro'); }
+  if (!r.ok) { this.checked = !this.checked; _notify(d.erro || 'Erro','err'); }
 });
 
 // Modal
@@ -243,7 +243,7 @@ document.getElementById('inputFoto').addEventListener('change', function() {
 // Salvar produto
 async function salvarProduto() {
   const nome = document.getElementById('campNome').value.trim();
-  if (!nome) { alert('Nome obrigatório'); return; }
+  if (!nome) { _notify('Nome obrigatório','err'); return; }
 
   // Normaliza valor: aceita vírgula (BR) ou ponto
   const valorRaw = document.getElementById('campValor').value.trim().replace(',', '.');
@@ -269,7 +269,7 @@ async function salvarProduto() {
     btn.disabled = false;
     btn.textContent = 'Salvar';
     if (!r.ok) {
-      alert(d.erro || 'Erro ao salvar');
+      _notify(d.erro || 'Erro ao salvar','err');
       if (r.status === 401) location.href = '/gestao/login';
       return;
     }
@@ -278,7 +278,7 @@ async function salvarProduto() {
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Salvar';
-    alert('Erro de conexão. Tente novamente.');
+    _notify('Erro de conexão. Tente novamente.','err');
     console.error(e);
   }
 }
@@ -305,7 +305,7 @@ document.querySelectorAll('.btn-editar').forEach(function(btn) {
 
 // Excluir produto
 async function excluirProduto(id) {
-  if (!confirm('Excluir este produto?')) return;
+  if (!await _confirmAsync('Excluir este produto?')) return;
   const r = await fetch(`/api/gestao/produtos/${id}`, { method: 'DELETE' });
   if (r.ok) {
     document.getElementById(`card-${id}`)?.remove();
@@ -320,7 +320,7 @@ async function excluirProduto(id) {
 async function toggleEstoque(id, btn) {
   const r = await fetch(`/api/gestao/produtos/${id}/estoque`, { method: 'POST' });
   const d = await r.json();
-  if (!r.ok) { alert(d.erro || 'Erro'); return; }
+  if (!r.ok) { _notify(d.erro || 'Erro','err'); return; }
   btn.className = `estoque-badge ${d.em_estoque ? 'sim' : 'nao'}`;
   btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg> ${d.em_estoque ? 'Em estoque' : 'Esgotado'}`;
 }

@@ -73,7 +73,7 @@
           autocomplete="tel"
           oninput="validarContato(this)"
         />
-        <p class="field-hint" id="contactHint" style="display:none;color:#c0392b;font-size:0.78rem;margin-top:4px;">Mínimo 8 números.</p>
+        <p class="field-hint" id="contactHint" style="display:none;color:var(--error);font-size:0.78rem;margin-top:4px;">Mínimo 8 números.</p>
       </div>
       <div class="field">
         <label class="field-label" for="observation">
@@ -118,7 +118,7 @@ function validarContato(input) {
   const hint = document.getElementById('contactHint');
   if (digitos > 0 && digitos < 8) {
     hint.style.display = 'block';
-    input.style.borderColor = '#c0392b';
+    input.style.borderColor = 'var(--error)';
   } else {
     hint.style.display = 'none';
     input.style.borderColor = '';
@@ -133,7 +133,7 @@ function validarForm(form) {
   }
   if (digitos < 8) {
     document.getElementById('contactHint').style.display = 'block';
-    contactEl.style.borderColor = '#c0392b';
+    contactEl.style.borderColor = 'var(--error)';
     contactEl.focus();
     return false;
   }

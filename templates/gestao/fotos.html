@@ -125,9 +125,9 @@ async function enviarFoto() {
   const arquivo = document.getElementById('fFoto').files[0];
   const categoria = document.getElementById('fCat').value;
   const servico = document.getElementById('fServico').value;
-  if (!arquivo) { alert('Selecione uma imagem'); return; }
-  if (!categoria) { alert('Selecione uma categoria'); return; }
-  if (!servico) { alert('Selecione um serviço'); return; }
+  if (!arquivo) { _notify('Selecione uma imagem','err'); return; }
+  if (!categoria) { _notify('Selecione uma categoria','err'); return; }
+  if (!servico) { _notify('Selecione um serviço','err'); return; }
   const btn = document.getElementById('btnEnviar');
   btn.disabled = true; btn.textContent = 'Enviando...';
   const fd = new FormData();
@@ -137,15 +137,15 @@ async function enviarFoto() {
   const r = await fetch('/api/fotos', {method:'POST', headers:{'Authorization':'Bearer '+TOKEN}, body:fd});
   btn.disabled = false; btn.textContent = 'Enviar';
   if (r.ok) { fecharModal(); await carregar(); }
-  else { const d=await r.json(); alert(d.erro||'Erro ao enviar'); }
+  else { const d=await r.json(); _notify(d.erro||'Erro ao enviar','err'); }
 }
 
 async function deletarFoto(id, btn) {
-  if (!confirm('Excluir foto?')) return;
+  if (!await _confirmAsync('Excluir foto?')) return;
   btn.disabled = true;
   const r = await fetch(`/api/fotos/${id}`, {method:'DELETE', headers:{'Authorization':'Bearer '+TOKEN}});
   if (r.ok) { fotos = fotos.filter(f=>f.id!==id); renderFotos(); }
-  else { btn.disabled=false; alert('Erro ao excluir'); }
+  else { btn.disabled=false; _notify('Erro ao excluir','err'); }
 }
 
 carregar();

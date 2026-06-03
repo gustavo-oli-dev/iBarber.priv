@@ -1202,7 +1202,7 @@ async function salvar() {
       abrirPagamento();
     }
   } catch(e) {
-    alert('Erro de conexão. Tente novamente.');
+    _notify('Erro de conexão. Tente novamente.','err');
   } finally {
     btn.disabled = false; btn.textContent = 'Salvar tema';
   }
