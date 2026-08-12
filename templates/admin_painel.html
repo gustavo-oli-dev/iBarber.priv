@@ -7,6 +7,8 @@
   <link rel="apple-touch-icon" href="/static/images/icon-192.png">
   <link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<script src="{{ url_for('static', filename='js/csrf.js') }}?v=1"></script>
 <title>Admin — iBarber</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -251,7 +253,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
           <td>
             <div class="td-actions">
               <a href="https://{{ t.slug }}.ibarber.shop" target="_blank" class="btn btn-outline btn-sm">Site</a>
-              <a href="/admin/entrar-gestao/{{ t.id }}?key={{ key }}" target="_blank" class="btn btn-warn btn-sm">Gestão</a>
+              <a href="/admin/entrar-gestao/{{ t.id }}" target="_blank" class="btn btn-warn btn-sm">Gestão</a>
               {% if t.assinatura_ativa %}
                 <button class="btn btn-outline btn-sm" onclick="abrirVencimento({{ t.id }}, '{{ asn.vencimento.strftime('%Y-%m-%d') if asn and asn.vencimento else '' }}')">Venc.</button>
                 <button class="btn btn-danger btn-sm" onclick="desativar({{ t.id }})">Desativar</button>
@@ -294,14 +296,15 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </div>
 
 <script>
-const KEY = '{{ key }}';
+// A chave mestra não é mais embutida na página: as rotas /api/admin/*
+// autorizam pela sessão do painel (cookie), definida no login acima.
 
 // ── Ativar ───────────────────────────────────────────────────────────────────
 async function ativarManual(id) {
   if (!await _confirmAsync('Ativar assinatura manualmente?')) return;
   const r = await fetch(`/api/admin/ativar/${id}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({key: KEY})
+    body: JSON.stringify({})
   });
   const d = await r.json();
   if (d.ok) location.reload();
@@ -313,7 +316,7 @@ async function desativar(id) {
   if (!await _confirmAsync('Desativar assinatura? O site do cliente ficará fora do ar.')) return;
   const r = await fetch(`/api/admin/desativar/${id}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({key: KEY})
+    body: JSON.stringify({})
   });
   const d = await r.json();
   if (d.ok) location.reload();
@@ -326,7 +329,7 @@ async function excluir(id, nome) {
   if (!await _confirmAsync('Tem certeza? Todos os dados serão removidos.')) return;
   const r = await fetch(`/api/admin/excluir/${id}`, {
     method:'DELETE', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({key: KEY})
+    body: JSON.stringify({})
   });
   const d = await r.json();
   if (d.ok) {
@@ -356,7 +359,7 @@ async function salvarVencimento() {
   if (!data) return;
   const r = await fetch(`/api/admin/vencimento/${id}`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({key: KEY, vencimento: data})
+    body: JSON.stringify({vencimento: data})
   });
   const d = await r.json();
   if (d.ok) { fecharVencimento(); location.reload(); }

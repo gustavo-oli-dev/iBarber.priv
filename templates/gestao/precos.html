@@ -26,6 +26,7 @@
 </div>
 
 <form id="formPrecos" method="POST" action="{{ url_for('gestao_precos') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <!-- Tabela desktop -->
   <div class="g-table-wrap desktop-only">
     <table class="g-table">

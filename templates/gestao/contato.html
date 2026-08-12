@@ -6,6 +6,7 @@
 </div>
 
 <form method="POST" action="{{ url_for('gestao_contato') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="ct-grid">
 
     <!-- Col esquerda: dados de contato -->

@@ -336,7 +336,7 @@ function renderLista() {
     const tel = wppNum(ag.contato);
     const wppHtml = tel ? `<a class="btn-wpp" href="https://wa.me/55${tel}" target="_blank">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.136.563 4.14 1.542 5.878L0 24l6.31-1.519A11.934 11.934 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.006-1.373l-.36-.214-3.727.977.995-3.636-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
-      ${ag.contato}
+      ${esc(ag.contato)}
     </a>` : '';
 
     const jaNaoComp = ag.status === 'nao_compareceu';
@@ -349,10 +349,10 @@ function renderLista() {
     return `<div class="ag-card${p ? ' passou' : ''}" onclick="abrirDetalhe(${i})">
       <div class="ag-avatar">👤</div>
       <div class="ag-info">
-        <div class="ag-nome">${ag.usuario || '—'}</div>
+        <div class="ag-nome">${esc(ag.usuario || '—')}</div>
         <div class="ag-hora">${formatarHora(ag.data_hora)}</div>
-        ${ag.contato && ag.contato !== '—' ? `<div class="ag-sub">${ag.contato}</div>` : ''}
-        ${ag.barbeiro ? `<div class="ag-barbeiro"><span>✂</span> ${ag.barbeiro}</div>` : ''}
+        ${ag.contato && ag.contato !== '—' ? `<div class="ag-sub">${esc(ag.contato)}</div>` : ''}
+        ${ag.barbeiro ? `<div class="ag-barbeiro"><span>✂</span> ${esc(ag.barbeiro)}</div>` : ''}
       </div>
       <div class="ag-right">${rightHtml}</div>
     </div>`;
@@ -370,15 +370,15 @@ function abrirDetalhe(idx) {
   const statusLabel = ag.status === 'cancelado' ? 'Cancelado' : p ? 'Realizado' : 'Ativo';
 
   document.getElementById('detContent').innerHTML = `
-    <div class="detalhe-nome">${ag.usuario || '—'}</div>
+    <div class="detalhe-nome">${esc(ag.usuario || '—')}</div>
     <div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:1rem;">${formatarDataHora(ag.data_hora)}</div>
 
-    <div class="detalhe-row"><span class="detalhe-row-label">Contato</span><span>${ag.contato || '—'}</span></div>
-    <div class="detalhe-row"><span class="detalhe-row-label">E-mail</span><span style="font-size:0.8rem">${ag.email || '—'}</span></div>
-    <div class="detalhe-row"><span class="detalhe-row-label">Funcionário</span><span>${ag.barbeiro || 'Gestor'}</span></div>
-    <div class="detalhe-row"><span class="detalhe-row-label">Serviço</span><span>${ag.servico || '—'}</span></div>
+    <div class="detalhe-row"><span class="detalhe-row-label">Contato</span><span>${esc(ag.contato || '—')}</span></div>
+    <div class="detalhe-row"><span class="detalhe-row-label">E-mail</span><span style="font-size:0.8rem">${esc(ag.email || '—')}</span></div>
+    <div class="detalhe-row"><span class="detalhe-row-label">Funcionário</span><span>${esc(ag.barbeiro || 'Gestor')}</span></div>
+    <div class="detalhe-row"><span class="detalhe-row-label">Serviço</span><span>${esc(ag.servico || '—')}</span></div>
     <div class="detalhe-row"><span class="detalhe-row-label">Status</span><span>${statusLabel}</span></div>
-    ${ag.observacao ? `<div class="detalhe-row"><span class="detalhe-row-label">Obs.</span><span style="font-size:0.8rem">${ag.observacao}</span></div>` : ''}
+    ${ag.observacao ? `<div class="detalhe-row"><span class="detalhe-row-label">Obs.</span><span style="font-size:0.8rem">${esc(ag.observacao)}</span></div>` : ''}
 
     <div class="detalhe-actions">
       ${tel ? `<a class="btn-wpp" href="https://wa.me/55${tel}" target="_blank" style="padding:6px 12px; font-size:13px;">WhatsApp</a>` : ''}
@@ -387,7 +387,7 @@ function abrirDetalhe(idx) {
       ` : ''}
       ${!p ? `
         <button class="g-btn g-btn-outline" style="font-size:.8rem;" onclick="abrirReagendar(${ag.id})">Reagendar</button>
-        <button class="g-btn g-btn-outline" style="color:var(--error);font-size:.8rem;" onclick="abrirConfirmCancelar(${ag.id},'${(ag.usuario||'').replace(/'/g,"\\'")}','${ag.data_hora}','${(ag.servico||'').replace(/'/g,"\\'")}','${(ag.barbeiro||'Gestor').replace(/'/g,"\\'")}')">Cancelar</button>
+        <button class="g-btn g-btn-outline" style="color:var(--error);font-size:.8rem;" onclick="abrirConfirmCancelar(${ag.id},${escJs(ag.usuario||'')},${escJs(ag.data_hora)},${escJs(ag.servico||'')},${escJs(ag.barbeiro||'Gestor')})">Cancelar</button>
       ` : ''}
     </div>
   `;
@@ -406,10 +406,10 @@ let _cancelarAgId = null;
 function abrirConfirmCancelar(agId, nome, dataHora, servico, barbeiro) {
   _cancelarAgId = agId;
   document.getElementById('confirmInfo').innerHTML =
-    `<div><span>Cliente: </span><strong>${nome || '—'}</strong></div>` +
+    `<div><span>Cliente: </span><strong>${esc(nome || '—')}</strong></div>` +
     `<div><span>Horário: </span><strong>${formatarDataHora(dataHora)}</strong></div>` +
-    `<div><span>Serviço: </span><strong>${servico || '—'}</strong></div>` +
-    `<div><span>Barbeiro: </span><strong>${barbeiro || 'Gestor'}</strong></div>`;
+    `<div><span>Serviço: </span><strong>${esc(servico || '—')}</strong></div>` +
+    `<div><span>Barbeiro: </span><strong>${esc(barbeiro || 'Gestor')}</strong></div>`;
   document.getElementById('confirmOverlay').classList.add('open');
   document.getElementById('confirmCancelarBtn').onclick = executarCancelar;
 }

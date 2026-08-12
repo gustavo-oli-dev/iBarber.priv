@@ -4,16 +4,18 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from sqlalchemy.orm import joinedload
-from sqlalchemy import inspect as _sa_inspect
+from sqlalchemy import inspect as _sa_inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
 import os, json, uuid, secrets, smtplib, requests as req_http
 import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
+from functools import wraps
 from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -43,6 +45,10 @@ if not os.environ.get('SECRET_KEY'):
     raise RuntimeError('SECRET_KEY não definida no ambiente')
 
 app = Flask(__name__)
+# Atrás do nginx, sem isto request.remote_addr é sempre 127.0.0.1 e todos os
+# usuários dividem o mesmo balde de rate limit. x_for=1 = confia em exatamente
+# um proxy (o nosso); valores maiores permitiriam o cliente forjar o IP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.jinja_env.auto_reload = True
 app.jinja_env.cache = {}
@@ -83,6 +89,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB upload limit
 app.config['SESSION_COOKIE_HTTPONLY'] = True
+# O cookie tem Domain=.APP_DOMAIN, ou seja é compartilhado com TODOS os
+# subdomínios de tenant. Como cada barbearia controla o conteúdo do próprio
+# subdomínio, 'Lax' não separa um tenant do outro — a defesa efetiva é o token
+# CSRF em _csrf_protect(). 'Lax' fica só para não quebrar o retorno do OAuth.
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 _is_dev = os.environ.get('FLASK_DEBUG', '0') == '1' or os.environ.get('FLASK_ENV') == 'development'
 app.config['SESSION_COOKIE_SECURE'] = not _is_dev
@@ -130,17 +140,35 @@ def _magic_image_type(buf: bytes) -> str | None:
             return ext
     return None
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024   # 10 MB por imagem
+# Teto de pixels após descompressão: um PNG pequeno pode expandir para GBs.
+Image.MAX_IMAGE_PIXELS = 40_000_000
+
+def _ler_limitado(arquivo, limite=MAX_UPLOAD_BYTES):
+    """Lê no máximo `limite`+1 bytes e devolve (BytesIO, erro).
+    Confiar em request.content_length não funciona: o header é controlado pelo
+    cliente e some por completo em Transfer-Encoding: chunked."""
+    dados = arquivo.read(limite + 1)
+    if len(dados) > limite:
+        return None, f'Imagem muito grande. Máximo {limite // (1024 * 1024)} MB.'
+    if not dados:
+        return None, 'arquivo vazio'
+    return io.BytesIO(dados), None
+
 def _processar_imagem(arquivo, max_px=1400, quality=82):
     """Validate, strip EXIF, resize, return (BytesIO, error_str, ext)."""
+    origem, _erro_tamanho = _ler_limitado(arquivo)
+    if _erro_tamanho:
+        return None, _erro_tamanho, None
     try:
-        head = arquivo.read(16)
+        head = origem.read(16)
         if not head or _magic_image_type(head) is None:
             return None, 'arquivo de imagem inválido', None
-        arquivo.seek(0)
-        img = Image.open(arquivo)
+        origem.seek(0)
+        img = Image.open(origem)
         img.verify()
-        arquivo.seek(0)
-        img = Image.open(arquivo)
+        origem.seek(0)
+        img = Image.open(origem)
     except Exception:
         return None, 'arquivo de imagem inválido', None
     has_alpha = img.mode in ('RGBA', 'LA', 'PA') or (img.mode == 'P' and 'transparency' in img.info)
@@ -166,6 +194,8 @@ MAIL_FROM     = os.environ.get('MAIL_FROM', '')
 if not MAIL_USER or not MAIL_PASSWORD or not MAIL_FROM:
     raise RuntimeError('MAIL_USER, MAIL_PASSWORD e MAIL_FROM devem estar definidos no ambiente')
 API_TOKEN            = os.environ.get('API_TOKEN', '')
+if not API_TOKEN or len(API_TOKEN) < 32:
+    raise RuntimeError('API_TOKEN ausente ou fraco — defina no ambiente com no mínimo 32 caracteres')
 GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.shop/auth/google/callback')
@@ -177,8 +207,34 @@ VPS_IP        = os.environ.get('VPS_IP', 'IP_REMOVIDO')
 def _tenant_url(slug):
     return f'https://{slug}.{APP_DOMAIN}'
 
+def admin_key_required(fn):
+    """Protege as rotas /api/admin/* (chave mestra do SaaS).
+    Autoriza pela sessão do painel — assim a chave não precisa ir para o HTML —
+    ou pela chave enviada em body/query/header, em comparação de tempo
+    constante. Chave vazia nunca autoriza."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if session.get(_SESSION_ADMIN_OK):
+            return fn(*args, **kwargs)
+        key = ((request.get_json(silent=True) or {}).get('key')
+               or request.args.get('key', '')
+               or request.headers.get('X-Admin-Key', ''))
+        if not key or not hmac.compare_digest(str(key), API_TOKEN):
+            return jsonify({'erro': 'não autorizado'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
 db = SQLAlchemy(app)
-limiter = Limiter(get_remote_address, app=app, default_limits=[], storage_uri='memory://')
+# memory:// dá um contador por worker do gunicorn — o limite real vira N vezes
+# o declarado e zera a cada deploy. Com REDIS_URL o estado é compartilhado.
+_LIMITER_STORAGE = os.environ.get('REDIS_URL', 'memory://')
+limiter = Limiter(get_remote_address, app=app,
+                  default_limits=['600 per hour'],
+                  storage_uri=_LIMITER_STORAGE)
+if _LIMITER_STORAGE == 'memory://' and not _is_debug:
+    app.logger.warning(
+        '[LIMITER] usando memory:// em produção — os limites são por worker. '
+        'Defina REDIS_URL para contagem compartilhada.')
 
 # Dados demo usados quando o banco não existe / está vazio (preview independente de DB)
 _PREVIEW_CATS = [
@@ -330,6 +386,9 @@ class LembreteEnviado(db.Model):
     agendamento_id = db.Column(db.Integer, db.ForeignKey('agendamento.id'), nullable=False, index=True)
     tipo           = db.Column(db.String(10), nullable=False)  # 3d | 1d | 12h | 1h
     enviado_em     = db.Column(db.DateTime, default=datetime.utcnow)
+    # A checagem "já enviei?" e o INSERT não são atômicos; a constraint impede
+    # que duas execuções concorrentes mandem o mesmo lembrete duas vezes.
+    __table_args__ = (db.UniqueConstraint('agendamento_id', 'tipo', name='uq_lembrete_ag_tipo'),)
 
 class PasswordResetToken(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
@@ -608,6 +667,14 @@ def _safe_radius(value, default='6') -> str:
     except (TypeError, ValueError):
         return default
 
+_NOME_RE = re.compile(r"^[0-9A-Za-zÀ-ÿ\s.'\-]{2,80}$")
+
+def _nome_seguro(valor, tamanho=80):
+    """Valida nome informado por visitante anônimo. Retorna None se inválido.
+    Barra o vetor de XSS armazenado no painel de gestão (nome vira HTML lá)."""
+    v = (valor or '').strip()[:tamanho]
+    return v if _NOME_RE.match(v) else None
+
 def user_dict(u):
     return {
         'id': u.id, 'nome': u.name, 'email': u.email,
@@ -684,7 +751,28 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
             lista.insert(0, {'id': 0, 'nome': gestor_nome, 'foto_url': gestor_foto})
     return lista
 
+DURACAO_MIN = 5
+DURACAO_MAX = 480   # 8h — teto para não permitir bloqueio da agenda inteira
+
+def _int_seguro(valor, default, minimo, maximo) -> int:
+    """Converte para int e prende no intervalo [minimo, maximo]."""
+    try:
+        v = int(valor)
+    except (TypeError, ValueError):
+        v = default
+    return max(minimo, min(v, maximo))
+
+def _duracao_segura(valor, default=40) -> int:
+    """Converte para int e prende no intervalo permitido.
+    Duração 0/negativa causaria laço infinito nos geradores de slot."""
+    try:
+        d = int(valor)
+    except (TypeError, ValueError):
+        d = default
+    return max(DURACAO_MIN, min(d, DURACAO_MAX))
+
 def _gerar_slots(abertura='08:00', fechamento='18:00', duracao=40):
+    duracao = _duracao_segura(duracao)
     h, m = map(int, abertura.split(':'))
     fh, fm = map(int, fechamento.split(':'))
     slots, cur = [], h * 60 + m
@@ -730,12 +818,12 @@ def login():
 @app.route('/login-rapido', methods=['POST'])
 @limiter.limit('15 per minute')
 def login_rapido():
-    nome    = request.form.get('nome', '').strip()
+    nome    = _nome_seguro(request.form.get('nome'))
     contato = request.form.get('contato', '').strip()
     observation = (request.form.get('alergia') or request.form.get('observation') or '').strip()[:500]
     alergia = observation
     if not nome or not contato:
-        flash('Nome e contato são obrigatórios.', 'error')
+        flash('Informe um nome válido (apenas letras, espaços, apóstrofo e hífen) e o contato.', 'error')
         return redirect(url_for('login'))
     email  = f"guest_{uuid.uuid4().hex[:8]}@temp.com"
     user   = User(
@@ -779,13 +867,15 @@ def api_auth_telefone():
 @limiter.limit('10 per minute')
 def api_auth_criar_telefone():
     data      = request.get_json(force=True) or {}
-    nome      = data.get('nome', '').strip()[:100]
+    nome      = _nome_seguro(data.get('nome'))
     tel       = ''.join(c for c in data.get('telefone', '') if c.isdigit())
     email_opt = data.get('email', '').strip().lower() or None
     if email_opt and not re.match(r'^[^@]+@[^@]+\.[^@]+$', email_opt):
         return jsonify({'erro': 'e-mail inválido'}), 400
     lembretes = bool(data.get('lembretes')) and bool(email_opt)
-    if not nome or len(tel) < 10:
+    if not nome:
+        return jsonify({'erro': 'Nome inválido — use apenas letras, espaços, apóstrofo e hífen'}), 400
+    if len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
     tid = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
     existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
@@ -874,7 +964,7 @@ def servicos():
             'barbeiro': _barb_nome,
         }
     sd = _get_setting('dias_agenda', _api_tid())
-    dias_agenda = int(sd.value) if sd and sd.value else 20
+    dias_agenda = _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)
     tenant = get_tenant_atual()
     tenant_slug = tenant.slug if tenant else None
     return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda, tenant_slug=tenant_slug)
@@ -1081,21 +1171,21 @@ def salvar_lembretes():
     db.session.commit()
     return redirect(url_for('perfil'))
 
-def _enviar_email(dest, assunto, _corpo):
+def _enviar_email(dest, assunto, corpo):
     try:
         msg = MIMEMultipart('alternative')
         msg['Subject'] = assunto
         msg['From']    = MAIL_FROM
         msg['To']      = dest
-        msg.attach(MIMEText(html, 'html'))
-        with smtplib.SMTP(MAIL_HOST, MAIL_PORT) as smtp:
+        msg.attach(MIMEText(corpo, 'html', 'utf-8'))
+        with smtplib.SMTP(MAIL_HOST, MAIL_PORT, timeout=20) as smtp:
             smtp.ehlo()
             smtp.starttls()
             smtp.login(MAIL_USER, MAIL_PASSWORD)
-            smtp.sendmail(MAIL_USER, dest, msg.as_string())
+            smtp.sendmail(MAIL_FROM, [dest], msg.as_string())
         return True
     except Exception as e:
-        print(f'[EMAIL ERROR] {e}')
+        app.logger.error('[EMAIL] falha ao enviar para %s: %s', dest, e)
         return False
 
 def _enviar_confirmacao_agendamento(user, data_hora):
@@ -1420,37 +1510,38 @@ def confirmar_pedido():
     if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
 
-    data  = request.get_json()
+    data  = request.get_json(silent=True) or {}
     itens = data.get('itens', [])
     _tid  = session.get(_SESSION_PATH_TENANT_ID) or session.get(_SESSION_TENANT_ID) or _api_tid()
 
-    # validate type
-    if not isinstance(itens, list):
+    if not isinstance(itens, list) or not itens or len(itens) > 20:
         return jsonify({'erro': 'itens inválido'}), 400
 
-    # recalculate total server-side
-    total_calculado = 0.0
-    for item in itens:
-        svc = Servico.query.filter_by(
-            nome=item.get('nome', ''), tenant_id=_tid, ativo=True
-        ).first()
-        if svc:
-            item['preco'] = svc.preco  # override client price
-            total_calculado += svc.preco
-        else:
-            total_calculado += _sf(item.get('preco', 0))
-    total = total_calculado
+    # Todo serviço precisa existir no catálogo do tenant. Aceitar itens
+    # desconhecidos deixaria nome e preço nas mãos do cliente.
+    nomes = [str(i.get('nome', '')).strip() for i in itens if isinstance(i, dict)]
+    if len(nomes) != len(itens):
+        return jsonify({'erro': 'itens inválido'}), 400
+    catalogo = {s.nome: s for s in Servico.query.filter(
+        Servico.tenant_id == _tid,
+        Servico.ativo.is_(True),
+        Servico.nome.in_(nomes)).all()}
+    ausente = next((n for n in nomes if n not in catalogo), None)
+    if ausente is not None:
+        return jsonify({'erro': f'serviço indisponível: {ausente[:60]}'}), 400
 
+    total = round(sum(catalogo[n].preco or 0 for n in nomes), 2)
     pedido = Pedido(user_id=session[_SESSION_USER_ID], total=total,
                     tenant_id=_tid)
     db.session.add(pedido)
     db.session.flush()
-    for item in itens:
+    for n in nomes:
+        sv = catalogo[n]
         db.session.add(PedidoItem(
             pedido_id=pedido.id,
-            nome=item.get('nome', ''),
-            categoria=item.get('categoria', ''),
-            preco=_sf(item.get('preco', 0)),
+            nome=sv.nome,                                            # do catálogo, não do cliente
+            categoria=sv.cat_ref.nome if sv.cat_ref else (sv.categoria or ''),
+            preco=sv.preco or 0,
         ))
     db.session.commit()
 
@@ -1493,11 +1584,18 @@ def agendar():
 
     duracao_total = data.get('duracao_total')
     _dur_s = _get_setting('intervalo_minutos', _api_tid())
-    _dur_default = int(_dur_s.value) if _dur_s and _dur_s.value else 40
-    _dur_req = int(duracao_total) if duracao_total else _dur_default
-    # H7: limitar duração máxima a 480 min (8h) para evitar bloqueio malicioso da agenda
-    if _dur_req > 480:
-        return jsonify({'erro': 'duração máxima excedida'}), 400
+    _dur_default = _duracao_segura(_dur_s.value if _dur_s and _dur_s.value else 40)
+    # H7: duração precisa ser inteiro dentro do intervalo permitido — 0/negativa
+    # travaria os geradores de slot e valores altos bloqueariam a agenda inteira
+    if duracao_total is None or duracao_total == '':
+        _dur_req = _dur_default
+    else:
+        try:
+            _dur_req = int(duracao_total)
+        except (TypeError, ValueError):
+            return jsonify({'erro': 'duração inválida'}), 400
+        if not (DURACAO_MIN <= _dur_req <= DURACAO_MAX):
+            return jsonify({'erro': f'duração deve estar entre {DURACAO_MIN} e {DURACAO_MAX} minutos'}), 400
     _data_hora_fim = data_hora + timedelta(minutes=_dur_req)
 
     # C6: with_for_update() serializa requisições concorrentes para o mesmo dia/tenant
@@ -1534,7 +1632,7 @@ def agendar():
             funcionario_id = random.choice(livres)['id']
     ag = Agendamento(user_id=session[_SESSION_USER_ID], pedido_id=pedido_id,
                      data_hora=data_hora, funcionario_id=funcionario_id,
-                     duracao_total=int(duracao_total) if duracao_total else None,
+                     duracao_total=_dur_req if duracao_total else None,
                      tenant_id=session.get(_SESSION_PATH_TENANT_ID) or session.get(_SESSION_TENANT_ID) or _api_tid())
     db.session.add(ag)
     db.session.commit()
@@ -1622,7 +1720,7 @@ def reagendar_agendamento():
         return jsonify({'erro': 'data inválida'}), 400
     # C7: verificar sobreposição com duração, não só horário exato
     _dur_s = _get_setting('intervalo_minutos', ag.tenant_id)
-    _dur_default_r = int(_dur_s.value) if _dur_s and _dur_s.value else 40
+    _dur_default_r = _duracao_segura(_dur_s.value if _dur_s and _dur_s.value else 40)
     _nova_fim = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_r)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
     capacidade = max(1, len(ativos))
@@ -1656,8 +1754,8 @@ def reagendar_agendamento():
 
 @app.route('/api/gestao/reagendar', methods=['POST'])
 def api_gestao_reagendar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'agendamentos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     data = request.get_json(silent=True) or {}
     ag_id       = data.get('ag_id')
     nova_dh_str = data.get('data_hora')
@@ -1675,7 +1773,7 @@ def api_gestao_reagendar():
         return jsonify({'erro': 'data inválida'}), 400
     # C7: verificar sobreposição com duração, não só horário exato
     _dur_sg = _get_setting('intervalo_minutos', tid)
-    _dur_default_g = int(_dur_sg.value) if _dur_sg and _dur_sg.value else 40
+    _dur_default_g = _duracao_segura(_dur_sg.value if _dur_sg and _dur_sg.value else 40)
     _nova_fim_g = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_g)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), tid)
     capacidade = max(1, len(ativos))
@@ -1897,25 +1995,34 @@ def meu_historico():
 
 _SECRET = os.environ.get('SECRET_KEY', 'dev-secret')
 
+TOKEN_TTL_SEGUNDOS = int(os.environ.get('TOKEN_TTL_HORAS', '12')) * 3600
+
 def _gerar_token(tenant_id: int, func_id: int = 0, version: int = 0) -> str:
-    msg = f"{tenant_id}:{func_id}:{version}"
+    iat = int(datetime.utcnow().timestamp())
+    msg = f"{tenant_id}:{func_id}:{version}:{iat}"
     sig = hmac.new(_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
     return base64.b64encode(f"{msg}:{sig}".encode()).decode()
 
 def _extrair_tenant_token(token: str):
     """Retorna (tenant_id, func_id, version) ou (None, None, None) se inválido.
-    Aceita tokens antigos no formato tid:fid (version=0) para retrocompatibilidade."""
+    Aceita o formato legado tid:fid:version (sem emissão) durante a transição,
+    mas esse formato não expira — remova o ramo após todos os apps atualizarem."""
     try:
         decoded = base64.b64decode(token.encode()).decode()
         payload, sig = decoded.rsplit(':', 1)
         expected = hmac.new(_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected): return None, None, None
         parts = payload.split(':')
+        if len(parts) == 4:
+            tid, fid, ver, iat = (int(p) for p in parts)
+            if datetime.utcnow().timestamp() - iat > TOKEN_TTL_SEGUNDOS:
+                return None, None, None          # expirado
+            return tid, fid, ver
+        if len(parts) == 3:
+            return int(parts[0]), int(parts[1]), int(parts[2])
         if len(parts) == 2:
             # formato legado: tid:fid — versão implícita 0
             return int(parts[0]), int(parts[1]), 0
-        elif len(parts) == 3:
-            return int(parts[0]), int(parts[1]), int(parts[2])
         return None, None, None
     except Exception:
         return None, None, None
@@ -1928,12 +2035,18 @@ def _token_valido(tid, version) -> bool:
     return (t.token_version or 0) == version
 
 def verificar_token(req):
-    """Retorna tenant_id se válido e na versão correta, None caso contrário."""
+    """Retorna tenant_id se válido e na versão correta, None caso contrário.
+    Se o token for de funcionário, ele precisa continuar ativo e no mesmo
+    tenant — demitir alguém corta o acesso na hora."""
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    tid, _, ver = _extrair_tenant_token(token)
-    if tid and _token_valido(tid, ver):
-        return tid
-    return None
+    tid, fid, ver = _extrair_tenant_token(token)
+    if not tid or not _token_valido(tid, ver):
+        return None
+    if fid:
+        f = db.session.get(Funcionario, fid)
+        if not f or f.tenant_id != tid or not f.ativo:
+            return None
+    return tid
 
 def verificar_token_admin(req):
     """Retorna tenant_id se o token pertence ao gestor (func_id==0) e versão válida."""
@@ -1942,6 +2055,25 @@ def verificar_token_admin(req):
     if tid and fid == 0 and _token_valido(tid, ver):
         return tid
     return None
+
+_PERMS_VALIDAS = ('agendamentos', 'calendario', 'marcar', 'clientes',
+                  'servicos', 'precos', 'pedidos', 'entradas', 'fotos')
+
+def verificar_token_perm(req, perm):
+    """Retorna tenant_id se o portador do token tem a permissão `perm`.
+    Dono (func_id==0) tem tudo. Funcionário precisa estar ativo, pertencer ao
+    tenant e ter a flag correspondente — demitir alguém passa a cortar o acesso
+    imediatamente, sem depender de rotação de token."""
+    token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
+    tid, fid, ver = _extrair_tenant_token(token)
+    if not tid or not _token_valido(tid, ver):
+        return None
+    if fid == 0:
+        return tid
+    f = db.session.get(Funcionario, fid)
+    if not f or f.tenant_id != tid or not f.ativo:
+        return None
+    return tid if getattr(f, f'perm_{perm}', False) else None
 
 def get_tenant_by_slug(slug):
     return Tenant.query.filter_by(slug=slug, ativo=True).first()
@@ -2143,8 +2275,9 @@ def api_tenant_config_get():
 
 @app.route('/api/tenant/config', methods=['PUT'])
 def api_tenant_config_put():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    # Altera identidade pública da barbearia — restrito ao dono
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     tenant = _get_tenant_para_api()
     if not tenant: return jsonify({'erro': 'não encontrado'}), 404
     d = request.get_json(force=True) or {}
@@ -2185,8 +2318,8 @@ def api_categorias_listar():
 
 @app.route('/api/categorias', methods=['POST'])
 def api_categorias_criar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'servicos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     d = request.get_json() or {}
     nome = d.get('nome', '').strip()[:100]
     if not nome: return jsonify({'erro': 'nome obrigatório'}), 400
@@ -2200,8 +2333,8 @@ def api_categorias_criar():
 
 @app.route('/api/categorias/<int:cid>', methods=['PUT', 'DELETE'])
 def api_categoria_detalhe(cid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'servicos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     cat = db.session.get(Categoria, cid)
     if not cat or cat.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
@@ -2243,8 +2376,8 @@ def api_servicos_listar():
 
 @app.route('/api/servicos', methods=['POST'])
 def api_servicos_criar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'servicos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     d    = request.get_json() or {}
     nome = d.get('nome', '').strip()
     if not nome: return jsonify({'erro': 'nome obrigatório'}), 400
@@ -2266,8 +2399,8 @@ def api_servicos_criar():
 
 @app.route('/api/servicos/<int:sid>', methods=['PUT', 'DELETE'])
 def api_servico_detalhe(sid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'servicos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     sv = db.session.get(Servico, sid)
     if not sv or sv.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     if request.method == 'DELETE':
@@ -2300,10 +2433,20 @@ def api_horarios_disponiveis():
         return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
 
     duracao_s = _get_setting('intervalo_minutos', _tid)
-    duracao   = int(duracao_s.value) if duracao_s and duracao_s.value else 40
+    duracao   = _duracao_segura(duracao_s.value if duracao_s and duracao_s.value else 40)
 
     # Duração solicitada pelo cliente (soma dos serviços escolhidos)
-    duracao_solicitada = int(request.args.get('duracao', duracao))
+    _dur_raw = request.args.get('duracao')
+    if _dur_raw is not None:
+        try:
+            _dur_int = int(_dur_raw)
+        except (TypeError, ValueError):
+            return jsonify({'erro': 'duração inválida'}), 400
+        if not (DURACAO_MIN <= _dur_int <= DURACAO_MAX):
+            return jsonify({'erro': f'duração deve estar entre {DURACAO_MIN} e {DURACAO_MAX} minutos'}), 400
+        duracao_solicitada = _dur_int
+    else:
+        duracao_solicitada = duracao
 
     # Hora atual em BRT
     agora_brt = datetime.utcnow() - timedelta(hours=3)
@@ -2458,8 +2601,8 @@ def api_barbeiros_disponiveis():
 @app.route('/api/gestor-barbeiro', methods=['GET', 'POST'])
 def api_gestor_barbeiro():
     """Lê/salva se o gestor conta como barbeiro e seu nome."""
-    _tid = verificar_token(request)
-    if not _tid: return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     ativo, nome = _gestor_como_barbeiro(_tid)
     if request.method == 'GET':
         gf = _get_setting('gestor_foto', _tid)
@@ -2531,18 +2674,16 @@ def api_escala(data_str):
 
 @app.route('/api/config-horarios', methods=['GET', 'POST'])
 def api_config_horarios():
-    _tid = verificar_token(request)
-    if not _tid: return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         data     = request.get_json(silent=True) or {}
         intervalo = data.pop('intervalo_minutos', None)
         if intervalo is not None:
-            intervalo = max(10, min(int(intervalo), 120))
-            _upsert_setting('intervalo_minutos', str(intervalo), _tid)
+            _upsert_setting('intervalo_minutos', str(_int_seguro(intervalo, 40, 10, 120)), _tid)
         dias_agenda = data.pop('dias_agenda', None)
         if dias_agenda is not None:
-            dias_agenda = max(1, min(int(dias_agenda), 60))
-            _upsert_setting('dias_agenda', str(dias_agenda), _tid)
+            _upsert_setting('dias_agenda', str(_int_seguro(dias_agenda, 20, 1, 60)), _tid)
         _upsert_setting('horario_funcionamento', json.dumps(data, ensure_ascii=False), _tid)
         db.session.commit()
         return jsonify({'ok': True})
@@ -2551,15 +2692,15 @@ def api_config_horarios():
     sd = _get_setting('dias_agenda', _tid)
     cfg = json.loads(s.value) if s and s.value else \
           {k: {'aberto': k != 'dom', 'abertura': '08:00', 'fechamento': '18:00'} for k in _DIAS_KEYS}
-    cfg['intervalo_minutos'] = int(si.value) if si and si.value else 40
-    cfg['dias_agenda'] = int(sd.value) if sd and sd.value else 20
+    cfg['intervalo_minutos'] = _duracao_segura(si.value if si and si.value else 40)
+    cfg['dias_agenda'] = _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)
     return jsonify(cfg)
 
 @app.route('/api/config-publica', methods=['GET'])
 def api_config_publica():
     """Configurações públicas lidas pelo site (sem autenticação)."""
     sd = _get_setting('dias_agenda', _api_tid())
-    return jsonify({'dias_agenda': int(sd.value) if sd and sd.value else 20})
+    return jsonify({'dias_agenda': _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)})
 
 @app.route('/api/horarios/conflitos', methods=['POST'])
 def api_horarios_conflitos():
@@ -2601,8 +2742,8 @@ def api_dias_fechados_conflitos():
 
 @app.route('/api/dias-fechados', methods=['GET', 'POST', 'DELETE'])
 def api_dias_fechados():
-    _tid = verificar_token(request)
-    if not _tid: return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     s = _get_setting('dias_fechados', _tid)
     dias = json.loads(s.value) if s and s.value else []
     if request.method in ('POST', 'DELETE'):
@@ -2627,8 +2768,8 @@ def api_dias_fechados():
 
 @app.route('/api/horarios-especiais', methods=['GET', 'POST'])
 def api_horarios_especiais():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         d = request.get_json(silent=True) or {}
         data       = d.get('data', '').strip()
@@ -2692,8 +2833,8 @@ def api_horarios_especiais():
 
 @app.route('/api/horarios-especiais/<int:hid>', methods=['DELETE'])
 def api_horario_especial_del(hid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     h = db.session.get(HorarioEspecial, hid)
     if not h or h.tenant_id != tid: return jsonify({'erro': 'não encontrado'}), 404
     db.session.delete(h)
@@ -2702,8 +2843,8 @@ def api_horario_especial_del(hid):
 
 @app.route('/api/slots-predefinidos', methods=['GET', 'POST'])
 def api_slots_predefinidos():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         d = request.get_json() or {}
         ativo = bool(d.get('ativo', False))
@@ -2715,8 +2856,8 @@ def api_slots_predefinidos():
 
 @app.route('/api/intervalos-descanso', methods=['GET', 'POST'])
 def api_intervalos_descanso():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         d = request.get_json() or {}
         _upsert_setting('intervalos_descanso', json.dumps(d, ensure_ascii=False), tid)
@@ -2727,8 +2868,8 @@ def api_intervalos_descanso():
 
 @app.route('/api/agendamentos/<int:ag_id>/status', methods=['POST'])
 def api_agendamento_status(ag_id):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'agendamentos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     ag = db.session.get(Agendamento, ag_id)
     if not ag or ag.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -2787,6 +2928,8 @@ def api_credenciais_conta():
         if len(senha_nova) < 8:
             return jsonify({'erro': 'Nova senha deve ter mínimo 8 caracteres'}), 400
         tenant.password = generate_password_hash(senha_nova)
+        # Invalida todos os tokens emitidos antes da troca de senha
+        tenant.token_version = (tenant.token_version or 0) + 1
     if email_novo and email_novo != tenant.email:
         if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email_novo):
             return jsonify({'erro': 'E-mail inválido'}), 400
@@ -2911,9 +3054,11 @@ def verificar_pagamento(mp_payment_id):
     status = r.json().get('status', 'unknown')
     if status == 'approved' and pedido_id:
         pedido = db.session.get(Pedido, pedido_id)
-        if pedido and pedido.tenant_id != _api_tid():
+        # O pedido precisa ser do próprio usuário: só conferir o tenant deixaria
+        # um cliente quitar o pedido de outro com um pagamento aprovado seu.
+        if not pedido or pedido.tenant_id != _api_tid() or pedido.user_id != session[_SESSION_USER_ID]:
             return jsonify({'status': 'unknown'}), 403
-        if pedido and pedido.status != 'pago':
+        if pedido.status != 'pago':
             pedido.status = 'pago'
             _entrada = EntradaMonetaria.query.filter_by(pedido_id=pedido_id).first()
             if _entrada:
@@ -2942,7 +3087,9 @@ def retorno_pagamento():
     if pedido_id:
         pedido = db.session.get(Pedido, pedido_id)
         if pedido:
-            if pedido.tenant_id != _api_tid():
+            # Mesmo critério do /api/verificar-pagamento: o pedido precisa ser
+            # do usuário logado, não apenas do mesmo tenant.
+            if pedido.tenant_id != _api_tid() or pedido.user_id != session.get(_SESSION_USER_ID):
                 return redirect('/')
             _tenant = db.session.get(Tenant, pedido.tenant_id)
             slug = _tenant.slug if _tenant else ''
@@ -2977,8 +3124,8 @@ def retorno_pagamento():
 
 @app.route('/api/precos', methods=['GET', 'POST'])
 def api_precos():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'precos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
         for nome, valor in data.items():
@@ -3028,8 +3175,8 @@ def api_usuarios():
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
 def api_usuario(uid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'clientes')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     u = db.session.get(User, uid)
     if not u or u.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3071,8 +3218,8 @@ def api_usuario(uid):
 
 @app.route('/api/pedidos', methods=['GET'])
 def api_pedidos():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'pedidos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     pedidos = (Pedido.query
                .filter_by(tenant_id=tid)
                .order_by(Pedido.criado_em.desc())
@@ -3081,8 +3228,8 @@ def api_pedidos():
 
 @app.route('/api/pedidos/<int:pid>', methods=['GET'])
 def api_pedido(pid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'pedidos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     p = db.session.get(Pedido, pid)
     if not p or p.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3090,8 +3237,8 @@ def api_pedido(pid):
 
 @app.route('/api/pedidos/<int:pid>/status', methods=['POST'])
 def api_pedido_status(pid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'pedidos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     p = db.session.get(Pedido, pid)
     if not p or p.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3125,8 +3272,9 @@ def api_stats_servicos():
 
 @app.route('/api/stats/barbeiros', methods=['GET'])
 def api_stats_barbeiros():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    # inclui receita por barbeiro
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     contagem  = {}
     receita   = {}
     _, gestor_nome = _gestor_como_barbeiro(tid)
@@ -3194,8 +3342,8 @@ def api_stats_formas():
 
 @app.route('/api/stats/receita_por_mes', methods=['GET'])
 def api_stats_receita_mes():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).limit(5000).all()
     contagem = {}
     for e in entradas:
@@ -3206,8 +3354,8 @@ def api_stats_receita_mes():
 
 @app.route('/api/stats/receita_por_forma', methods=['GET'])
 def api_stats_receita_forma():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).limit(5000).all()
     contagem = {}
     for e in entradas:
@@ -3247,17 +3395,30 @@ def api_stats_categorias():
 
 CSV_LIMIT = 500
 
+# Excel/Sheets interpretam células iniciadas por estes caracteres como fórmula.
+# Um cliente cadastrado como =HYPERLINK(...) executaria código na planilha do dono.
+_CSV_PREFIXOS_PERIGOSOS = ('=', '+', '-', '@', '\t', '\r')
+
+def _csv_safe(valor):
+    s = '' if valor is None else str(valor)
+    return "'" + s if s.startswith(_CSV_PREFIXOS_PERIGOSOS) else s
+
+def _csv_row(writer, valores):
+    writer.writerow([_csv_safe(v) for v in valores])
+
 @app.route('/api/export', methods=['GET'])
 def api_export():
-    # Accept token via _token query param (for <a> download links) or Authorization header
+    # Exporta base de clientes e financeiro inteiros — restrito ao dono.
+    # Aceita _token na query só para permitir download via <a href>; o valor
+    # precisa ser um token de dono (func_id==0) igual ao do header.
     _qt = request.args.get('_token', '')
     if _qt:
-        _ext_tid, _, _ext_ver = _extrair_tenant_token(_qt)
-        tid = _ext_tid if (_ext_tid and _token_valido(_ext_tid, _ext_ver)) else None
+        _ext_tid, _ext_fid, _ext_ver = _extrair_tenant_token(_qt)
+        tid = _ext_tid if (_ext_tid and _ext_fid == 0 and _token_valido(_ext_tid, _ext_ver)) else None
     else:
-        tid = verificar_token(request)
+        tid = verificar_token_admin(request)
     if not tid:
-        return jsonify({'erro': 'token inválido'}), 401
+        return jsonify({'erro': 'não autorizado'}), 403
     tipo   = request.args.get('tipo', 'agendamentos')
     mes    = request.args.get('mes', '')
     inicio = request.args.get('inicio', '')
@@ -3265,15 +3426,22 @@ def api_export():
 
     d_ini = None; d_fim = None
     if mes:
-        y, m = map(int, mes.split('-'))
-        d_ini = datetime(y, m, 1)
-        d_fim = datetime(y, m, monthrange(y, m)[1], 23, 59, 59)
+        try:
+            y, m = map(int, mes.split('-'))
+            d_ini = datetime(y, m, 1)
+            d_fim = datetime(y, m, monthrange(y, m)[1], 23, 59, 59)
+        except (ValueError, TypeError):
+            return jsonify({'erro': 'mês inválido (use AAAA-MM)'}), 400
     elif inicio:
-        try: d_ini = datetime.strptime(inicio, '%Y-%m-%d')
-        except: pass
+        try:
+            d_ini = datetime.strptime(inicio, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'erro': 'data inicial inválida (use AAAA-MM-DD)'}), 400
     if fim and not mes:
-        try: d_fim = datetime.strptime(fim + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
-        except: pass
+        try:
+            d_fim = datetime.strptime(fim + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            return jsonify({'erro': 'data final inválida (use AAAA-MM-DD)'}), 400
 
     out = io.StringIO()
     w   = csv.writer(out)
@@ -3290,10 +3458,10 @@ def api_export():
             pedido = db.session.get(Pedido, ag.pedido_id) if ag.pedido_id else None
             servs  = ', '.join(i.nome for i in pedido.itens) if pedido else '—'
             barb   = ag.funcionario.nome if ag.funcionario else 'Proprietário'
-            w.writerow([ag.data_hora.strftime('%d/%m/%Y'), ag.data_hora.strftime('%H:%M'),
-                        user.name if user else '—', user.contact if user else '—',
-                        servs, barb, STATUS_MAP.get(ag.status, ag.status),
-                        FORMA_MAP.get(ag.forma_pagamento or '', ag.forma_pagamento or '—')])
+            _csv_row(w, [ag.data_hora.strftime('%d/%m/%Y'), ag.data_hora.strftime('%H:%M'),
+                         user.name if user else '—', user.contact if user else '—',
+                         servs, barb, STATUS_MAP.get(ag.status, ag.status),
+                         FORMA_MAP.get(ag.forma_pagamento or '', ag.forma_pagamento or '—')])
 
     elif tipo == 'financeiro':
         w.writerow(['Data','Descrição','Valor (R$)','Forma Pagamento'])
@@ -3301,14 +3469,14 @@ def api_export():
         if d_ini: q = q.filter(EntradaMonetaria.criado_em >= d_ini)
         if d_fim: q = q.filter(EntradaMonetaria.criado_em <= d_fim)
         for e in q.order_by(EntradaMonetaria.criado_em.desc()).limit(CSV_LIMIT).all():
-            w.writerow([e.criado_em.strftime('%d/%m/%Y'), e.descricao,
-                        f'{e.valor:.2f}'.replace('.',','), FORMA_MAP.get(e.forma or '', e.forma or '—')])
+            _csv_row(w, [e.criado_em.strftime('%d/%m/%Y'), e.descricao,
+                         f'{e.valor:.2f}'.replace('.',','), FORMA_MAP.get(e.forma or '', e.forma or '—')])
 
     elif tipo == 'clientes':
         w.writerow(['Nome','Email','Contato','Cadastrado em'])
         q = User.query.filter(User.tenant_id == tid)
         for c in q.order_by(User.name).limit(CSV_LIMIT).all():
-            w.writerow([c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
+            _csv_row(w, [c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
 
     elif tipo == 'servicos':
         w.writerow(['Data','Cliente','Serviço','Categoria','Preço (R$)','Status'])
@@ -3317,20 +3485,23 @@ def api_export():
         if d_fim: q = q.filter(Pedido.criado_em <= d_fim)
         for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).limit(CSV_LIMIT).all():
             for item in p.itens:
-                w.writerow([p.criado_em.strftime('%d/%m/%Y'),
-                            p.usuario.name if p.usuario else '—',
-                            item.nome, item.categoria or '—',
-                            f'{item.preco:.2f}'.replace('.',','),
-                            STATUS_MAP.get(p.status, p.status)])
+                _csv_row(w, [p.criado_em.strftime('%d/%m/%Y'),
+                             p.usuario.name if p.usuario else '—',
+                             item.nome, item.categoria or '—',
+                             f'{item.preco:.2f}'.replace('.',','),
+                             STATUS_MAP.get(p.status, p.status)])
 
-    nome = f'ibarber_{tipo}_{mes or inicio or "todos"}.csv'
+    # tipo/mes vêm da query string — sanitizar evita injeção de cabeçalho HTTP
+    _sufixo = re.sub(r'[^A-Za-z0-9_-]', '', str(mes or inicio or 'todos'))[:20] or 'todos'
+    _tipo_s = re.sub(r'[^a-z]', '', str(tipo))[:20] or 'dados'
+    nome = f'ibarber_{_tipo_s}_{_sufixo}.csv'
     return Response('﻿' + out.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': f'attachment; filename="{nome}"'})
 
 @app.route('/api/agendamentos', methods=['GET', 'POST'])
 def api_agendamentos():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'marcar' if request.method == 'POST' else 'agendamentos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
 
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
@@ -3359,13 +3530,31 @@ def api_agendamentos():
         raw_ids = data.get('servico_ids') or (
             [data['servico_id']] if data.get('servico_id') else []
         )
-        servico_ids   = [int(x) for x in raw_ids if x]
-        forma_pag     = data.get('forma_pagamento', 'pagar_no_local')
-        funcionario_id = data.get('funcionario_id', None)
+        try:
+            servico_ids = [int(x) for x in raw_ids if x]
+        except (TypeError, ValueError):
+            return jsonify({'erro': 'serviço inválido'}), 400
+        forma_pag = data.get('forma_pagamento', 'pagar_no_local')
+        if forma_pag not in ('pagar_no_local', 'pix', 'cartao_credito', 'cartao_debito', 'dinheiro'):
+            return jsonify({'erro': 'forma de pagamento inválida'}), 400
 
-        ag = Agendamento(user_id=user_id, data_hora=data_hora, tenant_id=tid)
+        # O barbeiro precisa ser desta barbearia e estar ativo; sem isso dava
+        # para vincular o agendamento a um funcionário de OUTRO tenant.
+        funcionario_id = data.get('funcionario_id')
         if funcionario_id is not None:
-            ag.funcionario_id = funcionario_id
+            try:
+                funcionario_id = int(funcionario_id)
+            except (TypeError, ValueError):
+                return jsonify({'erro': 'funcionário inválido'}), 400
+            if funcionario_id == 0:
+                funcionario_id = None          # 0 = proprietário, sem registro em funcionario
+            else:
+                _f = db.session.get(Funcionario, funcionario_id)
+                if not _f or _f.tenant_id != tid or not _f.ativo:
+                    return jsonify({'erro': 'funcionário inválido'}), 400
+
+        ag = Agendamento(user_id=user_id, data_hora=data_hora,
+                         funcionario_id=funcionario_id, tenant_id=tid)
 
         # Cria Pedido se houver serviços
         pedido = None
@@ -3454,8 +3643,8 @@ def api_agendamentos():
 
 @app.route('/api/entradas', methods=['GET'])
 def api_entradas():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     entradas = EntradaMonetaria.query.filter_by(tenant_id=tid).order_by(EntradaMonetaria.criado_em.desc()).limit(5000).all()
     return jsonify([{
         'id': e.id, 'descricao': e.descricao, 'valor': e.valor,
@@ -3464,8 +3653,8 @@ def api_entradas():
 
 @app.route('/api/entradas', methods=['POST'])
 def api_entrada_criar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     d = request.get_json() or {}
     descricao = d.get('descricao', '').strip()[:200]
     valor     = _sf(d.get('valor', 0))
@@ -3486,8 +3675,8 @@ def api_entrada_criar():
 
 @app.route('/api/entradas/<int:eid>', methods=['DELETE'])
 def api_entrada_deletar(eid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'entradas')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     e = db.session.get(EntradaMonetaria, eid)
     if not e or e.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3515,8 +3704,8 @@ def api_fotos_listar():
 @app.route('/api/fotos', methods=['POST'])
 @limiter.limit('30 per hour')
 def api_fotos_upload():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'fotos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     categoria = request.form.get('categoria', 'outros')
     servico   = request.form.get('servico', '').strip()
     arquivo   = request.files.get('foto')
@@ -3537,8 +3726,8 @@ def api_fotos_upload():
 
 @app.route('/api/fotos/<int:fid>', methods=['DELETE'])
 def api_fotos_deletar(fid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_perm(request, 'fotos')
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     foto = db.session.get(FotoServico, fid)
     if not foto or foto.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3615,14 +3804,14 @@ def verificar_lembretes():
                         db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo=tipo))
                         db.session.commit()
                         enviados.add((ag.id, tipo))
-                        print(f'[LEMBRETE] {tipo} enviado para {user.email}')
+                        app.logger.info('[LEMBRETE] %s enviado para %s', tipo, user.email)
         except Exception as e:
-            print(f'[SCHEDULER] verificar_lembretes erro: {e}')
+            app.logger.error('[SCHEDULER] verificar_lembretes erro: %s', e)
 
 @app.route('/api/testar-lembretes', methods=['POST'])
 def testar_lembretes():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     with app.app_context():
         user = User.query.filter_by(tenant_id=tid).first()
         if not user:
@@ -3669,7 +3858,7 @@ def verificar_assinaturas():
                       </p></div>''')
             db.session.commit()
         except Exception as e:
-            print(f'[SCHEDULER] verificar_assinaturas erro: {e}')
+            app.logger.error('[SCHEDULER] verificar_assinaturas erro: %s', e)
 
 def limpar_guests():
     with app.app_context():
@@ -3682,7 +3871,7 @@ def limpar_guests():
                     db.session.delete(g)
             db.session.commit()
         except Exception as e:
-            print(f'[SCHEDULER] limpar_guests erro: {e}')
+            app.logger.error('[SCHEDULER] limpar_guests erro: %s', e)
 
 def limpar_trials_expirados():
     with app.app_context():
@@ -3697,9 +3886,9 @@ def limpar_trials_expirados():
                 db.session.delete(t)
             if expirados:
                 db.session.commit()
-                print(f'[TRIAL] {len(expirados)} tenant(s) expirado(s) excluídos.')
+                app.logger.info('[TRIAL] %d tenant(s) expirado(s) excluídos.', len(expirados))
         except Exception as e:
-            print(f'[SCHEDULER] limpar_trials_expirados erro: {e}')
+            app.logger.error('[SCHEDULER] limpar_trials_expirados erro: %s', e)
 
 def enviar_retorno_automatico():
     """Envia email 28 dias após um corte sugerindo reagendar."""
@@ -3758,9 +3947,9 @@ def enviar_retorno_automatico():
                 if ok:
                     db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo='retorno'))
                     db.session.commit()
-                    print(f'[RETORNO] Enviado para {user.email}')
+                    app.logger.info('[RETORNO] enviado para %s', user.email)
         except Exception as e:
-            print(f'[SCHEDULER] enviar_retorno_automatico erro: {e}')
+            app.logger.error('[SCHEDULER] enviar_retorno_automatico erro: %s', e)
 
 def _migrate_db():
     """Adiciona colunas novas sem quebrar instâncias existentes."""
@@ -3770,22 +3959,36 @@ def _migrate_db():
                 "ALTER TABLE tenant ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"
             ))
             conn.commit()
-            print('[MIGRATE] token_version adicionado à tabela tenant')
-    except Exception:
-        pass  # coluna já existe
+            app.logger.info('[MIGRATE] token_version adicionado à tabela tenant')
+    except Exception as e:
+        # "duplicate column" é esperado quando a coluna já existe; o resto é erro real
+        _msg = str(e).lower()
+        if 'duplicate' not in _msg and 'exists' not in _msg:
+            app.logger.error('[MIGRATE] token_version falhou: %s', e)
 
 with app.app_context():
     _migrate_db()
 
-# C8: em modo debug o Werkzeug sobe dois processos; iniciar o scheduler só no principal
-if not _is_dev or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+# O scheduler roda em UM processo só. A guarda anterior (`not _is_dev`) era
+# verdadeira em cada worker do gunicorn: com 4 workers, cada job executava 4x —
+# lembretes duplicados para o cliente e limpezas concorrentes.
+# Produção: suba um processo dedicado com RUN_SCHEDULER=1.
+# Dev: o Werkzeug cria dois processos, e só o principal tem WERKZEUG_RUN_MAIN.
+_RODAR_SCHEDULER = (
+    os.environ.get('RUN_SCHEDULER') == '1'
+    or (_is_dev and os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
+)
+if _RODAR_SCHEDULER:
     scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(verificar_lembretes,      'interval', minutes=30)
-    scheduler.add_job(verificar_assinaturas,    'interval', hours=12)
-    scheduler.add_job(limpar_guests,            'interval', hours=24)
-    scheduler.add_job(limpar_trials_expirados,  'interval', hours=24)
-    scheduler.add_job(enviar_retorno_automatico,'interval', hours=12)
+    scheduler.add_job(verificar_lembretes,      'interval', minutes=30, max_instances=1, coalesce=True)
+    scheduler.add_job(verificar_assinaturas,    'interval', hours=12,   max_instances=1, coalesce=True)
+    scheduler.add_job(limpar_guests,            'interval', hours=24,   max_instances=1, coalesce=True)
+    scheduler.add_job(limpar_trials_expirados,  'interval', hours=24,   max_instances=1, coalesce=True)
+    scheduler.add_job(enviar_retorno_automatico,'interval', hours=12,   max_instances=1, coalesce=True)
     scheduler.start()
+    app.logger.info('[SCHEDULER] iniciado neste processo')
+elif not _is_dev:
+    app.logger.info('[SCHEDULER] inativo neste worker (defina RUN_SCHEDULER=1 no processo dedicado)')
 
 
 @app.route('/api/ping', methods=['GET'])
@@ -3850,11 +4053,10 @@ def _email_atualizar_apk(tenant):
     )
 
 @app.route('/api/admin/email-apk-update', methods=['POST'])
+@limiter.limit('5 per minute')
+@admin_key_required
 def api_admin_email_apk_update():
     """Dispara e-mail de atualização do APK para todos os tenants ativos."""
-    data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     tenants = Tenant.query.filter_by(ativo=True, assinatura_ativa=True).all()
     enviados = 0
     falhas   = 0
@@ -3874,7 +4076,8 @@ def admin_login():
     tenant = Tenant.query.filter_by(email=email, ativo=True).first()
     if not tenant or not check_password_hash(tenant.password, senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    # func_id=0 aqui é correto: quem autenticou foi o próprio dono do tenant
+    token = _gerar_token(tenant.id, func_id=0, version=tenant.token_version or 0)
     return jsonify({'ok': True, 'token': token, 'nome': tenant.nome, 'tipo': 'admin'})
 
 @app.route('/api/funcionarios/login', methods=['POST'])
@@ -3897,15 +4100,16 @@ def api_funcionarios_login():
 
 @app.route('/api/funcionarios', methods=['GET'])
 def api_funcionarios_listar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     funs = Funcionario.query.filter_by(tenant_id=tid, ativo=True).order_by(Funcionario.nome).limit(5000).all()
     return jsonify([f.to_dict() for f in funs])
 
 @app.route('/api/funcionarios', methods=['POST'])
 def api_funcionarios_criar():
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    # Criar funcionário define permissões — restrito ao dono
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     d = request.get_json() or {}
     email_func = d.get('email', '').strip().lower() or None
     if email_func:
@@ -3950,8 +4154,9 @@ def api_funcionarios_criar():
 
 @app.route('/api/funcionarios/<int:fid>', methods=['PUT', 'DELETE'])
 def api_funcionario_detalhe(fid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    # Altera permissões e senha de funcionário — restrito ao dono
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     f = db.session.get(Funcionario, fid)
     if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -3996,8 +4201,8 @@ def api_funcionario_detalhe(fid):
 
 @app.route('/api/funcionarios/<int:fid>/conflitos', methods=['GET'])
 def api_funcionario_conflitos(fid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     f = db.session.get(Funcionario, fid)
     if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -4006,16 +4211,16 @@ def api_funcionario_conflitos(fid):
 
 @app.route('/api/gestor-barbeiro/conflitos', methods=['GET'])
 def api_gestor_barbeiro_conflitos():
-    _tid = verificar_token(request)
-    if not _tid: return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     conflitos = _conflitos_agendamentos_futuros(_tid, funcionario_id=0)
     return jsonify({'conflitos': [{'id': c['ag'].id, 'nome': c['nome'], 'hora': c['data_hora_fmt']} for c in conflitos]})
 
 @app.route('/api/funcionarios/<int:fid>/foto', methods=['POST', 'DELETE'])
 @limiter.limit('20 per hour', methods=['POST'])
 def api_funcionario_foto(fid):
-    tid = verificar_token(request)
-    if not tid: return jsonify({'erro': 'token inválido'}), 401
+    tid = verificar_token_admin(request)
+    if not tid: return jsonify({'erro': 'não autorizado'}), 403
     f = db.session.get(Funcionario, fid)
     if not f or f.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -4047,8 +4252,8 @@ def api_funcionario_foto(fid):
 @app.route('/api/gestor-foto', methods=['POST', 'DELETE'])
 @limiter.limit('20 per hour', methods=['POST'])
 def api_gestor_foto():
-    _tid = verificar_token(request)
-    if not _tid: return jsonify({'erro': 'token inválido'}), 401
+    _tid = verificar_token_admin(request)
+    if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'DELETE':
         s = _get_setting('gestor_foto', _tid)
         if s and s.value:
@@ -4075,6 +4280,16 @@ def api_gestor_foto():
     _upsert_setting('gestor_foto', filename, _tid)
     db.session.commit()
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
+
+def _ativar_tenant(tenant):
+    """Ativa a assinatura e dispara DNS/SSL. Chamado APENAS após pagamento
+    confirmado (ou ativação manual pelo admin) — nunca no cadastro, para não
+    permitir que qualquer visitante consuma cota da Let's Encrypt."""
+    tenant.ativo = True
+    tenant.assinatura_ativa = True
+    db.session.commit()
+    threading.Thread(target=_provisionar_ssl_tenant,
+                     args=(tenant.slug, tenant.email), daemon=True).start()
 
 def _enviar_boas_vindas(tenant):
     site_url   = _tenant_url(tenant.slug)
@@ -4126,10 +4341,28 @@ def _gestao_login_required():
     if not db.session.get(Tenant, tid):
         session.clear()
         return redirect(url_for('gestao_login'))
+    # Funcionário desativado perde a sessão imediatamente
+    fid = session.get(_SESSION_GESTAO_FUNC_ID)
+    if fid:
+        f = db.session.get(Funcionario, fid)
+        if not f or f.tenant_id != tid or not f.ativo:
+            session.clear()
+            return redirect(url_for('gestao_login'))
     return None
 
 def _gestao_tenant():
     return db.session.get(Tenant, session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID))
+
+def _gestao_token():
+    """Token da API com a identidade REAL de quem está logado.
+    func_id 0 = dono; qualquer outro = funcionário, que não passa em
+    verificar_token_admin(). Emitir sempre 0 aqui daria a qualquer
+    funcionário acesso às rotas restritas ao dono (credenciais, rotação
+    de token, cadastro de funcionários)."""
+    t = _gestao_tenant()
+    if not t:
+        return ''
+    return _gerar_token(t.id, session.get(_SESSION_GESTAO_FUNC_ID) or 0, t.token_version or 0)
 
 def _gestao_is_owner():
     return not session.get('gestao_func_id')
@@ -4179,16 +4412,39 @@ def _gestao_template_ctx():
     return {}
 
 def _csrf_ok():
-    """Verifica Origin/Referer em form POSTs para prevenir CSRF."""
-    origin = request.headers.get('Origin') or request.headers.get('Referer') or ''
-    host   = request.host.split(':')[0]
-    if not origin:
-        return True
-    try:
-        o_host = urlparse(origin).hostname or ''
-    except Exception:
-        o_host = ''
-    return o_host == APP_DOMAIN or o_host.endswith('.' + APP_DOMAIN) or o_host == host
+    """Confere o token CSRF da sessão. Mantido para as rotas que já o chamavam;
+    a proteção geral está em _csrf_protect() (before_request).
+    A versão anterior checava Origin/Referer e liberava quando ambos faltavam —
+    justamente o caso de um form cross-site com referrer suprimido."""
+    enviado  = request.form.get('_csrf') or request.headers.get('X-CSRF-Token', '')
+    esperado = session.get('_csrf_token', '')
+    return bool(esperado) and hmac.compare_digest(str(enviado), str(esperado))
+
+# Rotas isentas: webhook do MP (autenticado por HMAC próprio) e o callback OAuth.
+_CSRF_ISENTOS = ('/api/pagamento/webhook', '/auth/google/callback')
+
+@app.before_request
+def _csrf_protect():
+    if request.method in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
+        return
+    if request.path.startswith(_CSRF_ISENTOS):
+        return
+    # Chamadas de API por Bearer token não usam cookie, logo não são forjáveis
+    # por CSRF; a mesma lógica vale para a chave do painel admin.
+    if request.headers.get('Authorization', '').startswith('Bearer '):
+        return
+    if request.headers.get('X-Admin-Key'):
+        return
+    if not _csrf_ok():
+        if request.path.startswith('/api/'):
+            return jsonify({'erro': 'CSRF inválido — recarregue a página'}), 403
+        return 'Requisição inválida (CSRF)', 403
+
+@app.context_processor
+def _csrf_ctx():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_urlsafe(32)
+    return {'csrf_token': session['_csrf_token']}
 
 @app.route('/gestao/login', methods=['GET', 'POST'])
 @limiter.limit('10 per minute', methods=['POST'])
@@ -4222,10 +4478,9 @@ def gestao_login():
 
 @app.route('/gestao/logout')
 def gestao_logout():
-    session.pop('gestao_tenant_id', None)
-    session.pop('gestao_func_id', None)
-    session.pop('gestao_nome', None)
-    session.pop('reperson_tid', None)
+    # session.clear() em vez de pops seletivos: a versão anterior deixava
+    # user_id, onb_tenant_id e — o mais grave — admin_ok vivos após o logout.
+    session.clear()
     return redirect(url_for('gestao_login'))
 
 @app.route('/gestao')
@@ -4294,7 +4549,7 @@ def gestao_dashboard():
         hoje_mes=MESES_ABREV[hoje.month - 1],
         proximos_dias=proximos_dias,
         agendamentos_json=_safe_json(ags_json),
-        token=_gerar_token(tenant.id, 0, tenant.token_version or 0),
+        token=_gestao_token(),
     )
 
 @app.route('/gestao/agendamentos', methods=['GET'])
@@ -4305,7 +4560,7 @@ def gestao_agendamentos():
     if perm: return perm
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
     clientes_json = _safe_json([
         {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
@@ -4354,7 +4609,7 @@ def gestao_pedidos():
     perm = _gestao_perm_required('pedidos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     pedidos = (Pedido.query
                .filter_by(tenant_id=tenant.id)
                .options(joinedload(Pedido.usuario), joinedload(Pedido.itens))
@@ -4374,7 +4629,7 @@ def gestao_clientes():
     perm = _gestao_perm_required('clientes')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
     clientes_json = _safe_json([{
         'id': c.id, 'name': c.name, 'email': c.email,
@@ -4389,7 +4644,7 @@ def gestao_cliente_detalhe(uid):
     perm = _gestao_perm_required('clientes')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     return render_template('gestao/cliente_detalhe.html', active='clientes', uid=uid, token=token)
 
 @app.route('/gestao/entradas', methods=['GET', 'POST'])
@@ -4455,7 +4710,7 @@ def gestao_funcionarios():
     perm = _gestao_owner_required()
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     return render_template('gestao/funcionarios.html', active='funcionarios', token=token)
 
 @app.route('/gestao/servicos')
@@ -4465,7 +4720,7 @@ def gestao_servicos():
     perm = _gestao_perm_required('servicos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     return render_template('gestao/servicos.html', active='servicos', token=token)
 
 @app.route('/gestao/precos', methods=['GET', 'POST'])
@@ -4477,7 +4732,7 @@ def gestao_precos():
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     servicos = Servico.query.filter_by(ativo=True, tenant_id=tenant.id).order_by(Servico.nome).limit(1000).all()
     if request.method == 'POST':
         for s in servicos:
@@ -4497,7 +4752,7 @@ def gestao_fotos():
     perm = _gestao_perm_required('fotos')
     if perm: return perm
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     return render_template('gestao/fotos.html', active='fotos', token=token)
 
 @app.route('/gestao/loja')
@@ -4629,7 +4884,7 @@ def gestao_horarios():
     if request.method == 'POST' and not _csrf_ok():
         return 'Requisição inválida', 403
     tenant = _gestao_tenant()
-    token = _gerar_token(tenant.id, 0, tenant.token_version or 0)
+    token = _gestao_token()
     if request.method == 'POST':
         DIAS_KEYS = ['seg','ter','qua','qui','sex','sab','dom']
         horarios = {}
@@ -4641,8 +4896,8 @@ def gestao_horarios():
             }
         _tid = tenant.id
         _upsert_setting('horario_funcionamento', json.dumps(horarios, ensure_ascii=False), _tid)
-        _upsert_setting('intervalo_minutos', request.form.get('slot_minutos', '40'), _tid)
-        _upsert_setting('dias_agenda', request.form.get('dias_agenda', '20'), _tid)
+        _upsert_setting('intervalo_minutos', str(_duracao_segura(request.form.get('slot_minutos'), 40)), _tid)
+        _upsert_setting('dias_agenda', str(_int_seguro(request.form.get('dias_agenda'), 20, 1, 60)), _tid)
         # Cancelar agendamentos conflitantes se solicitado
         if request.form.get('_confirmar') == 'cancelar':
             DOW_MAP = {'Monday':'seg','Tuesday':'ter','Wednesday':'qua','Thursday':'qui',
@@ -4674,8 +4929,8 @@ def gestao_horarios():
     dias_fechados = json.loads(dias_fechados_s.value) if dias_fechados_s and dias_fechados_s.value else []
     especiais = HorarioEspecial.query.filter_by(tenant_id=tenant.id).order_by(HorarioEspecial.data).limit(1000).all()
     config_geral = {
-        'slot_minutos': int(slot_s.value) if slot_s and slot_s.value else 40,
-        'dias_agenda': int(dias_ag_s.value) if dias_ag_s and dias_ag_s.value else 20,
+        'slot_minutos': _duracao_segura(slot_s.value if slot_s and slot_s.value else 40),
+        'dias_agenda': _int_seguro(dias_ag_s.value if dias_ag_s and dias_ag_s.value else 20, 20, 1, 60),
     }
     especiais_json = _safe_json([{'id': e.id, 'data': e.data,
         'abertura': e.abertura, 'fechamento': e.fechamento} for e in especiais])
@@ -4704,23 +4959,31 @@ def gestao_contato():
         # Botões FAB — mostrar=True se texto preenchido, False se vazio
         wpp_texto  = request.form.get('wpp_texto', '').strip()
         maps_texto = request.form.get('maps_texto', '').strip()
-        try: wpp_cfg = json.loads(tenant.fab_wpp or '{}')
-        except: wpp_cfg = {}
+        try:
+            wpp_cfg = json.loads(tenant.fab_wpp or '{}')
+        except (ValueError, TypeError):
+            wpp_cfg = {}
         wpp_cfg['texto']   = wpp_texto or 'Chame no Zap'
         wpp_cfg['mostrar'] = bool(wpp_texto)
         tenant.fab_wpp = json.dumps(wpp_cfg)
-        try: maps_cfg = json.loads(tenant.fab_maps or '{}')
-        except: maps_cfg = {}
+        try:
+            maps_cfg = json.loads(tenant.fab_maps or '{}')
+        except (ValueError, TypeError):
+            maps_cfg = {}
         maps_cfg['texto']   = maps_texto or 'Como chegar'
         maps_cfg['mostrar'] = bool(maps_texto)
         tenant.fab_maps = json.dumps(maps_cfg)
         db.session.commit()
         flash('Contato atualizado.', 'success')
         return redirect(url_for('gestao_contato'))
-    try: wpp_texto  = json.loads(tenant.fab_wpp  or '{}').get('texto', '')
-    except: wpp_texto = ''
-    try: maps_texto = json.loads(tenant.fab_maps or '{}').get('texto', '')
-    except: maps_texto = ''
+    try:
+        wpp_texto = json.loads(tenant.fab_wpp or '{}').get('texto', '')
+    except (ValueError, TypeError, AttributeError):
+        wpp_texto = ''
+    try:
+        maps_texto = json.loads(tenant.fab_maps or '{}').get('texto', '')
+    except (ValueError, TypeError, AttributeError):
+        maps_texto = ''
     return render_template('gestao/contato.html', active='contato', tenant=tenant,
                            wpp_texto=wpp_texto, maps_texto=maps_texto)
 
@@ -4762,7 +5025,7 @@ def gestao_credenciais():
     def _sv(key): s = _get_setting(key, tenant.id); return s.value if s else ''
     return render_template('gestao/credenciais.html',
         active='credenciais', tenant=tenant,
-        token=_gerar_token(tenant.id, 0, tenant.token_version or 0),
+        token=_gestao_token(),
         pix_chave=_sv('pix_chave'),
         mp_token=_sv('mp_token'),
         mp_public_key=_sv('mp_public_key'),
@@ -4779,7 +5042,7 @@ def gestao_graficos():
     tenant = _gestao_tenant()
     return render_template('gestao/graficos.html',
         active='graficos',
-        token=_gerar_token(tenant.id, 0, tenant.token_version or 0))
+        token=_gestao_token())
 
 @app.route('/gestao/calendario')
 def gestao_calendario():
@@ -4790,7 +5053,7 @@ def gestao_calendario():
     tenant = _gestao_tenant()
     return render_template('gestao/calendario.html',
         active='calendario',
-        token=_gerar_token(tenant.id, 0, tenant.token_version or 0))
+        token=_gestao_token())
 
 @app.route('/personalizar')
 def personalizar():
@@ -4947,7 +5210,7 @@ def api_cadastro_personalizar():
     db.session.commit()
     session.pop('is_preview', None)
     session[_SESSION_ONB_TENANT_ID] = tenant.id
-    threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
+    # DNS/SSL só após pagamento confirmado — ver _ativar_tenant()
     return jsonify({'ok': True, 'slug': slug, 'tenant_id': tenant.id})
 
 @app.route('/api/pagamento/status')
@@ -5014,6 +5277,8 @@ def api_repersonalizar_credenciais():
         if len(senha) < 8:
             return jsonify({'erro': 'Senha deve ter pelo menos 8 caracteres'}), 400
         tenant.password = generate_password_hash(senha)
+        # Invalida todos os tokens emitidos antes da troca de senha
+        tenant.token_version = (tenant.token_version or 0) + 1
     if whatsapp is not None:
         tenant.whatsapp = whatsapp or None
     if slug_novo and slug_novo != tenant.slug:
@@ -5114,17 +5379,27 @@ def api_cadastro():
     if Tenant.query.filter_by(slug=slug).first():
         return jsonify({'erro': 'slug já em uso'}), 400
     email = d.get('email', '').strip().lower()
+    if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
+        return jsonify({'erro': 'E-mail inválido'}), 400
     if Tenant.query.filter_by(email=email).first():
         return jsonify({'erro': 'e-mail já cadastrado'}), 400
+    nome = (d.get('nome') or '').strip()[:100]
+    if not nome:
+        return jsonify({'erro': 'nome obrigatório'}), 400
+    senha = (d.get('senha') or '').strip()
+    if len(senha) < 8:
+        return jsonify({'erro': 'Senha deve ter ao menos 8 caracteres'}), 400
     tenant = Tenant(
         slug=slug,
-        nome=d.get('nome', '').strip(),
+        nome=nome,
         email=email,
-        password=generate_password_hash(d.get('senha', '')),
+        password=generate_password_hash(senha),
         contato=d.get('contato', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
-        assinatura_ativa=True,
+        # Assinatura só é ativada pelo webhook do Mercado Pago após pagamento
+        # confirmado — o mesmo vale para o provisionamento de DNS/SSL.
+        assinatura_ativa=False,
     )
     db.session.add(tenant)
     db.session.flush()
@@ -5133,7 +5408,7 @@ def api_cadastro():
     _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     session.pop('is_preview', None)
-    threading.Thread(target=_provisionar_ssl_tenant, args=(slug, email), daemon=True).start()
+    session[_SESSION_ONB_TENANT_ID] = tenant.id
     return jsonify({'ok': True, 'tenant_id': tenant.id, 'slug': slug})
 
 
@@ -5153,9 +5428,9 @@ def api_pagamento_cartao():
     tenant = db.session.get(Tenant, tenant_id)
     if not tenant:
         return jsonify({'erro': 'tenant não encontrado'}), 404
-    onb_tid = session.get('onb_tenant_id')
-    if onb_tid and int(onb_tid) != tenant.id:
-        return jsonify({'erro': 'tenant inválido para esta sessão'}), 403
+    onb_tid = session.get(_SESSION_ONB_TENANT_ID)
+    if not onb_tid or int(onb_tid) != tenant.id:
+        return jsonify({'erro': 'sessão de cadastro inválida'}), 403
     mp_token = get_mp_token()
     if not mp_token:
         return jsonify({'erro': 'credenciais não configuradas'}), 400
@@ -5201,9 +5476,7 @@ def api_pagamento_cartao():
                 assinatura.mp_payment_id = str(data.get('id', ''))
                 assinatura.inicio      = datetime.utcnow()
                 assinatura.vencimento  = datetime.utcnow() + timedelta(days=30 * meses)
-            tenant.ativo = True
-            tenant.assinatura_ativa = True
-            db.session.commit()
+            _ativar_tenant(tenant)
             _enviar_boas_vindas(tenant)
         return jsonify({'ok': True, 'status': status, 'slug': tenant.slug})
     return jsonify({'erro': data.get('message', 'Pagamento recusado'), 'status': status}), 402
@@ -5212,12 +5485,19 @@ def api_pagamento_cartao():
 @limiter.limit('20 per minute')
 def admin_painel():
     if request.method == 'POST':
-        if request.form.get('key', '') == API_TOKEN:
+        _k = request.form.get('key', '')
+        if _k and hmac.compare_digest(_k, API_TOKEN):
             session[_SESSION_ADMIN_OK] = True
         return redirect(url_for('admin_painel'))
-    if not session.get('admin_ok') or API_TOKEN == '':
-        return '''<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+    if not session.get(_SESSION_ADMIN_OK):
+        # HTML inline (fora do render_template) — o token CSRF precisa ser
+        # garantido e embutido aqui, o context_processor não alcança esta resposta.
+        if '_csrf_token' not in session:
+            session['_csrf_token'] = secrets.token_urlsafe(32)
+        _csrf = html.escape(session['_csrf_token'])
+        return f'''<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
         <form method="post" style="text-align:center">
+          <input type="hidden" name="_csrf" value="{_csrf}">
           <h2 style="color:#C9A96E;margin-bottom:1.5rem">✦ Admin — iBarber</h2>
           <input name="key" type="password" placeholder="Token de acesso"
             style="padding:10px 16px;border-radius:6px;border:1px solid #333;background:#1e1e1e;color:#f0ece4;font-size:15px;width:260px">
@@ -5251,7 +5531,7 @@ def admin_painel():
     receita_total = sum(float(asn.valor_total or 0) for t in tenants for asn in t.assinaturas if asn.status == 'ativo')
 
     return render_template('admin_painel.html',
-        tenants=tenants, key=API_TOKEN,
+        tenants=tenants,
         mp_public_key=mp_pub.value if mp_pub else '',
         mp_token_set=bool(get_mp_token()),
         chart_data=chart_data,
@@ -5259,10 +5539,10 @@ def admin_painel():
         receita_total=receita_total)
 
 @app.route('/api/admin/credenciais', methods=['POST'])
+@limiter.limit('10 per minute')
+@admin_key_required
 def api_admin_credenciais():
     data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     for k, env_k in [('mp_token', 'MP_ACCESS_TOKEN'), ('mp_public_key', 'admin_mp_public_key')]:
         v = (data.get(k) or '').strip()
         if not v:
@@ -5277,10 +5557,9 @@ def api_admin_credenciais():
     return jsonify({'ok': True})
 
 @app.route('/api/admin/ativar/<int:tid>', methods=['POST'])
+@limiter.limit('20 per minute')
+@admin_key_required
 def api_admin_ativar(tid):
-    data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -5293,15 +5572,13 @@ def api_admin_ativar(tid):
         db.session.add(Assinatura(tenant_id=tid, plano='mensal', valor_total=49.0,
             valor_mensal=49.0, status='ativo', inicio=datetime.utcnow(),
             vencimento=datetime.utcnow() + timedelta(days=30)))
-    t.ativo = True
-    t.assinatura_ativa = True
-    db.session.commit()
+    _ativar_tenant(t)
     return jsonify({'ok': True})
 
 @app.route('/api/admin/tenant/<int:tid>', methods=['DELETE'])
+@limiter.limit('20 per minute')
+@admin_key_required
 def api_admin_tenant_delete(tid):
-    if request.args.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -5311,10 +5588,9 @@ def api_admin_tenant_delete(tid):
     return jsonify({'ok': True})
 
 @app.route('/api/admin/desativar/<int:tid>', methods=['POST'])
+@limiter.limit('20 per minute')
+@admin_key_required
 def api_admin_desativar(tid):
-    data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -5326,10 +5602,9 @@ def api_admin_desativar(tid):
     return jsonify({'ok': True})
 
 @app.route('/api/admin/excluir/<int:tid>', methods=['DELETE'])
+@limiter.limit('5 per minute')
+@admin_key_required
 def api_admin_excluir(tid):
-    data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -5379,14 +5654,20 @@ def api_admin_excluir(tid):
 
     # 12. Tenant
     db.session.delete(t)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        # Sem rollback, uma FK que falhe no meio deixaria o tenant meio apagado
+        db.session.rollback()
+        app.logger.error('[ADMIN] falha ao excluir tenant %s: %s', tid, e)
+        return jsonify({'erro': 'falha ao excluir — nenhuma alteração foi aplicada'}), 500
     return jsonify({'ok': True})
 
 @app.route('/api/admin/vencimento/<int:tid>', methods=['POST'])
+@limiter.limit('20 per minute')
+@admin_key_required
 def api_admin_vencimento(tid):
     data = request.get_json(force=True) or {}
-    if data.get('key') != API_TOKEN:
-        return jsonify({'erro': 'não autorizado'}), 401
     t = db.session.get(Tenant, tid)
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
@@ -5401,16 +5682,14 @@ def api_admin_vencimento(tid):
         db.session.add(asn)
     asn.vencimento = nova_data
     asn.status = 'ativo'
-    t.assinatura_ativa = True
-    db.session.commit()
+    _ativar_tenant(t)
     return jsonify({'ok': True})
 
 @app.route('/admin/entrar-gestao/<int:tid>')
 def admin_entrar_gestao(tid):
-    key = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
-    if not key:
-        key = request.args.get('key', '')
-    if not key or key != API_TOKEN:
+    # Usa a sessão do painel admin em vez de aceitar a chave mestra na query
+    # string, que vazaria em histórico do navegador e log do nginx.
+    if not session.get(_SESSION_ADMIN_OK):
         return 'Não autorizado', 401
     t = db.session.get(Tenant, tid)
     if not t:
@@ -5426,10 +5705,12 @@ def api_pagamento_criar_v2():
     tenant = db.session.get(Tenant, d.get('tenant_id'))
     if not tenant:
         return jsonify({'erro': 'tenant não encontrado'}), 404
-    # Validate tenant_id matches onboarding session or is a new signup
-    onb_tid = session.get('onb_tenant_id')
-    if onb_tid and int(onb_tid) != tenant.id:
-        return jsonify({'erro': 'tenant inválido para esta sessão'}), 403
+    # A sessão de onboarding é obrigatória. Antes, sem cookie a checagem era
+    # pulada e qualquer um criava Assinatura 'pendente' para qualquer tenant —
+    # e o webhook casava com a primeira pendente que encontrasse.
+    onb_tid = session.get(_SESSION_ONB_TENANT_ID)
+    if not onb_tid or int(onb_tid) != tenant.id:
+        return jsonify({'erro': 'sessão de cadastro inválida'}), 403
     plano = d.get('plano', '')
     if plano not in PLANOS:
         return jsonify({'erro': 'plano inválido'}), 400
@@ -5562,7 +5843,7 @@ def api_pagamento_webhook():
         meta = payment.get('metadata', {})
         tenant_id = meta.get('tenant_id')
         if not tenant_id:
-            print(f'[WEBHOOK] payment {payment_id} sem tenant_id no metadata')
+            app.logger.error('[WEBHOOK] payment %s sem tenant_id no metadata', payment_id)
             return '', 200
         tipo = meta.get('tipo', 'assinatura')
         tenant = db.session.get(Tenant, tenant_id)
@@ -5575,23 +5856,27 @@ def api_pagamento_webhook():
                 db.session.commit()
             else:
                 plano = meta.get('plano', '')
-                meses = PLANOS.get(plano, {}).get('meses', 1)
-                assinatura = Assinatura.query.filter_by(
-                    tenant_id=tenant_id, status='pendente').first()
+                if plano not in PLANOS:
+                    app.logger.error('[WEBHOOK] payment %s com plano inválido: %r', payment_id, plano)
+                    return '', 200
+                meses = PLANOS[plano]['meses']
+                # Casa pelo plano que foi efetivamente pago; pegar "a primeira
+                # pendente" ativaria uma assinatura de plano/valor diferente.
+                assinatura = (Assinatura.query
+                              .filter_by(tenant_id=tenant_id, status='pendente', plano=plano)
+                              .order_by(Assinatura.id.desc()).first())
                 if not assinatura:
                     assinatura = Assinatura(
                         tenant_id=tenant_id, plano=plano,
-                        valor_total=PLANOS.get(plano, {}).get('total', 0),
-                        valor_mensal=PLANOS.get(plano, {}).get('mensal', 0),
+                        valor_total=PLANOS[plano]['total'],
+                        valor_mensal=PLANOS[plano]['mensal'],
                     )
                     db.session.add(assinatura)
                 assinatura.status = 'ativo'
                 assinatura.mp_payment_id = payment_id
                 assinatura.inicio = datetime.utcnow()
                 assinatura.vencimento = datetime.utcnow() + timedelta(days=30 * meses)
-                tenant.ativo = True
-                tenant.assinatura_ativa = True
-                db.session.commit()
+                _ativar_tenant(tenant)
                 _enviar_boas_vindas(tenant)
     return '', 200
 
@@ -5605,8 +5890,8 @@ def verificar_slug(slug):
 
 @app.route('/api/minha-assinatura')
 def api_minha_assinatura():
-    tenant_id = verificar_token(request)
-    if not tenant_id: return jsonify({'erro': 'token inválido'}), 401
+    tenant_id = verificar_token_admin(request)
+    if not tenant_id: return jsonify({'erro': 'não autorizado'}), 403
     assinatura = Assinatura.query.filter_by(
         tenant_id=tenant_id).order_by(Assinatura.criado_em.desc()).first()
     if not assinatura:
@@ -5684,5 +5969,11 @@ def erro_rate_limit(e):
     return jsonify({'erro': 'Muitas tentativas. Aguarde um momento.'}), 429
 
 if __name__ == '__main__':
-    threading.Thread(target=_udp_broadcast, daemon=True).start()
-    app.run(host='0.0.0.0', debug=True)
+    # debug=True fixo expunha o console interativo do Werkzeug (execução remota
+    # de código) em 0.0.0.0 para quem rodasse `python app.py` fora de casa.
+    # Produção usa gunicorn e não passa por aqui.
+    _debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    _host  = os.environ.get('FLASK_RUN_HOST', '127.0.0.1' if not _debug else '0.0.0.0')
+    if _debug:
+        threading.Thread(target=_udp_broadcast, daemon=True).start()
+    app.run(host=_host, port=int(os.environ.get('FLASK_RUN_PORT', '5000')), debug=_debug)

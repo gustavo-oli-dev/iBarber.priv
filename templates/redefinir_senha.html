@@ -9,6 +9,7 @@
       <p class="auth-sub">Digite sua nova senha abaixo</p>
     </div>
     <form class="auth-form" method="POST" novalidate>
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <div class="field">
         <label class="field-label" for="password">Nova senha</label>
         <div class="field-input-wrap">

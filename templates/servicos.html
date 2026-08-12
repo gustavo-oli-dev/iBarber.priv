@@ -680,7 +680,9 @@
     lista.forEach(s => {
       const slug  = _slug(s.nome);
       const fotos = fotosCache[slug] || [];
-      const ac    = document.querySelector(`[data-servico="${s.nome}"]`)?.closest('.servico-acordeao');
+      // CSS.escape: um nome de serviço com aspas quebraria o seletor com
+      // SyntaxError e derrubaria o carregamento de fotos da categoria inteira.
+      const ac    = document.querySelector(`[data-servico="${CSS.escape(s.nome)}"]`)?.closest('.servico-acordeao');
       if (!ac) return;
       ac.querySelectorAll('.mini-foto').forEach((div, i) => {
         if (fotos[i]) {

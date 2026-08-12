@@ -16,6 +16,7 @@
 <!-- Tab 1: Horários de funcionamento -->
 <div id="tab-horarios">
   <form method="POST" action="{{ url_for('gestao_horarios') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <div class="g-section-title" style="margin-bottom:.75rem;">Horário por dia da semana</div>
     <div style="display:grid;gap:.6rem;max-width:540px;margin-bottom:1.5rem;">
       {% set dias = [('seg','Segunda'),('ter','Terça'),('qua','Quarta'),('qui','Quinta'),('sex','Sexta'),('sab','Sábado'),('dom','Domingo')] %}
@@ -266,9 +267,9 @@ async function verificarESalvarHorarios() {
   if (conflitos.length > 0) {
     document.getElementById('listaConflitoHorario').innerHTML = conflitos.map(c =>
       `<div style="display:flex;align-items:center;gap:.5rem;padding:.25rem 0;border-bottom:1px solid var(--border);">
-        <span style="color:var(--text);flex:1;">${c.nome}</span>
-        <button onclick="copiarNome('${c.nome.replace(/'/g,"\\'")}',this)" title="Copiar nome" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;font-size:.7rem;padding:.1rem .35rem;flex-shrink:0;">⎘</button>
-        <span style="color:var(--gold);font-weight:600;flex-shrink:0;">${c.hora}</span>
+        <span style="color:var(--text);flex:1;">${esc(c.nome)}</span>
+        <button onclick="copiarNome(${escJs(c.nome)},this)" title="Copiar nome" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;font-size:.7rem;padding:.1rem .35rem;flex-shrink:0;">⎘</button>
+        <span style="color:var(--gold);font-weight:600;flex-shrink:0;">${esc(c.hora)}</span>
       </div>`
     ).join('');
     document.getElementById('modalConflitoHorario').style.display = 'flex';
@@ -326,7 +327,7 @@ async function addFechado() {
     _pendingDia = d;
     document.getElementById('listaConflitoDia').innerHTML = cdata.conflitos.map(c =>
       `<div style="display:flex;justify-content:space-between;padding:.2rem 0;border-bottom:1px solid var(--border);">
-        <span>${c.nome}</span><span style="color:var(--text-muted)">${c.hora}</span>
+        <span>${esc(c.nome)}</span><span style="color:var(--text-muted)">${esc(c.hora)}</span>
       </div>`
     ).join('');
     const m = document.getElementById('modalConflitoDia');
@@ -433,8 +434,8 @@ function abrirModalConflito(conflitos) {
   const lista = document.getElementById('listaConflitos');
   lista.innerHTML = conflitos.map(c =>
     `<div style="display:flex;justify-content:space-between;padding:.25rem 0;border-bottom:1px solid var(--border);">
-       <span style="color:var(--text);">${c.usuario}</span>
-       <span style="color:var(--gold);font-weight:600;">${c.hora}</span>
+       <span style="color:var(--text);">${esc(c.usuario)}</span>
+       <span style="color:var(--gold);font-weight:600;">${esc(c.hora)}</span>
      </div>`
   ).join('');
   document.getElementById('modalConflito').style.display = 'flex';

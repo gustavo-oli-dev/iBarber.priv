@@ -282,7 +282,7 @@ function renderCategorias() {
     <button type="button" onclick="selecionarCategoria(${c.id})"
       style="padding:.3rem .75rem;border-radius:999px;font-size:.8rem;cursor:pointer;transition:.15s;
              background:var(--surface);border:1px solid var(--border);color:var(--text-muted);">
-      ${c.icone ? c.icone+' ' : ''}${c.nome}
+      ${c.icone ? esc(c.icone)+' ' : ''}${esc(c.nome)}
     </button>`).join('');
   if (semCat.length) {
     html += `<button type="button" onclick="selecionarCategoria(null)"
@@ -313,7 +313,7 @@ function selecionarCategoria(catId) {
              background:${sel?'var(--gold)':'var(--surface)'};
              border:1px solid ${sel?'var(--gold)':'var(--border)'};
              color:${sel?'#000':'var(--text-muted)'};">
-      ${s.nome}${s.preco>0?' · R$ '+parseFloat(s.preco).toFixed(2).replace('.',','):''}
+      ${esc(s.nome)}${s.preco>0?' · R$ '+parseFloat(s.preco).toFixed(2).replace('.',','):''}
     </button>`;
   }).join('') || '<span style="font-size:.8rem;color:var(--text-muted);">Nenhum serviço nesta categoria.</span>';
 }
@@ -368,9 +368,9 @@ function abrirLista() {
 function renderLista() {
   const lista = document.getElementById('clienteLista');
   lista.innerHTML = clientesFiltrados.slice(0, 30).map(c => `
-    <div class="cliente-item" onclick="selecionarCliente(${c.id}, '${c.name.replace(/'/g,"\\'")}')">
-      <div class="cliente-item-nome">${c.name}</div>
-      <div class="cliente-item-sub">${c.contact || c.email || ''}</div>
+    <div class="cliente-item" onclick="selecionarCliente(${c.id}, ${escJs(c.name)})">
+      <div class="cliente-item-nome">${esc(c.name)}</div>
+      <div class="cliente-item-sub">${esc(c.contact || c.email || '')}</div>
     </div>
   `).join('') || '<div class="cliente-item" style="color:var(--text-muted)">Nenhum cliente encontrado</div>';
   lista.classList.add('open');
