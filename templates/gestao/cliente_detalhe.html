@@ -123,7 +123,7 @@ async function carregar() {
   const fone = (u.contact||'').replace(/\D/g,'');
   const foneEl = document.getElementById('infoFone');
   if (fone) {
-    foneEl.innerHTML = `<span>${u.contact}</span>
+    foneEl.innerHTML = `<span>${esc(u.contact)}</span>
       <a href="https://wa.me/55${fone}" target="_blank"
          style="color:#25d366;text-decoration:none;font-size:.75rem;border:1px solid #25d366;border-radius:999px;padding:.1rem .5rem;">WhatsApp</a>`;
   } else {
@@ -166,10 +166,10 @@ async function carregar() {
     document.getElementById('cardsAgs').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem;">Nenhum agendamento.</p>';
   } else {
     tbody.innerHTML = ags.map(ag => {
-      const servs = (ag.servicos||[]).join(', ') || '—';
+      const servs = (ag.servicos||[]).map(esc).join(', ') || '—';
       return `<tr>
         <td style="white-space:nowrap;">${fmtData(ag.data_hora)}</td>
-        <td>${ag.barbeiro||'—'}</td>
+        <td>${esc(ag.barbeiro||'—')}</td>
         <td style="font-size:.85rem;">${servs}</td>
         <td style="color:var(--gold)">${ag.total != null ? fmtR(ag.total) : '—'}</td>
         <td>${badgeStatus(ag.status)}</td>
@@ -177,14 +177,14 @@ async function carregar() {
     }).join('');
 
     document.getElementById('cardsAgs').innerHTML = ags.map(ag => {
-      const servs = (ag.servicos||[]).join(', ') || '—';
+      const servs = (ag.servicos||[]).map(esc).join(', ') || '—';
       return `<div class="ag-card">
         <div class="ag-card-top">
           <span class="ag-card-data">${fmtData(ag.data_hora)}</span>
           ${badgeStatus(ag.status)}
         </div>
         <div class="ag-card-bot">
-          <span>${ag.barbeiro||'—'} · ${servs}</span>
+          <span>${esc(ag.barbeiro||'—')} · ${servs}</span>
           <span>${ag.total != null ? fmtR(ag.total) : ''}</span>
         </div>
       </div>`;

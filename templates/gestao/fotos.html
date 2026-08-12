@@ -69,7 +69,7 @@ function renderFiltros() {
   const box = document.getElementById('filtrosCat');
   box.innerHTML = `<button class="g-chip g-chip-active" onclick="setFiltro('todos',this)">Todas</button>` +
     categorias.map(c =>
-      `<button class="g-chip" onclick="setFiltro('${c.nome}',this)">${c.nome}</button>`
+      `<button class="g-chip" onclick="setFiltro(${escJs(c.nome)},this)">${esc(c.nome)}</button>`
     ).join('');
 }
 function setFiltro(f, el) {
@@ -88,11 +88,11 @@ function renderFotos() {
   }
   grid.innerHTML = lista.map(f => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
-      <img src="${f.url}" alt="${f.servico||''}" style="width:100%;height:150px;object-fit:cover;display:block;" />
+      <img src="${esc(f.url)}" alt="${esc(f.servico||'')}" style="width:100%;height:150px;object-fit:cover;display:block;" />
       <div style="padding:.5rem .75rem;display:flex;align-items:center;justify-content:space-between;">
         <div>
-          <div style="font-size:.8rem;font-weight:500;">${f.servico||'—'}</div>
-          <div style="font-size:.72rem;color:var(--text-muted);">${f.categoria||''}</div>
+          <div style="font-size:.8rem;font-weight:500;">${esc(f.servico||'—')}</div>
+          <div style="font-size:.72rem;color:var(--text-muted);">${esc(f.categoria||'')}</div>
         </div>
         <button class="g-btn g-btn-outline" style="padding:.2rem .5rem;font-size:.7rem;color:var(--error);" onclick="deletarFoto(${f.id},this)">✕</button>
       </div>
@@ -104,14 +104,14 @@ function renderFotos() {
 function populateCats() {
   const sel = document.getElementById('fCat');
   sel.innerHTML = '<option value="">— Selecione —</option>' +
-    categorias.map(c=>`<option value="${c.nome}">${c.nome}</option>`).join('');
+    categorias.map(c=>`<option value="${esc(c.nome)}">${esc(c.nome)}</option>`).join('');
 }
 function loadServicosPorCat() {
   const cat = document.getElementById('fCat').value;
   const lista = servicos.filter(s=>categorias.find(c=>c.nome===cat && c.id===s.categoria_id));
   const sel = document.getElementById('fServico');
   sel.innerHTML = '<option value="">— Nenhum —</option>' +
-    lista.map(s=>`<option value="${s.nome}">${s.nome}</option>`).join('');
+    lista.map(s=>`<option value="${esc(s.nome)}">${esc(s.nome)}</option>`).join('');
 }
 function abrirModal() {
   populateCats();

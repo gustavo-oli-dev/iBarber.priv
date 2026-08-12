@@ -139,10 +139,10 @@ function renderPedidos() {
     : '';
 
   tbody.innerHTML = filtered.map(p => {
-    const servicos = (p.itens||[]).map(i=>i.nome).join(', ') || '—';
+    const servicos = (p.itens||[]).map(i=>esc(i.nome)).join(', ') || '—';
     return `<tr>
       <td style="color:var(--text-muted)">#${p.id}</td>
-      <td>${p.usuario}</td>
+      <td>${esc(p.usuario)}</td>
       <td style="font-size:.8rem;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${servicos}</td>
       <td style="color:var(--gold)">${fmtR(p.total)}</td>
       <td>${badgeStatus(p.status)}</td>
@@ -153,10 +153,10 @@ function renderPedidos() {
 
   // Mobile cards
   document.getElementById('cardsPedidos').innerHTML = filtered.map(p => {
-    const servicos = (p.itens||[]).map(i=>i.nome).join(', ') || '—';
+    const servicos = (p.itens||[]).map(i=>esc(i.nome)).join(', ') || '—';
     return `<div class="pedido-card">
       <div class="pedido-card-top">
-        <div class="pedido-card-nome">${p.usuario}</div>
+        <div class="pedido-card-nome">${esc(p.usuario)}</div>
         <div class="pedido-card-total">${fmtR(p.total)}</div>
       </div>
       <div class="pedido-card-servicos">${servicos}</div>

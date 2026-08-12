@@ -92,7 +92,7 @@ function render() {
     const lista = servicos.filter(s=>s.categoria_id===cat.id);
     html += `<div style="margin-bottom:1.25rem;">
       <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;">
-        <div class="g-section-title" style="margin:0">${cat.nome}</div>
+        <div class="g-section-title" style="margin:0">${esc(cat.nome)}</div>
         <button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.75rem;" onclick="editarCategoria(${cat.id})">Editar</button>
       </div>
       ${lista.length ? lista.map(s => renderServico(s)).join('') : '<p style="color:var(--text-muted);font-size:.8rem;padding:.5rem 0;">Nenhum serviço nesta categoria.</p>'}
@@ -107,7 +107,7 @@ function render() {
 function renderServico(s) {
   return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem;">
     <div style="flex:1;">
-      <span style="font-size:.9rem;font-weight:500;">${s.nome}</span>
+      <span style="font-size:.9rem;font-weight:500;">${esc(s.nome)}</span>
     </div>
     <span style="color:var(--gold);font-size:.9rem;">${fmtR(s.preco)}</span>
     <button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.75rem;" onclick="editarServico(${s.id})">Editar</button>
@@ -155,7 +155,7 @@ async function deletarCategoria() {
 function populateCatSelect(selectedId) {
   const sel = document.getElementById('sCat');
   sel.innerHTML = '<option value="">— Sem categoria —</option>' +
-    categorias.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nome}</option>`).join('');
+    categorias.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${esc(c.nome)}</option>`).join('');
 }
 function abrirModalServico() {
   document.getElementById('servicoId').value = '';

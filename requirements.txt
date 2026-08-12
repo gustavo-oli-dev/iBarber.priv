@@ -1,12 +1,16 @@
 flask==3.0.3
 flask-sqlalchemy==3.1.1
-flask-cors==4.0.0
-flask-limiter==3.5.0
-werkzeug==3.0.3
+flask-cors==6.0.0          # CVE-2024-6221 (Access-Control-Allow-Private-Network) em <5.0.1
+flask-limiter==3.8.0
+werkzeug==3.0.6            # CVE-2024-49767 (DoS no parser multipart) em <3.0.6
 apscheduler==3.10.4
-requests==2.31.0
+requests==2.32.4           # CVE-2024-35195 e CVE-2024-47081 em <2.32.4
 python-dotenv==1.0.1
-gunicorn==21.2.0
-PyMySQL==1.1.1
-cryptography==42.0.8
-Pillow==10.3.0
+gunicorn==23.0.0
+# Os dois drivers convivem: o usado depende do esquema em DATABASE_URL.
+# Manter ambos deixa a mesma branch rodar no Render (Postgres) e na VPS (MySQL).
+psycopg[binary]==3.2.3     # Postgres — Render
+PyMySQL==1.1.1             # MySQL — VPS legada
+cryptography==44.0.1
+Pillow==11.3.0
+redis==5.2.1               # backend compartilhado do rate limiter (REDIS_URL)

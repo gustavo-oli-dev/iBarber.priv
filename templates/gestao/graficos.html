@@ -279,7 +279,7 @@ function drawHBar(canvasId, legendId, dados, labelFn, valFn, fmtFn, colorFn) {
       const pct = ((valFn(i) / total) * 100).toFixed(1);
       return `<div class="legend-row">
         <div class="legend-dot" style="background:${colorFn(i,n)}"></div>
-        <span class="legend-name">${labelFn(i)}</span>
+        <span class="legend-name">${esc(labelFn(i))}</span>
         <span class="legend-val">${fmtFn(i)}&nbsp;<span style="color:var(--text-muted);font-size:.7rem;">${pct}%</span></span>
       </div>`;
     }).join('');
@@ -288,7 +288,7 @@ function drawHBar(canvasId, legendId, dados, labelFn, valFn, fmtFn, colorFn) {
 
 // ── KPI card ──────────────────────────────────────────────────────
 function kpiHTML(label, val, sub) {
-  return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-val">${val}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;
+  return `<div class="kpi-card"><div class="kpi-label">${esc(label)}</div><div class="kpi-val">${esc(val)}</div>${sub?`<div class="kpi-sub">${esc(sub)}</div>`:''}</div>`;
 }
 
 // ── Carregar todos os dados ───────────────────────────────────────

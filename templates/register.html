@@ -11,6 +11,7 @@
     </div>
     <form class="auth-form" id="registerForm" method="POST" action="{{ url_for('register') }}" novalidate
           onsubmit="return validarForm(this)">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <div class="field">
         <label class="field-label" for="name">Nome completo <span class="required">*</span></label>
         <input

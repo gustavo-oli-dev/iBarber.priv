@@ -197,7 +197,7 @@ function renderCalendario() {
     const chips = ags.slice(0,3).map(ag => {
       const hora = (ag.data_hora||'').split('T')[1]?.slice(0,5) || '';
       const cls2 = 'cal-ag-chip ' + (STATUS_COR[ag.status]||'');
-      return `<div class="${cls2}">${hora} ${ag.usuario||''}</div>`;
+      return `<div class="${cls2}">${hora} ${esc(ag.usuario||'')}</div>`;
     }).join('');
     const mais = ags.length > 3 ? `<div class="cal-mais">+${ags.length-3} mais</div>` : '';
 
@@ -248,8 +248,8 @@ function abrirDia(iso) {
         📱 WhatsApp</a>` : '';
       return `<div class="dia-ag-item">
         <div class="dia-ag-hora">${hora}</div>
-        <div class="dia-ag-nome">${ag.usuario||'—'}</div>
-        <div class="dia-ag-sub">${ag.servico||''}${ag.barbeiro?' · '+ag.barbeiro:''}</div>
+        <div class="dia-ag-nome">${esc(ag.usuario||'—')}</div>
+        <div class="dia-ag-sub">${esc(ag.servico||'')}${ag.barbeiro?' · '+esc(ag.barbeiro):''}</div>
         <span class="dia-ag-badge" style="${badgeStyle}">${label}</span>
         ${wpp}
       </div>`;
@@ -279,7 +279,7 @@ async function carregarEscala(iso) {
       ${lista.map(f => `
         <label style="display:flex;align-items:center;gap:.6rem;padding:.35rem 0;cursor:pointer;">
           <input type="checkbox" data-fid="${f.id}" ${f.trabalhando?'checked':''} onchange="salvarEscala()" style="accent-color:var(--gold);width:16px;height:16px;">
-          <span style="font-size:.85rem;">${f.nome}</span>
+          <span style="font-size:.85rem;">${esc(f.nome)}</span>
         </label>`).join('')}`;
   } catch(e) { box.innerHTML = ''; }
 }

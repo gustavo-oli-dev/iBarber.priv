@@ -121,9 +121,9 @@ function renderClientes() {
       ? `<a href="https://wa.me/55${fone}" target="_blank" class="g-btn g-btn-outline" style="padding:.25rem .65rem;font-size:.75rem;color:#25d366;border-color:#25d366;text-decoration:none;" onclick="event.stopPropagation()">WhatsApp</a>`
       : '';
     return `<tr style="cursor:pointer;" onclick="location.href='/gestao/clientes/${c.id}'">
-      <td style="font-weight:500;">${c.name}</td>
-      <td style="color:var(--text-muted)">${c.email}</td>
-      <td>${c.contact||'—'}</td>
+      <td style="font-weight:500;">${esc(c.name)}</td>
+      <td style="color:var(--text-muted)">${esc(c.email)}</td>
+      <td>${esc(c.contact||'—')}</td>
       <td style="color:var(--text-muted)">${fmtData(c.criado_em)}</td>
       <td>${waBtn}</td>
     </tr>`;
@@ -139,10 +139,10 @@ function renderClientes() {
            style="background:#1a2b1a;border:1px solid rgba(37,211,102,.4);color:#25d366;border-radius:6px;padding:3px 9px;font-size:.75rem;text-decoration:none;white-space:nowrap;flex-shrink:0;">WPP</a>`
       : '';
     return `<a class="cliente-card" href="/gestao/clientes/${c.id}">
-      <div class="cliente-card-avatar">${letra}</div>
+      <div class="cliente-card-avatar">${esc(letra)}</div>
       <div class="cliente-card-info">
-        <div class="cliente-card-nome">${c.name}</div>
-        <div class="cliente-card-sub">${sub}</div>
+        <div class="cliente-card-nome">${esc(c.name)}</div>
+        <div class="cliente-card-sub">${esc(sub)}</div>
       </div>
       ${waHtml}
     </a>`;

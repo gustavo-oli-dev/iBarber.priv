@@ -89,6 +89,7 @@
     {% endwith %}
 
     <form method="POST" action="{{ url_for('gestao_login') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <div class="form-group">
         <label class="g-label" for="email">E-mail</label>
         <input class="g-input" type="email" id="email" name="email" required placeholder="seu@email.com" data-validate="email" autocapitalize="none" autocorrect="off" />

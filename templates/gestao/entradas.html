@@ -217,7 +217,7 @@ function renderGrafico(lista) {
     const pct = ((grupos[k]/total)*100).toFixed(1);
     return `<div style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;">
       <span style="width:10px;height:10px;border-radius:50%;background:${_PIE_COLORS[i%_PIE_COLORS.length]};flex-shrink:0;"></span>
-      <span style="flex:1;color:var(--text-muted);">${k}</span>
+      <span style="flex:1;color:var(--text-muted);">${esc(k)}</span>
       <span style="color:var(--text);font-weight:500;">${fmtR(grupos[k])} <span style="color:var(--text-muted);font-size:.7rem;">${pct}%</span></span>
     </div>`;
   }).join('');
@@ -241,14 +241,14 @@ function renderAll() {
   }
   tbody.innerHTML = lista.map(e => `<tr>
     <td style="color:var(--text-muted);white-space:nowrap;">${fmtData(e.criado_em)}</td>
-    <td>${e.descricao||'—'}</td>
+    <td>${esc(e.descricao||'—')}</td>
     <td>${fmtForma(e.forma)}</td>
     <td style="color:var(--gold)">${fmtR(e.valor)}</td>
     <td><button class="g-btn g-btn-outline" style="padding:.2rem .55rem;font-size:.7rem;color:var(--error);" onclick="deletarEntrada(${e.id},this)">✕</button></td>
   </tr>`).join('');
   mbox.innerHTML = lista.map(e => `<div class="entrada-card">
     <div class="entrada-card-info">
-      <div class="entrada-card-desc">${e.descricao||'—'}</div>
+      <div class="entrada-card-desc">${esc(e.descricao||'—')}</div>
       <div class="entrada-card-meta">${fmtForma(e.forma)} · ${fmtData(e.criado_em)}</div>
     </div>
     <div style="display:flex;align-items:center;gap:.65rem;flex-shrink:0;">

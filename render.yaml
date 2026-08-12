@@ -1,0 +1,145 @@
+# Blueprint do Render — https://render.com/docs/blueprint-spec
+#
+# Cria: web service (Flask), worker do scheduler, Postgres e Redis.
+# Depois do primeiro deploy, preencha no dashboard os segredos marcados com
+# `sync: false` (eles NÃO ficam versionados aqui).
+
+databases:
+  - name: ibarber-db
+    databaseName: ibarber
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  # ── API + site (Flask) ─────────────────────────────────────────────────────
+  - type: web
+    name: ibarber
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: main
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn -c gunicorn.conf.py app:app
+    healthCheckPath: /api/ping
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+
+      # Este worker NÃO roda os jobs periódicos — quem roda é o serviço
+      # ibarber-scheduler. Com RUN_SCHEDULER=1 aqui, cada job executaria uma
+      # vez por worker do gunicorn.
+      - key: RUN_SCHEDULER
+        value: "0"
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ibarber-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ibarber-redis
+          property: connectionString
+
+      # Gerados pelo Render no primeiro deploy
+      - key: SECRET_KEY
+        generateValue: true
+      - key: API_TOKEN          # chave mestra do /admin/painel (>=32 chars)
+        generateValue: true
+
+      - key: APP_DOMAIN
+        value: ibarber.shop
+      - key: APP_BASE_URL
+        value: https://ibarber.shop
+      - key: CORS_ORIGINS
+        value: https://ibarber.shop
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: TOKEN_TTL_HORAS
+        value: "12"
+
+      # Alvo do CNAME dos subdomínios de tenant. Preencha com o hostname do
+      # serviço (ex.: ibarber.onrender.com) após o primeiro deploy.
+      - key: CNAME_ALVO
+        sync: false
+
+      # ── Segredos: preencher no dashboard ───────────────────────────────────
+      - key: MAIL_USER
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_PUBLIC_KEY
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+      - key: CF_TOKEN
+        sync: false
+      - key: CF_ZONE_ID
+        sync: false
+
+  # ── Jobs periódicos (lembretes, assinaturas, limpezas) ─────────────────────
+  # Processo único e separado: é o que garante que cada job rode uma vez só.
+  - type: worker
+    name: ibarber-scheduler
+    runtime: python
+    plan: starter
+    region: oregon
+    branch: main
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python worker.py
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: RUN_SCHEDULER
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ibarber-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: ibarber-redis
+          property: connectionString
+      # Precisa das MESMAS chaves do web service: os tokens são assinados com
+      # SECRET_KEY e os e-mails saem daqui.
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: ibarber
+          envVarKey: SECRET_KEY
+      - key: API_TOKEN
+        fromService:
+          type: web
+          name: ibarber
+          envVarKey: API_TOKEN
+      - key: APP_DOMAIN
+        value: ibarber.shop
+      - key: MAIL_USER
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+
+  # ── Redis: contador compartilhado do rate limiter ──────────────────────────
+  - type: keyvalue
+    name: ibarber-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: []      # somente rede interna
