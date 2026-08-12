@@ -7,7 +7,7 @@ apscheduler==3.10.4
 requests==2.32.4           # CVE-2024-35195 e CVE-2024-47081 em <2.32.4
 python-dotenv==1.0.1
 gunicorn==23.0.0
-PyMySQL==1.1.1
+psycopg[binary]==3.2.3     # driver Postgres (Render)
 cryptography==44.0.1
 Pillow==11.3.0
 redis==5.2.1               # backend compartilhado do rate limiter (REDIS_URL)
