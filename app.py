@@ -1,3 +1,7 @@
+# Adia a avaliação das anotações: permite sintaxe como `str | None` (PEP 604)
+# em Python 3.9, onde ela só seria válida a partir do 3.10.
+from __future__ import annotations
+
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, Response, make_response, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -10,14 +14,13 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
 import os, json, uuid, secrets, smtplib, requests as req_http
-import socket, threading, time
+import subprocess, socket, threading, time
 import re, random, html, csv, io, hmac, hashlib, base64
 from functools import wraps
 from cryptography.fernet import Fernet, InvalidToken
 from calendar import monthrange
 from urllib.parse import urlencode
 from collections import defaultdict
-from contextlib import contextmanager
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -80,14 +83,7 @@ app.secret_key = os.environ.get('SECRET_KEY')
 _DB_URL = os.environ.get('DATABASE_URL')
 if not _DB_URL:
     raise RuntimeError('DATABASE_URL não definida no ambiente')
-# O Render injeta DATABASE_URL com o esquema `postgres://`, que o SQLAlchemy 2
-# não reconhece. Normaliza para o driver psycopg (v3).
-if _DB_URL.startswith('postgres://'):
-    _DB_URL = _DB_URL.replace('postgres://', 'postgresql+psycopg://', 1)
-elif _DB_URL.startswith('postgresql://'):
-    _DB_URL = _DB_URL.replace('postgresql://', 'postgresql+psycopg://', 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = _DB_URL
-_DB_DIALETO = _DB_URL.split(':', 1)[0].split('+', 1)[0]   # postgresql | mysql | sqlite
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,    # reconecta automaticamente se a conexão cair
@@ -107,14 +103,7 @@ app.config['SESSION_COOKIE_SECURE'] = not _is_dev
 _cookie_domain = os.environ.get('APP_DOMAIN', 'ibarber.shop')
 app.config['SESSION_COOKIE_DOMAIN'] = f".{_cookie_domain}" if not _is_dev else None
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
-# Em plataformas de container (Render, Fly, Heroku) o filesystem é EFÊMERO:
-# tudo que for gravado aqui some no próximo deploy ou restart. Aponte
-# UPLOAD_FOLDER para um disco persistente montado (ex.: /var/data/uploads)
-# ou migre para object storage antes de operar com clientes reais.
-UPLOAD_FOLDER = os.environ.get(
-    'UPLOAD_FOLDER',
-    os.path.join(os.path.dirname(__file__), 'static', 'uploads'),
-)
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.after_request
@@ -545,42 +534,12 @@ class Produto(db.Model):
     criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-@contextmanager
-def _lock_migracao():
-    """Serializa o DDL de boot entre processos.
-
-    Em produção há vários processos importando este módulo ao mesmo tempo
-    (N workers do gunicorn + o worker do scheduler). Sem lock, dois deles
-    executam CREATE TABLE/ALTER TABLE simultaneamente e um morre com
-    DuplicateTable no meio do deploy.
-
-    O advisory lock do Postgres é liberado junto com a conexão.
-    """
-    if _DB_DIALETO != 'postgresql':
-        yield          # MySQL/SQLite: sem lock, comportamento anterior
-        return
-    conn = db.engine.connect()
-    try:
-        conn.execute(text('SELECT pg_advisory_lock(823510771)'))
-        conn.commit()
-        yield
-    finally:
-        try:
-            conn.execute(text('SELECT pg_advisory_unlock(823510771)'))
-            conn.commit()
-        except Exception:
-            pass       # a conexão fechando já libera o lock
-        conn.close()
-
-with app.app_context(), _lock_migracao():
+with app.app_context():
     _inspector = _sa_inspect(db.engine)
     _existing = set(_inspector.get_table_names())
     for _tbl in db.metadata.sorted_tables:
         if _tbl.name not in _existing:
-            try:
-                _tbl.create(db.engine, checkfirst=True)
-            except Exception as _e:
-                app.logger.warning('[MIGRATE] tabela %s: %s', _tbl.name, _e)
+            _tbl.create(db.engine)
     _inspector = _sa_inspect(db.engine)
     _existing = set(_inspector.get_table_names())
     _ALLOWED_TENANT_COLS = {
@@ -592,24 +551,16 @@ with app.app_context(), _lock_migracao():
     _ALLOWED_ENTRADA_COLS = {'pedido_id'}
     _ALLOWED_PEDIDO_COLS = {'tenant_id'}
     _ALLOWED_AG_COLS = {'tenant_id', 'duracao_total', 'funcionario_id', 'criado_em'}
-    # DATETIME e BOOLEAN DEFAULT 0 são sintaxe MySQL; o Postgres quer
-    # TIMESTAMP e FALSE. Traduz conforme o dialeto em uso.
-    _PG = _DB_DIALETO == 'postgresql'
-    _TS   = 'TIMESTAMP' if _PG else 'DATETIME'
-    _BOOL = 'BOOLEAN DEFAULT FALSE' if _PG else 'BOOLEAN DEFAULT 0'
-    _INT0 = 'INTEGER DEFAULT 0'
     _TENANT_COL_TYPES = {
         'fab_wpp': 'TEXT', 'fab_maps': 'TEXT', 'whatsapp': 'VARCHAR(20)',
-        'maps_url': 'VARCHAR(500)', 'tema_editacoes': _INT0,
-        'tema_pendente': 'TEXT', 'trial_expira': _TS, 'loja_ativa': _BOOL,
+        'maps_url': 'VARCHAR(500)', 'tema_editacoes': 'INTEGER DEFAULT 0',
+        'tema_pendente': 'TEXT', 'trial_expira': 'DATETIME', 'loja_ativa': 'BOOLEAN DEFAULT 0',
     }
-    _USER_COL_TYPES = {'guest': _INT0, 'tenant_id': 'INTEGER'}
+    _USER_COL_TYPES = {'guest': 'INTEGER DEFAULT 0', 'tenant_id': 'INTEGER'}
     _SERV_COL_TYPES = {'categoria_id': 'INTEGER'}
     _ENTRADA_COL_TYPES = {'pedido_id': 'INTEGER'}
     _PEDIDO_COL_TYPES = {'tenant_id': 'INTEGER'}
-    _AG_COL_TYPES = {'tenant_id': 'INTEGER', 'duracao_total': 'INTEGER', 'funcionario_id': 'INTEGER', 'criado_em': _TS}
-    # `user` é palavra reservada: crase no MySQL, aspas duplas no Postgres
-    _TBL_USER = '"user"' if _PG else '`user`'
+    _AG_COL_TYPES = {'tenant_id': 'INTEGER', 'duracao_total': 'INTEGER', 'funcionario_id': 'INTEGER', 'criado_em': 'DATETIME'}
     _tenant_cols = {c['name'] for c in _inspector.get_columns('tenant')} if 'tenant' in _existing else set()
     for _col, _type in [(k, _TENANT_COL_TYPES[k]) for k in _ALLOWED_TENANT_COLS]:
         if _col not in _tenant_cols:
@@ -620,7 +571,7 @@ with app.app_context(), _lock_migracao():
     for _col, _type in [(k, _USER_COL_TYPES[k]) for k in _ALLOWED_USER_COLS]:
         if _col not in _user_cols:
             with db.engine.connect() as _conn:
-                _conn.execute(db.text(f'ALTER TABLE {_TBL_USER} ADD COLUMN {_col} {_type}'))
+                _conn.execute(db.text(f'ALTER TABLE `user` ADD COLUMN {_col} {_type}'))
                 _conn.commit()
     _serv_cols = {c['name'] for c in _inspector.get_columns('servico')} if 'servico' in _existing else set()
     for _col, _type in [(k, _SERV_COL_TYPES[k]) for k in _ALLOWED_SERV_COLS]:
@@ -646,20 +597,13 @@ with app.app_context(), _lock_migracao():
             with db.engine.connect() as _conn:
                 _conn.execute(db.text(f'ALTER TABLE agendamento ADD COLUMN {_col} {_type}'))
                 _conn.commit()
-    # Torna funcionario.email nullable para permitir múltiplos barbeiros sem email.
-    # MODIFY COLUMN é MySQL; no Postgres a forma é ALTER COLUMN ... DROP NOT NULL.
-    _sql_email_nullable = (
-        'ALTER TABLE funcionario ALTER COLUMN email DROP NOT NULL' if _PG
-        else 'ALTER TABLE funcionario MODIFY COLUMN email VARCHAR(120) NULL'
-    )
+    # Torna funcionario.email nullable para permitir múltiplos barbeiros sem email
     try:
         with db.engine.connect() as _conn:
-            _conn.execute(db.text(_sql_email_nullable))
+            _conn.execute(db.text('ALTER TABLE funcionario MODIFY COLUMN email VARCHAR(120) NULL'))
             _conn.commit()
-    except Exception as _e:
-        # SQLite (dev) não suporta nenhuma das duas formas — esperado
-        if _DB_DIALETO != 'sqlite':
-            app.logger.warning('[MIGRATE] funcionario.email nullable falhou: %s', _e)
+    except Exception:
+        pass  # SQLite (dev) não suporta MODIFY COLUMN — sem problema
     # Mangle emails de funcionários inativos legados que ainda bloqueiam o unique constraint
     try:
         inativos = Funcionario.query.filter_by(ativo=False).all()
@@ -845,14 +789,6 @@ def _gerar_slots(abertura='08:00', fechamento='18:00', duracao=40):
 @app.route('/manifest.json')
 def manifest():
     return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
-
-# As URLs gravadas no banco são /static/uploads/<arquivo>. Quando UPLOAD_FOLDER
-# aponta para fora da pasta static (disco persistente), o handler estático
-# padrão do Flask não acha o arquivo — esta rota resolve os dois casos.
-# send_from_directory faz safe_join, então ../ não escapa do diretório.
-@app.route('/static/uploads/<path:filename>')
-def uploads(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename, max_age=31536000)
 
 _ADMIN_WEB = os.path.join(os.path.dirname(__file__), 'admin_web')
 
@@ -1313,11 +1249,7 @@ def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
         Agendamento.data_hora > _agora_brt()
     )
     if data:
-        # DATE(coluna) é função MySQL/SQLite; no Postgres o equivalente
-        # portável é o CAST para DATE, que o SQLAlchemy emite corretamente
-        # em todos os dialetos.
-        _d = datetime.strptime(data, '%Y-%m-%d').date() if isinstance(data, str) else data
-        q = q.filter(db.cast(Agendamento.data_hora, db.Date) == _d)
+        q = q.filter(db.func.date(Agendamento.data_hora) == data)
     if funcionario_id is not None:
         q = q.filter(Agendamento.funcionario_id == funcionario_id)
     result = []
@@ -4495,6 +4427,19 @@ def _csrf_ok():
 # Rotas isentas: webhook do MP (autenticado por HMAC próprio) e o callback OAuth.
 _CSRF_ISENTOS = ('/api/pagamento/webhook', '/auth/google/callback')
 
+def _autenticado_por_chave():
+    """True se a requisição traz a chave mestra correta (body, query ou header).
+
+    Quem autentica assim não depende do cookie de sessão, então não é alvo de
+    CSRF: um site atacante não conhece a chave. Já uma chamada a /api/admin/*
+    apoiada só na sessão continua exigindo o token CSRF."""
+    if not API_TOKEN:
+        return False
+    chave = ((request.get_json(silent=True) or {}).get('key')
+             or request.args.get('key', '')
+             or request.headers.get('X-Admin-Key', ''))
+    return bool(chave) and hmac.compare_digest(str(chave), API_TOKEN)
+
 @app.before_request
 def _csrf_protect():
     if request.method in ('GET', 'HEAD', 'OPTIONS', 'TRACE'):
@@ -4502,10 +4447,10 @@ def _csrf_protect():
     if request.path.startswith(_CSRF_ISENTOS):
         return
     # Chamadas de API por Bearer token não usam cookie, logo não são forjáveis
-    # por CSRF; a mesma lógica vale para a chave do painel admin.
+    # por CSRF; a mesma lógica vale para a chave mestra do painel admin.
     if request.headers.get('Authorization', '').startswith('Bearer '):
         return
-    if request.headers.get('X-Admin-Key'):
+    if _autenticado_por_chave():
         return
     if not _csrf_ok():
         if request.path.startswith('/api/'):
@@ -5170,64 +5115,83 @@ def api_personalizar_upload():
         fh.write(buf.read())
     return jsonify({'ok': True, 'url': f'/static/uploads/{filename}'})
 
-# Alvo do CNAME dos subdomínios de tenant. No Render é o hostname do serviço
-# (ex.: ibarber.onrender.com), que já responde pelo wildcard *.APP_DOMAIN com
-# TLS emitido pela própria plataforma.
-CNAME_ALVO = os.environ.get('CNAME_ALVO', '')
-
 def _criar_dns_cloudflare(slug):
-    """Cria o registro DNS do subdomínio da barbearia, se ainda não existir."""
     if not CF_TOKEN or not CF_ZONE_ID:
-        return False
+        return
     domain = f"{slug}.{APP_DOMAIN}"
     headers = {
         'Authorization': f'Bearer {CF_TOKEN}',
         'Content-Type': 'application/json',
     }
-    # CNAME apontando para o serviço no Render; sem CNAME_ALVO cai no A record
-    # legado da VPS, para não quebrar quem ainda estiver lá.
-    if CNAME_ALVO:
-        registro = {'type': 'CNAME', 'name': domain, 'content': CNAME_ALVO,
-                    'ttl': 60, 'proxied': False}
-    elif VPS_IP:
-        registro = {'type': 'A', 'name': domain, 'content': VPS_IP,
-                    'ttl': 60, 'proxied': False}
-    else:
-        app.logger.warning('[DNS] nem CNAME_ALVO nem VPS_IP definidos — %s sem DNS', domain)
-        return False
-    try:
-        r = req_http.get(
-            f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
-            headers=headers, params={'name': domain}, timeout=10,
-        )
-        if r.ok and r.json().get('result'):
-            return True                       # já existe
-        r = req_http.post(
-            f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
-            headers=headers, json=registro, timeout=10,
-        )
-        if not r.ok:
-            app.logger.error('[DNS] falha ao criar %s: %s', domain, r.text[:300])
-            return False
-        app.logger.info('[DNS] %s criado', domain)
-        return True
-    except Exception as e:
-        app.logger.error('[DNS] erro ao criar %s: %s', domain, e)
-        return False
+    r = req_http.get(
+        f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
+        headers=headers,
+        params={'type': 'A', 'name': domain},
+        timeout=10,
+    )
+    if r.ok and r.json().get('result'):
+        return
+    req_http.post(
+        f'https://api.cloudflare.com/client/v4/zones/{CF_ZONE_ID}/dns_records',
+        headers=headers,
+        json={'type': 'A', 'name': domain, 'content': VPS_IP, 'ttl': 60, 'proxied': False},
+        timeout=10,
+    )
 
 
 def _provisionar_ssl_tenant(slug, email):
-    """Provisiona o subdomínio da barbearia.
+    """Emite o certificado do subdomínio e registra o vhost no nginx.
 
-    O TLS é responsabilidade da plataforma: o domínio wildcard *.APP_DOMAIN
-    configurado no Render cobre todo tenant novo automaticamente. Aqui resta
-    apenas criar o registro DNS.
-
-    A versão anterior rodava `certbot`, escrevia em /etc/nginx/sites-enabled e
-    dava `systemctl reload nginx` — nada disso existe num container sem root e
-    com filesystem efêmero.
+    Depende de rodar na VPS com root: usa certbot, escreve em
+    /etc/nginx/sites-enabled e recarrega o nginx.
     """
     _criar_dns_cloudflare(slug)
+    domain = f"{slug}.{APP_DOMAIN}"
+    cert_path = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+    if os.path.exists(cert_path):
+        return
+    for _ in range(60):
+        try:
+            socket.gethostbyname(domain)
+            break
+        except socket.gaierror:
+            time.sleep(10)
+    else:
+        return
+    try:
+        r = subprocess.run(
+            ['certbot', 'certonly', '--nginx', '-d', domain,
+             '--non-interactive', '--agree-tos', '-m', email],
+            capture_output=True, text=True, timeout=120
+        )
+        if r.returncode != 0:
+            return
+    except Exception:
+        return
+    nginx_block = f"""
+server {{
+    listen 443 ssl;
+    server_name {domain};
+    ssl_certificate /etc/letsencrypt/live/{domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{domain}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    location / {{
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+}}
+"""
+    try:
+        with open('/etc/nginx/sites-enabled/ibarber', 'a') as f:
+            f.write(nginx_block)
+        subprocess.run(['nginx', '-t'], check=True, capture_output=True, timeout=10)
+        subprocess.run(['systemctl', 'reload', 'nginx'], check=True, timeout=10)
+    except Exception:
+        pass
 
 
 @app.route('/api/cadastro-personalizar', methods=['POST'])
