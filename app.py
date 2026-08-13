@@ -206,7 +206,9 @@ GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI', 'https://ibarber.sh
 APP_DOMAIN    = os.environ.get('APP_DOMAIN', 'ibarber.shop')
 CF_TOKEN      = os.environ.get('CF_TOKEN', '')
 CF_ZONE_ID    = os.environ.get('CF_ZONE_ID', '')
-VPS_IP        = os.environ.get('VPS_IP', 'IP_REMOVIDO')
+# Sem default: o IP do servidor é infraestrutura e não pertence ao código.
+# Vazio faz _criar_dns_cloudflare() sair sem criar registro algum.
+VPS_IP        = os.environ.get('VPS_IP', '')
 
 def _tenant_url(slug):
     return f'https://{slug}.{APP_DOMAIN}'
@@ -5116,7 +5118,7 @@ def api_personalizar_upload():
     return jsonify({'ok': True, 'url': f'/static/uploads/{filename}'})
 
 def _criar_dns_cloudflare(slug):
-    if not CF_TOKEN or not CF_ZONE_ID:
+    if not CF_TOKEN or not CF_ZONE_ID or not VPS_IP:
         return
     domain = f"{slug}.{APP_DOMAIN}"
     headers = {
