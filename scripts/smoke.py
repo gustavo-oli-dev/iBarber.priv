@@ -51,6 +51,7 @@ def main():
             falhas.append((r.rule, repr(e)[:150]))
 
     falhas += _checar_senhas(m)
+    falhas += _checar_config(m)
 
     os.unlink(tmp_db.name)
 
@@ -60,7 +61,34 @@ def main():
             print(f'  {alvo}: {erro}')
         sys.exit(1)
 
-    print('OK — rotas GET e contrato de senha verificados.')
+    print('OK — rotas GET, contrato de senha e leitura/escrita de Configuracao.')
+
+
+def _checar_config(m):
+    """Grava e le uma Configuracao — cobre o caminho de escrita, que as rotas
+    GET nao exercitam."""
+    falhas = []
+    with m.app.app_context():
+        try:
+            m._gravar_config('chave_smoke', 'v1', tenant_id=1)
+            m.db.session.commit()
+
+            lido = m._obter_config('chave_smoke', tenant_id=1)
+            if lido is None:
+                falhas.append(('Configuracao', 'gravou mas nao releu'))
+            elif lido.valor != 'v1':
+                falhas.append(('Configuracao', f'valor lido {lido.valor!r} != v1'))
+            elif lido.chave != '1:chave_smoke':
+                falhas.append(('Configuracao', f'chave {lido.chave!r} sem prefixo'))
+
+            # Segunda gravacao tem de atualizar, nao duplicar.
+            m._gravar_config('chave_smoke', 'v2', tenant_id=1)
+            m.db.session.commit()
+            if m._obter_config('chave_smoke', tenant_id=1).valor != 'v2':
+                falhas.append(('Configuracao', 'update nao sobrescreveu'))
+        except Exception as e:
+            falhas.append(('Configuracao', f'{type(e).__name__}: {e}'))
+    return falhas
 
 
 def _checar_senhas(m):
