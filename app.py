@@ -4051,7 +4051,7 @@ def api_rotar_token():
 # ── Email blast — atualização do APK ───────────────────────────────────────────
 
 def _email_atualizar_apk(tenant):
-    apk_url   = f'https://{APP_DOMAIN}/static/app/ibarber.apk'
+    apk_url   = f'https://{APP_DOMAIN}/static/ibarber.apk'
     painel_url = f'https://{APP_DOMAIN}/gestao/login'
     corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;
