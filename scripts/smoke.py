@@ -52,6 +52,8 @@ def main():
 
     falhas += _checar_senhas(m)
     falhas += _checar_config(m)
+    falhas += _checar_assinatura(m)
+    falhas += _checar_bloqueio(m, client)
 
     os.unlink(tmp_db.name)
 
@@ -62,6 +64,143 @@ def main():
         sys.exit(1)
 
     print('OK — rotas GET, contrato de senha e leitura/escrita de Configuracao.')
+
+
+def _checar_bloqueio(m, client):
+    """Confere o que cada camada faz em cada estado da assinatura."""
+    from datetime import datetime, timedelta
+
+    falhas = []
+
+    def montar(slug, horas_vencido):
+        """Cria tenant cuja assinatura venceu ha `horas_vencido` horas."""
+        with m.app.app_context():
+            tenant = m.Tenant(slug=slug, nome='Barbearia', email=f'{slug}@x.com',
+                              senha='senha123', ativo=True, assinatura_ativa=True)
+            m.db.session.add(tenant)
+            m.db.session.flush()
+            m.db.session.add(m.Assinatura(
+                tenant_id=tenant.id, plano='mensal', valor_total=49, valor_mensal=49,
+                status='ativo',
+                vencimento=datetime.utcnow() - timedelta(hours=horas_vencido, seconds=1)))
+            m.db.session.commit()
+            return tenant.id
+
+    def logar(tid):
+        with client.session_transaction() as sessao:
+            sessao.clear()
+            sessao[m._SESSION_GESTAO_TENANT_ID] = tid
+
+    casos = [
+        # (slug, horas vencido, painel esperado, site esperado)
+        ('emdia',    -240, 200, 200),  # faltam 10 dias
+        ('carencia',   12, 200, 200),  # venceu ha 12h — passa, com aviso
+        ('bloqueado',  30, 302, 402),  # venceu ha 30h — corta
+    ]
+    for slug, horas, painel_esperado, site_esperado in casos:
+        tid = montar(slug, horas)
+        logar(tid)
+
+        painel = client.get('/gestao/')
+        if painel.status_code != painel_esperado:
+            falhas.append(('bloqueio',
+                           f'{slug}: /gestao/ deu {painel.status_code}, '
+                           f'esperado {painel_esperado}'))
+
+        site = client.get(f'/{slug}')
+        if site.status_code != site_esperado:
+            falhas.append(('bloqueio',
+                           f'{slug}: site publico deu {site.status_code}, '
+                           f'esperado {site_esperado}'))
+
+        # O aviso so aparece na carencia.
+        if horas == 12:
+            corpo = painel.get_data(as_text=True)
+            if 'Assinatura vencida' not in corpo:
+                falhas.append(('bloqueio', 'carencia: faltou o aviso no painel'))
+        elif horas == -240:
+            if 'Assinatura vencida' in painel.get_data(as_text=True):
+                falhas.append(('bloqueio', 'em dia: aviso apareceu sem motivo'))
+
+    # Quem esta bloqueado cai na tela de assinatura vencida, nao em loop.
+    tid_bloqueado = montar('bloqueado2', 48)
+    logar(tid_bloqueado)
+    tela = client.get('/gestao/assinatura-vencida')
+    if tela.status_code != 402:
+        falhas.append(('bloqueio',
+                       f'tela de vencida deu {tela.status_code}, esperado 402'))
+
+    # Renovar tem de liberar tudo de novo.
+    with m.app.app_context():
+        tenant = m.db.session.get(m.Tenant, tid_bloqueado)
+        assinatura = tenant.assinatura_atual
+        assinatura.vencimento = datetime.utcnow() + timedelta(days=30)
+        assinatura.status = 'ativo'
+        tenant.assinatura_ativa = True
+        m.db.session.commit()
+    logar(tid_bloqueado)
+    if client.get('/gestao/').status_code != 200:
+        falhas.append(('bloqueio', 'renovar nao liberou o painel'))
+
+    with client.session_transaction() as sessao:
+        sessao.clear()
+    return falhas
+
+
+def _checar_assinatura(m):
+    """Verifica a regra de carencia de 24h em volta do vencimento."""
+    from datetime import datetime, timedelta
+
+    falhas = []
+    casos = [
+        # (descricao, horas desde o vencimento, estado esperado)
+        ('faltando 10 dias',     -240, m.Tenant.ASSINATURA_ATIVA),
+        ('faltando 1 hora',        -1, m.Tenant.ASSINATURA_ATIVA),
+        ('venceu ha 1 minuto',      0, m.Tenant.ASSINATURA_CARENCIA),
+        ('venceu ha 23 horas',     23, m.Tenant.ASSINATURA_CARENCIA),
+        ('venceu ha 25 horas',     25, m.Tenant.ASSINATURA_BLOQUEADA),
+        ('venceu ha 10 dias',     240, m.Tenant.ASSINATURA_BLOQUEADA),
+    ]
+
+    with m.app.app_context():
+        for i, (descricao, horas, esperado) in enumerate(casos):
+            tenant = m.Tenant(slug=f'assin{i}', nome='X', email=f'a{i}@x.com',
+                              senha='senha123', ativo=True, assinatura_ativa=True)
+            m.db.session.add(tenant)
+            m.db.session.flush()
+            # 'horas' positivo = ja venceu; negativo = ainda vai vencer.
+            vencimento = datetime.utcnow() - timedelta(hours=horas, seconds=1)
+            m.db.session.add(m.Assinatura(
+                tenant_id=tenant.id, plano='mensal', valor_total=49,
+                valor_mensal=49, status='ativo', vencimento=vencimento))
+            m.db.session.commit()
+
+            obtido = tenant.estado_assinatura()
+            if obtido != esperado:
+                falhas.append(('Assinatura',
+                               f'{descricao}: esperado {esperado}, obtido {obtido}'))
+
+        # assinatura_ativa=False manda bloquear, mesmo dentro do prazo.
+        desligado = m.Tenant(slug='desligado', nome='X', email='d@x.com',
+                             senha='senha123', ativo=True, assinatura_ativa=False)
+        m.db.session.add(desligado)
+        m.db.session.flush()
+        m.db.session.add(m.Assinatura(
+            tenant_id=desligado.id, plano='mensal', valor_total=49, valor_mensal=49,
+            status='ativo', vencimento=datetime.utcnow() + timedelta(days=30)))
+        m.db.session.commit()
+        if desligado.estado_assinatura() != m.Tenant.ASSINATURA_BLOQUEADA:
+            falhas.append(('Assinatura', 'desligado pelo admin deveria bloquear'))
+
+        # Ativado na mao pelo admin, sem assinatura nenhuma: liberado.
+        manual = m.Tenant(slug='manual', nome='X', email='m@x.com',
+                          senha='senha123', ativo=True, assinatura_ativa=True)
+        m.db.session.add(manual)
+        m.db.session.commit()
+        if manual.estado_assinatura() != m.Tenant.ASSINATURA_ATIVA:
+            falhas.append(('Assinatura', 'ativado pelo admin sem assinatura deveria liberar'))
+
+    return falhas
 
 
 def _checar_config(m):

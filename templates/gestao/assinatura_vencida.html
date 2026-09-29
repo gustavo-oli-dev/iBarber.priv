@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assinatura vencida — iBarber</title>
+  <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080808; --surface: #111111; --border: #222222;
+      --gold: #C8C8C8; --text: #F2F2F2; --text-muted: #5A5A5A;
+      --error: #E05555; --radius: 10px;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      min-height: 100vh; display: flex; align-items: center;
+      justify-content: center; padding: 1.5rem;
+    }
+    .cartao {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 2.5rem 2rem;
+      max-width: 440px; width: 100%; text-align: center;
+    }
+    .selo {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(224,85,85,0.12); border: 1px solid var(--error);
+      color: var(--error); font-size: 1.6rem;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.25rem;
+    }
+    h1 {
+      font-family: 'Playfair Display', serif; font-size: 1.5rem;
+      font-weight: 600; margin-bottom: 0.6rem;
+    }
+    .barbearia { color: var(--gold); font-size: 0.9rem; margin-bottom: 1.25rem; }
+    p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem; }
+    .venceu-em { color: var(--error); font-weight: 500; }
+    .acoes { margin-top: 1.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
+    .btn {
+      padding: 0.8rem 1.5rem; border-radius: var(--radius);
+      font-size: 0.9rem; font-weight: 600; text-decoration: none;
+      display: block; transition: opacity .2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-principal { background: var(--gold); color: #000; }
+    .btn-secundario { background: none; color: var(--text-muted); border: 1px solid var(--border); }
+    .rodape { margin-top: 1.5rem; font-size: 0.78rem; color: var(--text-muted); }
+    .rodape a { color: var(--gold); }
+  </style>
+</head>
+<body>
+  <main class="cartao">
+    <div class="selo" aria-hidden="true">!</div>
+
+    <h1>Assinatura vencida</h1>
+    <div class="barbearia">{{ tenant.nome }}</div>
+
+    {% if vencimento %}
+      <p>Sua assinatura venceu em
+        <span class="venceu-em">{{ vencimento.strftime('%d/%m/%Y') }}</span>
+        e o prazo extra de 24 horas terminou.
+      </p>
+    {% else %}
+      <p>Sua assinatura está vencida e o prazo extra de 24 horas terminou.</p>
+    {% endif %}
+
+    <p>
+      O painel e o site da sua barbearia estão bloqueados. Seus dados —
+      agenda, clientes e histórico — continuam salvos e voltam assim que
+      o pagamento for confirmado.
+    </p>
+
+    <div class="acoes">
+      <a class="btn btn-principal" href="/planos">Renovar assinatura</a>
+      <a class="btn btn-secundario" href="{{ url_for('gestao_logout') }}">Sair</a>
+    </div>
+
+    <div class="rodape">
+      Já pagou? A liberação é automática em alguns minutos.<br>
+      Se continuar bloqueado, fale com <a href="mailto:contato@ibarber.shop">contato@ibarber.shop</a>.
+    </div>
+  </main>
+</body>
+</html>

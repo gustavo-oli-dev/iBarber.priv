@@ -321,6 +321,40 @@ class Tenant(SenhaMixin, db.Model):
             return 0
         return max(0, (self.trial_expira - datetime.utcnow()).days)
 
+    # ── Estado da assinatura ────────────────────────────────────────────────
+    # Calculado na hora a partir do vencimento, nao do job periodico: o job
+    # roda a cada 12h e sozinho nao consegue respeitar um corte de 24h.
+    ASSINATURA_ATIVA     = 'ativa'       # em dia
+    ASSINATURA_CARENCIA  = 'carencia'    # venceu ha menos de 24h — ainda passa
+    ASSINATURA_BLOQUEADA = 'bloqueada'   # venceu ha 24h ou mais — corta
+
+    @property
+    def assinatura_atual(self):
+        """A assinatura mais recente do tenant, ou None."""
+        return self.assinaturas[0] if self.assinaturas else None
+
+    def estado_assinatura(self):
+        # assinatura_ativa=False cobre quem nunca pagou e quem o admin desligou.
+        if not self.assinatura_ativa:
+            return self.ASSINATURA_BLOQUEADA
+
+        atual = self.assinatura_atual
+        # Ativado na mao pelo admin, sem assinatura ou sem vencimento: liberado.
+        if atual is None or not atual.vencimento:
+            return self.ASSINATURA_ATIVA
+
+        if not atual.vencida:
+            return self.ASSINATURA_ATIVA
+        if atual.em_carencia:
+            return self.ASSINATURA_CARENCIA
+        return self.ASSINATURA_BLOQUEADA
+
+    def assinatura_bloqueada(self):
+        return self.estado_assinatura() == self.ASSINATURA_BLOQUEADA
+
+    def assinatura_em_carencia(self):
+        return self.estado_assinatura() == self.ASSINATURA_CARENCIA
+
 class Assinatura(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     tenant_id        = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
@@ -334,12 +368,43 @@ class Assinatura(db.Model):
     vencimento       = db.Column(db.DateTime, nullable=True)
     criado_em        = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Depois de vencer, a barbearia ainda tem estas horas para pagar antes de
+    # perder o acesso. Vale para o painel, para a API e para o site publico.
+    HORAS_CARENCIA = 24
+
     def dias_restantes(self):
         if not self.vencimento: return 0
         return max(0, (self.vencimento - datetime.utcnow()).days)
 
     def esta_ativo(self):
         return self.status == 'ativo' and bool(self.vencimento) and self.vencimento > datetime.utcnow()
+
+    @property
+    def fim_da_carencia(self):
+        if not self.vencimento:
+            return None
+        return self.vencimento + timedelta(hours=self.HORAS_CARENCIA)
+
+    @property
+    def vencida(self):
+        return bool(self.vencimento) and self.vencimento <= datetime.utcnow()
+
+    @property
+    def em_carencia(self):
+        """Venceu, mas ainda esta dentro das HORAS_CARENCIA."""
+        return self.vencida and datetime.utcnow() < self.fim_da_carencia
+
+    @property
+    def carencia_esgotada(self):
+        return self.vencida and datetime.utcnow() >= self.fim_da_carencia
+
+    @property
+    def horas_restantes_carencia(self):
+        """Horas inteiras que faltam para o bloqueio; 0 se ja passou."""
+        if not self.em_carencia:
+            return 0
+        faltam = self.fim_da_carencia - datetime.utcnow()
+        return max(0, int(faltam.total_seconds() // 3600))
 
 class Usuario(SenhaMixin, db.Model):
     """Cliente da barbearia.
@@ -2079,7 +2144,9 @@ def _token_valido(tid, version) -> bool:
 def verificar_token(req):
     """Retorna tenant_id se válido e na versão correta, None caso contrário.
     Se o token for de funcionário, ele precisa continuar ativo e no mesmo
-    tenant — demitir alguém corta o acesso na hora."""
+    tenant — demitir alguém corta o acesso na hora.
+    Assinatura vencida além da carência também invalida o token: é o que
+    bloqueia o app."""
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
     tid, fid, ver = _extrair_tenant_token(token)
     if not tid or not _token_valido(tid, ver):
@@ -2088,6 +2155,9 @@ def verificar_token(req):
         f = db.session.get(Funcionario, fid)
         if not f or f.tenant_id != tid or not f.ativo:
             return None
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
+        return None
     return tid
 
 def verificar_token_admin(req):
@@ -2109,6 +2179,9 @@ def verificar_token_perm(req, perm):
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
     tid, fid, ver = _extrair_tenant_token(token)
     if not tid or not _token_valido(tid, ver):
+        return None
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
         return None
     if fid == 0:
         return tid
@@ -3871,12 +3944,48 @@ def testar_lembretes():
         return jsonify({'ok': True, 'enviados': enviados, 'email': user.email})
 
 def verificar_assinaturas():
+    """Avisa quem acabou de vencer e suspende quem passou da carência.
+
+    O bloqueio em si não depende deste job: estado_assinatura() calcula pelo
+    vencimento a cada requisição. O job cuida do e-mail e de deixar o banco
+    coerente (status e assinatura_ativa).
+    """
     with app.app_context():
         try:
             agora = datetime.utcnow()
-            vencidas = Assinatura.query.filter(
+            limite_carencia = agora - timedelta(hours=Assinatura.HORAS_CARENCIA)
+
+            # 1. Venceu agora, ainda na carência: avisa que faltam horas.
+            em_carencia = Assinatura.query.filter(
                 Assinatura.status == 'ativo',
-                Assinatura.vencimento < agora
+                Assinatura.vencimento < agora,
+                Assinatura.vencimento >= limite_carencia,
+            ).all()
+            for a in em_carencia:
+                tenant = db.session.get(Tenant, a.tenant_id)
+                if not tenant:
+                    continue
+                # Um aviso por assinatura, na primeira passada após vencer.
+                if a.status != 'vencendo':
+                    a.status = 'vencendo'
+                    _enviar_email(tenant.email,
+                        'Assinatura vencida — renove em 24h',
+                        f'''<div style="font-family:Arial,sans-serif;
+                      background:#0f0f0f;color:#f0f0f0;padding:28px;
+                      border-radius:10px;">
+                      <h2 style="color:#C9A96E;">Assinatura vencida</h2>
+                      <p>Olá {tenant.nome}, sua assinatura venceu.</p>
+                      <p>Você tem <strong>24 horas</strong> para renovar antes
+                        que o painel e o site da sua barbearia sejam bloqueados.</p>
+                      <p>Renove em
+                        <a href="https://ibarber.shop/planos"
+                           style="color:#C9A96E;">ibarber.shop</a>.
+                      </p></div>''')
+
+            # 2. Passou da carência: suspende de fato.
+            vencidas = Assinatura.query.filter(
+                Assinatura.status.in_(('ativo', 'vencendo')),
+                Assinatura.vencimento < limite_carencia,
             ).all()
             for a in vencidas:
                 a.status = 'suspenso'
@@ -3884,16 +3993,17 @@ def verificar_assinaturas():
                 if tenant:
                     tenant.assinatura_ativa = False
                     _enviar_email(tenant.email,
-                        'Assinatura vencida — Barbearia Online',
+                        'Acesso bloqueado — Barbearia Online',
                         f'''<div style="font-family:Arial,sans-serif;
                       background:#0f0f0f;color:#f0f0f0;padding:28px;
                       border-radius:10px;">
-                      <h2 style="color:#C9A96E;">Assinatura vencida</h2>
-                      <p>Olá {tenant.nome}, sua assinatura venceu.</p>
-                      <p>Renove em
+                      <h2 style="color:#C9A96E;">Acesso bloqueado</h2>
+                      <p>Olá {tenant.nome}, o prazo de 24 horas terminou e o
+                        painel e o site da sua barbearia foram bloqueados.</p>
+                      <p>Seus dados continuam salvos. Renove em
                         <a href="https://ibarber.shop/planos"
                            style="color:#C9A96E;">ibarber.shop</a>
-                        para reativar seu site.
+                        para liberar.
                       </p></div>''')
             db.session.commit()
         except Exception as e:
@@ -4387,10 +4497,51 @@ def _gestao_login_required():
         if not f or f.tenant_id != tid or not f.ativo:
             session.clear()
             return redirect(url_for('gestao_login'))
+    # Assinatura vencida ha mais de 24h fecha o painel. Dentro das 24h o acesso
+    # continua liberado e o aviso aparece pelo _assinatura_ctx.
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
+        return redirect(url_for('gestao_assinatura_vencida'))
     return None
 
 def _gestao_tenant():
     return db.session.get(Tenant, session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID))
+
+@app.route('/gestao/assinatura-vencida')
+def gestao_assinatura_vencida():
+    """Tela final de quem passou da carencia. Nao usa _gestao_login_required
+    (ele redireciona para ca, o que daria laco)."""
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
+    if not tid:
+        return redirect(url_for('gestao_login'))
+    tenant = db.session.get(Tenant, tid)
+    if not tenant:
+        session.clear()
+        return redirect(url_for('gestao_login'))
+    # Pagou enquanto estava nesta tela: volta para o painel.
+    if not tenant.assinatura_bloqueada():
+        return redirect(url_for('gestao_dashboard'))
+    atual = tenant.assinatura_atual
+    return render_template('gestao/assinatura_vencida.html',
+                           tenant=tenant,
+                           vencimento=atual.vencimento if atual else None), 402
+
+@app.context_processor
+def _assinatura_ctx():
+    """Alimenta o aviso de vencimento em todo template da gestao."""
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
+    if not tid:
+        return {}
+    tenant = db.session.get(Tenant, tid)
+    if not tenant:
+        return {}
+    estado = tenant.estado_assinatura()
+    atual = tenant.assinatura_atual
+    return {
+        'assinatura_estado': estado,
+        'assinatura_em_carencia': estado == Tenant.ASSINATURA_CARENCIA,
+        'assinatura_horas_restantes': atual.horas_restantes_carencia if atual else 0,
+    }
 
 def _gestao_token():
     """Token da API com a identidade REAL de quem está logado.
@@ -5650,7 +5801,11 @@ def api_admin_desativar(tid):
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
     t.assinatura_ativa = False
-    asn = Assinatura.query.filter_by(tenant_id=tid, status='ativo').first()
+    # 'vencendo' é o estado de quem está na carência — também precisa cair.
+    asn = Assinatura.query.filter(
+        Assinatura.tenant_id == tid,
+        Assinatura.status.in_(('ativo', 'vencendo')),
+    ).first()
     if asn:
         asn.status = 'inativo'
     db.session.commit()
@@ -5943,20 +6098,40 @@ def verificar_slug(slug):
     existe = Tenant.query.filter_by(slug=slug).first() is not None
     return jsonify({'disponivel': valido and not existe})
 
+def _aviso_assinatura(estado, horas_restantes):
+    """Mensagem pronta para o app exibir. Vazia quando esta tudo em dia."""
+    if estado == Tenant.ASSINATURA_CARENCIA:
+        return (f'Assinatura vencida. Seu acesso será bloqueado em '
+                f'{horas_restantes}h. Renove em ibarber.shop/planos.')
+    if estado == Tenant.ASSINATURA_BLOQUEADA:
+        return ('Assinatura vencida. O acesso está bloqueado — '
+                'renove em ibarber.shop/planos para liberar.')
+    return ''
+
 @app.route('/api/minha-assinatura')
 def api_minha_assinatura():
     tenant_id = verificar_token_admin(request)
     if not tenant_id: return jsonify({'erro': 'não autorizado'}), 403
+    tenant = db.session.get(Tenant, tenant_id)
+    estado = tenant.estado_assinatura() if tenant else Tenant.ASSINATURA_BLOQUEADA
+
     assinatura = Assinatura.query.filter_by(
         tenant_id=tenant_id).order_by(Assinatura.criado_em.desc()).first()
     if not assinatura:
-        return jsonify({'status': 'sem_assinatura'})
+        return jsonify({'status': 'sem_assinatura', 'estado': estado,
+                        'bloqueado': estado == Tenant.ASSINATURA_BLOQUEADA,
+                        'aviso': _aviso_assinatura(estado, 0)})
     return jsonify({
         'status': assinatura.status,
         'plano': assinatura.plano,
         'vencimento': assinatura.vencimento.isoformat() if assinatura.vencimento else None,
         'dias_restantes': assinatura.dias_restantes(),
         'valor_mensal': assinatura.valor_mensal,
+        # Campos novos: permitem ao app avisar antes de o acesso cair.
+        'estado': estado,
+        'bloqueado': estado == Tenant.ASSINATURA_BLOQUEADA,
+        'horas_para_bloqueio': assinatura.horas_restantes_carencia,
+        'aviso': _aviso_assinatura(estado, assinatura.horas_restantes_carencia),
     })
 
 def _udp_broadcast():
@@ -5972,7 +6147,7 @@ def _udp_broadcast():
 @app.route('/<slug>/loja')
 def tenant_loja(slug):
     tenant = get_tenant_by_slug(slug)
-    if not tenant or not tenant.assinatura_ativa or not getattr(tenant, 'loja_ativa', False):
+    if not tenant or tenant.assinatura_bloqueada() or not getattr(tenant, 'loja_ativa', False):
         return redirect(url_for('tenant_site', slug=slug))
     if session.get(_SESSION_USER_ID) and session.get(_SESSION_PATH_TENANT_ID) and session[_SESSION_PATH_TENANT_ID] != tenant.id:
         session.pop('user_id', None)
@@ -5994,7 +6169,9 @@ def tenant_site(slug):
                 '<p style="color:#888;margin-top:.5rem">Barbearia não encontrada.</p>'
                 '<a href="/landing" style="color:#C9A96E;margin-top:1rem;display:block">Criar meu site →</a>'
                 '</div></body></html>', 404)
-    if not tenant.assinatura_ativa:
+    # Dentro das 24h de carencia o site continua no ar: quem agenda e o cliente
+    # da barbearia, que nao tem culpa do atraso do pagamento.
+    if tenant.assinatura_bloqueada():
         return ('<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;'
                 'display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">'
                 f'<div><h2 style="color:#C9A96E">✦ {tenant.nome}</h2>'
