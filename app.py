@@ -268,12 +268,35 @@ PLANOS = {
     'anual':      {'meses': 12, 'mensal': 34.00, 'total': 408.00},
 }
 
-class Tenant(db.Model):
+class SenhaMixin:
+    """Campo de senha compartilhado por Tenant, Usuario e Funcionario.
+
+    A coluna continua se chamando 'password' no banco (sem precisar de
+    migration); o que muda é que ninguém mais grava ou lê o hash na mão.
+    Escrever em `.senha` sempre passa por generate_password_hash — não tem
+    como salvar senha em texto puro por esquecimento. Ler `.senha` não é
+    permitido; a comparação é feita por `conferir_senha()`.
+    """
+    password = db.Column(db.String(200), nullable=False)
+
+    @property
+    def senha(self):
+        raise AttributeError('senha é escreve-só — use conferir_senha() para validar')
+
+    @senha.setter
+    def senha(self, texto):
+        if not texto or len(texto) < 8:
+            raise ValueError('senha precisa ter 8 caracteres ou mais')
+        self.password = generate_password_hash(texto)
+
+    def conferir_senha(self, texto):
+        return bool(texto) and check_password_hash(self.password, texto)
+
+class Tenant(SenhaMixin, db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     slug             = db.Column(db.String(50),  unique=True, nullable=False)
     nome             = db.Column(db.String(100), nullable=False)
     email            = db.Column(db.String(120), unique=True, nullable=False)
-    password         = db.Column(db.String(200), nullable=False)
     contato          = db.Column(db.String(20),  nullable=True)
     ativo            = db.Column(db.Boolean, default=True)
     criado_em        = db.Column(db.DateTime, default=datetime.utcnow)
@@ -298,6 +321,40 @@ class Tenant(db.Model):
             return 0
         return max(0, (self.trial_expira - datetime.utcnow()).days)
 
+    # ── Estado da assinatura ────────────────────────────────────────────────
+    # Calculado na hora a partir do vencimento, nao do job periodico: o job
+    # roda a cada 12h e sozinho nao consegue respeitar um corte de 24h.
+    ASSINATURA_ATIVA     = 'ativa'       # em dia
+    ASSINATURA_CARENCIA  = 'carencia'    # venceu ha menos de 24h — ainda passa
+    ASSINATURA_BLOQUEADA = 'bloqueada'   # venceu ha 24h ou mais — corta
+
+    @property
+    def assinatura_atual(self):
+        """A assinatura mais recente do tenant, ou None."""
+        return self.assinaturas[0] if self.assinaturas else None
+
+    def estado_assinatura(self):
+        # assinatura_ativa=False cobre quem nunca pagou e quem o admin desligou.
+        if not self.assinatura_ativa:
+            return self.ASSINATURA_BLOQUEADA
+
+        atual = self.assinatura_atual
+        # Ativado na mao pelo admin, sem assinatura ou sem vencimento: liberado.
+        if atual is None or not atual.vencimento:
+            return self.ASSINATURA_ATIVA
+
+        if not atual.vencida:
+            return self.ASSINATURA_ATIVA
+        if atual.em_carencia:
+            return self.ASSINATURA_CARENCIA
+        return self.ASSINATURA_BLOQUEADA
+
+    def assinatura_bloqueada(self):
+        return self.estado_assinatura() == self.ASSINATURA_BLOQUEADA
+
+    def assinatura_em_carencia(self):
+        return self.estado_assinatura() == self.ASSINATURA_CARENCIA
+
 class Assinatura(db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     tenant_id        = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
@@ -311,6 +368,10 @@ class Assinatura(db.Model):
     vencimento       = db.Column(db.DateTime, nullable=True)
     criado_em        = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Depois de vencer, a barbearia ainda tem estas horas para pagar antes de
+    # perder o acesso. Vale para o painel, para a API e para o site publico.
+    HORAS_CARENCIA = 24
+
     def dias_restantes(self):
         if not self.vencimento: return 0
         return max(0, (self.vencimento - datetime.utcnow()).days)
@@ -318,20 +379,55 @@ class Assinatura(db.Model):
     def esta_ativo(self):
         return self.status == 'ativo' and bool(self.vencimento) and self.vencimento > datetime.utcnow()
 
-class User(db.Model):
-    id             = db.Column(db.Integer, primary_key=True)
-    name           = db.Column(db.String(100), nullable=False)
-    email          = db.Column(db.String(120), nullable=False)
-    password       = db.Column(db.String(200), nullable=False)
-    contact            = db.Column(db.String(20),  nullable=True)
-    observation        = db.Column(db.Text,        nullable=True)
+    @property
+    def fim_da_carencia(self):
+        if not self.vencimento:
+            return None
+        return self.vencimento + timedelta(hours=self.HORAS_CARENCIA)
+
+    @property
+    def vencida(self):
+        return bool(self.vencimento) and self.vencimento <= datetime.utcnow()
+
+    @property
+    def em_carencia(self):
+        """Venceu, mas ainda esta dentro das HORAS_CARENCIA."""
+        return self.vencida and datetime.utcnow() < self.fim_da_carencia
+
+    @property
+    def carencia_esgotada(self):
+        return self.vencida and datetime.utcnow() >= self.fim_da_carencia
+
+    @property
+    def horas_restantes_carencia(self):
+        """Horas inteiras que faltam para o bloqueio; 0 se ja passou."""
+        if not self.em_carencia:
+            return 0
+        faltam = self.fim_da_carencia - datetime.utcnow()
+        return max(0, int(faltam.total_seconds() // 3600))
+
+class Usuario(SenhaMixin, db.Model):
+    """Cliente da barbearia.
+
+    Os nomes das colunas no banco ('user', 'name', 'contact', 'observation',
+    'guest') sao preservados de proposito: o app Flutter compilado le essas
+    chaves e nao ha fonte Dart neste repositorio para recompilar. So os nomes
+    em Python foram traduzidos.
+    """
+    __tablename__ = 'user'
+
+    id                 = db.Column(db.Integer, primary_key=True)
+    nome               = db.Column('name',        db.String(100), nullable=False)
+    email              = db.Column(db.String(120), nullable=False)
+    contato            = db.Column('contact',     db.String(20),  nullable=True)
+    observacao         = db.Column('observation', db.Text,        nullable=True)
     receber_lembretes  = db.Column(db.Boolean,     default=True)
-    guest              = db.Column(db.Boolean,     default=False)
+    convidado          = db.Column('guest',       db.Boolean,     default=False)
     google_id          = db.Column(db.String(200), nullable=True, index=True)
     criado_em          = db.Column(db.DateTime,    default=datetime.utcnow)
     tenant_id          = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
-    pedidos        = db.relationship('Pedido', backref='usuario', lazy=True,
-                                     cascade='all, delete-orphan')
+    pedidos            = db.relationship('Pedido', backref='usuario', lazy=True,
+                                         cascade='all, delete-orphan')
     __table_args__ = (db.UniqueConstraint('email', 'tenant_id', name='uq_user_email_tenant'),)
 
 class Pedido(db.Model):
@@ -351,24 +447,30 @@ class PedidoItem(db.Model):
     categoria = db.Column(db.String(50))
     preco     = db.Column(db.Float, default=0)
 
-class Setting(db.Model):
-    key   = db.Column(db.String(100), primary_key=True)  # "global:KEY" ou "{tenant_id}:KEY"
-    value = db.Column(db.String(500))
+class Configuracao(db.Model):
+    """Par chave/valor por tenant. A chave e "global:CHAVE" ou "{tenant_id}:CHAVE".
 
-def _sk(key, tenant_id=None):
-    """Monta a chave do Setting com prefixo de tenant."""
-    return f"{tenant_id}:{key}" if tenant_id else f"global:{key}"
+    Tabela e colunas mantem os nomes originais no banco para dispensar migration.
+    """
+    __tablename__ = 'setting'
 
-def _get_setting(key, tenant_id=None):
-    return db.session.get(Setting, _sk(key, tenant_id))
+    chave = db.Column('key',   db.String(100), primary_key=True)
+    valor = db.Column('value', db.String(500))
 
-def _upsert_setting(key, value, tenant_id=None):
-    full = _sk(key, tenant_id)
-    s = db.session.get(Setting, full)
-    if s:
-        s.value = value
+def _chave_config(chave, tenant_id=None):
+    """Prefixa a chave com o tenant, ou com 'global' quando nao houver."""
+    return f"{tenant_id}:{chave}" if tenant_id else f"global:{chave}"
+
+def _obter_config(chave, tenant_id=None):
+    return db.session.get(Configuracao, _chave_config(chave, tenant_id))
+
+def _gravar_config(chave, valor, tenant_id=None):
+    chave_completa = _chave_config(chave, tenant_id)
+    config = db.session.get(Configuracao, chave_completa)
+    if config:
+        config.valor = valor
     else:
-        db.session.add(Setting(key=full, value=value))
+        db.session.add(Configuracao(chave=chave_completa, valor=valor))
 
 def _gestao_tid():
     """Retorna tenant_id do gestor ou repersonalizador logado, ou None."""
@@ -431,7 +533,7 @@ class Agendamento(db.Model):
     funcionario_id  = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
     criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
-    usuario         = db.relationship('User', lazy='select')
+    usuario         = db.relationship('Usuario', lazy='select')
     funcionario     = db.relationship('Funcionario', lazy='select', foreign_keys=[funcionario_id])
     pedido          = db.relationship('Pedido', lazy='select', foreign_keys=[pedido_id])
 
@@ -465,11 +567,10 @@ class HorarioEspecial(db.Model):
     criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
-class Funcionario(db.Model):
+class Funcionario(SenhaMixin, db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     nome          = db.Column(db.String(100), nullable=False)
     email         = db.Column(db.String(120), nullable=True)
-    password      = db.Column(db.String(200), nullable=False)
     telefone      = db.Column(db.String(20),  nullable=True)
     foto          = db.Column(db.String(200),  nullable=True)
     ativo         = db.Column(db.Boolean, default=True)
@@ -648,13 +749,13 @@ def _dec(value: str) -> str:
         return value
 
 def get_mp_token():
-    """Retorna o MP Access Token: env var primeiro, depois Setting persistido."""
+    """Retorna o MP Access Token: env var primeiro, depois Configuracao persistido."""
     t = os.environ.get('MP_ACCESS_TOKEN', '')
     if t:
         return t
     try:
-        s = _get_setting('admin_mp_access_token')
-        return _dec(s.value) if s and s.value else ''
+        s = _obter_config('admin_mp_access_token')
+        return _dec(s.valor) if s and s.valor else ''
     except Exception:
         return ''
 
@@ -683,21 +784,21 @@ def _nome_seguro(valor, tamanho=80):
 
 def user_dict(u):
     return {
-        'id': u.id, 'nome': u.name, 'email': u.email,
-        'contato': u.contact, 'observacao': u.observation,
+        'id': u.id, 'nome': u.nome, 'email': u.email,
+        'contato': u.contato, 'observacao': u.observacao,
         'criado_em': u.criado_em.isoformat() if u.criado_em else None,
     }
 
 def pedido_dict(p):
     ag   = Agendamento.query.filter_by(pedido_id=p.id, tenant_id=p.tenant_id).first()
-    user = db.session.get(User, p.user_id)
+    user = db.session.get(Usuario, p.user_id)
     return {
         'id': p.id, 'user_id': p.user_id, 'total': p.total,
         'status': p.status,
         'criado_em': p.criado_em.isoformat() if p.criado_em else None,
         'data_hora': ag.data_hora.isoformat() if ag else None,
-        'user_nome':    user.name    if user else '',
-        'user_contato': user.contact if user else '',
+        'user_nome':    user.nome    if user else '',
+        'user_contato': user.contato if user else '',
         'itens': [{'nome': i.nome, 'categoria': i.categoria, 'preco': i.preco} for i in p.itens],
     }
 
@@ -718,10 +819,10 @@ def _gestor_como_barbeiro(tenant_id=None):
     """Retorna (ativo: bool, nome: str) do gestor como barbeiro."""
     if tenant_id is None:
         tenant_id = _api_tid()
-    s = _get_setting('gestor_e_barbeiro', tenant_id)
-    ativo = s and s.value == '1'
-    n = _get_setting('gestor_nome', tenant_id)
-    nome = n.value if n and n.value else 'Proprietário'
+    s = _obter_config('gestor_e_barbeiro', tenant_id)
+    ativo = s and s.valor == '1'
+    n = _obter_config('gestor_nome', tenant_id)
+    nome = n.valor if n and n.valor else 'Proprietário'
     return ativo, nome
 
 def _funcionarios_ativos_para_data(data_str, tenant_id=None):
@@ -750,10 +851,10 @@ def _funcionarios_ativos_para_data(data_str, tenant_id=None):
     ]
     gestor_ativo, gestor_nome = _gestor_como_barbeiro(tenant_id)
     if gestor_ativo:
-        gestor_ausente_s = _get_setting(f'gestor_ausente_{data_str}', tenant_id)
-        if not (gestor_ausente_s and gestor_ausente_s.value == '1'):
-            gf = _get_setting('gestor_foto', tenant_id)
-            gestor_foto = f'/static/uploads/{gf.value}' if gf and gf.value else None
+        gestor_ausente_s = _obter_config(f'gestor_ausente_{data_str}', tenant_id)
+        if not (gestor_ausente_s and gestor_ausente_s.valor == '1'):
+            gf = _obter_config('gestor_foto', tenant_id)
+            gestor_foto = f'/static/uploads/{gf.valor}' if gf and gf.valor else None
             lista.insert(0, {'id': 0, 'nome': gestor_nome, 'foto_url': gestor_foto})
     return lista
 
@@ -808,7 +909,7 @@ def index():
     if tenant:
         session[_SESSION_PATH_TENANT_ID] = tenant.id
         session.pop('is_preview', None)
-        user = db.session.get(User, session[_SESSION_USER_ID]) if 'user_id' in session else None
+        user = db.session.get(Usuario, session[_SESSION_USER_ID]) if 'user_id' in session else None
         auto_rapido = bool(not user and request.args.get('agendar'))
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
@@ -832,14 +933,14 @@ def login_rapido():
         flash('Informe um nome válido (apenas letras, espaços, apóstrofo e hífen) e o contato.', 'error')
         return redirect(url_for('login'))
     email  = f"guest_{uuid.uuid4().hex[:8]}@temp.com"
-    user   = User(
-        name=nome,
+    user   = Usuario(
+        nome=nome,
         email=email,
-        password=generate_password_hash(secrets.token_hex(16)),
-        contact=contato or None,
-        observation=alergia or None,
+        senha=secrets.token_hex(16),
+        contato=contato or None,
+        observacao=alergia or None,
         receber_lembretes=False,
-        guest=True,
+        convidado=True,
         tenant_id=session.get(_SESSION_PATH_TENANT_ID) or _api_tid(),
     )
     db.session.add(user)
@@ -858,15 +959,15 @@ def api_auth_telefone():
     if len(tel) < 10:
         return jsonify({'erro': 'Telefone inválido'}), 400
     tid  = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    user = Usuario.query.filter_by(contato=tel, convidado=False, tenant_id=tid).first()
     if user:
         _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
         session[_SESSION_USER_ID]    = user.id
-        session[_SESSION_USER_NAME]  = user.name
+        session[_SESSION_USER_NAME]  = user.nome
         session[_SESSION_USER_EMAIL] = user.email
         if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
-        return jsonify({'ok': True, 'nome': user.name})
+        return jsonify({'ok': True, 'nome': user.nome})
     return jsonify({'novo': True})
 
 @app.route('/api/auth/criar-telefone', methods=['POST'])
@@ -884,25 +985,25 @@ def api_auth_criar_telefone():
     if len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
     tid = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    existing = Usuario.query.filter_by(contato=tel, convidado=False, tenant_id=tid).first()
     if existing:
         _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
         session[_SESSION_USER_ID]    = existing.id
-        session[_SESSION_USER_NAME]  = existing.name
+        session[_SESSION_USER_NAME]  = existing.nome
         session[_SESSION_USER_EMAIL] = existing.email
         if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
-        return jsonify({'ok': True, 'nome': existing.name})
-    if email_opt and User.query.filter_by(email=email_opt, tenant_id=tid).first():
+        return jsonify({'ok': True, 'nome': existing.nome})
+    if email_opt and Usuario.query.filter_by(email=email_opt, tenant_id=tid).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
     email = email_opt or f"tel_{tel}_{tid or 0}@ibarber.local"
-    user  = User(
-        name=nome,
+    user  = Usuario(
+        nome=nome,
         email=email,
-        password=generate_password_hash(secrets.token_hex(16)),
-        contact=tel,
+        senha=secrets.token_hex(16),
+        contato=tel,
         receber_lembretes=lembretes,
-        guest=False,
+        convidado=False,
         tenant_id=tid,
     )
     db.session.add(user)
@@ -922,13 +1023,13 @@ def api_auth_lembretes():
     data      = request.get_json(force=True) or {}
     ativo     = bool(data.get('ativo'))
     email_opt = data.get('email', '').strip().lower() or None
-    user      = db.session.get(User, session[_SESSION_USER_ID])
+    user      = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if ativo and not email_opt and user.email.endswith('@ibarber.local'):
         return jsonify({'erro': 'Informe um e-mail para receber lembretes'}), 400
     if email_opt:
-        conflito = User.query.filter(User.email == email_opt, User.id != user.id, User.tenant_id == user.tenant_id).first()
+        conflito = Usuario.query.filter(Usuario.email == email_opt, Usuario.id != user.id, Usuario.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já em uso'}), 400
         user.email = email_opt
@@ -969,8 +1070,8 @@ def servicos():
             'forma_pagamento': _forma_label.get(ag.forma_pagamento or '', ''),
             'barbeiro': _barb_nome,
         }
-    sd = _get_setting('dias_agenda', _api_tid())
-    dias_agenda = _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)
+    sd = _obter_config('dias_agenda', _api_tid())
+    dias_agenda = _int_seguro(sd.valor if sd and sd.valor else 20, 20, 1, 60)
     tenant = get_tenant_atual()
     tenant_slug = tenant.slug if tenant else None
     return render_template('servicos.html', agendamento_info=agendamento_info, dias_agenda=dias_agenda, tenant_slug=tenant_slug)
@@ -1044,19 +1145,19 @@ def auth_google_callback():
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
     tid = tid_from_state or session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
+    user = Usuario.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
-        user = User.query.filter_by(email=email, tenant_id=tid).first()
+        user = Usuario.query.filter_by(email=email, tenant_id=tid).first()
         if user:
             if not user.google_id:
                 user.google_id = google_id
                 db.session.commit()
         else:
-            user = User(
-                name=nome, email=email,
-                password=generate_password_hash(secrets.token_hex(32)),
-                google_id=google_id, contact=None,
-                receber_lembretes=True, guest=False, tenant_id=tid,
+            user = Usuario(
+                nome=nome, email=email,
+                senha=secrets.token_hex(32),
+                google_id=google_id, contato=None,
+                receber_lembretes=True, convidado=False, tenant_id=tid,
             )
             db.session.add(user)
             try:
@@ -1064,15 +1165,15 @@ def auth_google_callback():
             except Exception:
                 # C5: race condition — outro request criou o mesmo usuário simultaneamente
                 db.session.rollback()
-                user = (User.query.filter_by(google_id=google_id, tenant_id=tid).first() or
-                        User.query.filter_by(email=email, tenant_id=tid).first())
+                user = (Usuario.query.filter_by(google_id=google_id, tenant_id=tid).first() or
+                        Usuario.query.filter_by(email=email, tenant_id=tid).first())
                 if not user:
                     flash('Erro ao criar conta. Tente novamente.', 'error')
                     return redirect(url_for('index'))
     # M1: atribuição direta em vez de session.clear() para preservar path_tenant_id
     # e outros dados úteis já presentes na sessão antes do callback OAuth
     session[_SESSION_USER_ID]       = user.id
-    session[_SESSION_USER_NAME]     = user.name
+    session[_SESSION_USER_NAME]     = user.nome
     session[_SESSION_USER_EMAIL]    = user.email
     session[_SESSION_PATH_TENANT_ID] = tid
     # C4: só redirecionar para subdomínios conhecidos do APP_DOMAIN (evita open redirect)
@@ -1081,7 +1182,7 @@ def auth_google_callback():
         _allowed_suffix = f".{APP_DOMAIN}"
         if oauth_host == APP_DOMAIN or oauth_host.endswith(_allowed_suffix):
             _base = f"https://{oauth_host}"
-    if not user.contact:
+    if not user.contato:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")
 
@@ -1095,16 +1196,16 @@ def google_contato():
         if len(tel) < 10:
             erro = 'Telefone inválido — mínimo 10 dígitos.'
         else:
-            user = db.session.get(User, session[_SESSION_USER_ID])
+            user = db.session.get(Usuario, session[_SESSION_USER_ID])
             # H3: garantir que o user pertence ao tenant da sessão atual
             if user and user.tenant_id != session.get(_SESSION_PATH_TENANT_ID):
                 return redirect(url_for('index'))
             if user:
-                user.contact = tel
+                user.contato = tel
                 user.receber_lembretes = request.form.get('lembretes', '1') != '0'
                 db.session.commit()
             return redirect(url_for('servicos'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     return render_template('google_contato.html', user=user, erro=erro)
 
 # ── Perfil — atualização de campo individual ──────────────────────────────────
@@ -1119,19 +1220,19 @@ def api_perfil_update():
     _CAMPOS_PERMITIDOS = {'telefone', 'email', 'nome'}  # H1: whitelist — name/contact/receber_lembretes
     if campo not in _CAMPOS_PERMITIDOS:
         return jsonify({'erro': 'Campo inválido'}), 400
-    user  = db.session.get(User, session[_SESSION_USER_ID])
+    user  = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if campo == 'telefone':
         tel = ''.join(c for c in valor if c.isdigit())
         if len(tel) < 10:
             return jsonify({'erro': 'Telefone inválido — mínimo 10 dígitos'}), 400
-        user.contact = tel
+        user.contato = tel
     elif campo == 'email':
         email = valor.strip().lower()
         if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'erro': 'E-mail inválido'}), 400
-        conflito = User.query.filter(User.email == email, User.id != user.id, User.tenant_id == user.tenant_id).first()
+        conflito = Usuario.query.filter(Usuario.email == email, Usuario.id != user.id, Usuario.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já está em uso'}), 400
         user.email = email
@@ -1139,7 +1240,7 @@ def api_perfil_update():
     elif campo == 'nome':
         if len(valor) < 2:
             return jsonify({'erro': 'Nome muito curto'}), 400
-        user.name = valor
+        user.nome = valor
         session[_SESSION_USER_NAME] = valor
     else:
         return jsonify({'erro': 'Campo inválido'}), 400
@@ -1150,7 +1251,7 @@ def api_perfil_update():
 def perfil():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     return render_template('perfil.html', user=user, hide_fabs=True)
@@ -1159,10 +1260,10 @@ def perfil():
 def salvar_observacao():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
-    user.observation = request.form.get('observation', '').strip() or None
+    user.observacao = request.form.get('observation', '').strip() or None
     db.session.commit()
     return redirect(url_for('perfil'))
 
@@ -1170,7 +1271,7 @@ def salvar_observacao():
 def salvar_lembretes():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     user.receber_lembretes = request.form.get('receber_lembretes') == '1'
@@ -1203,7 +1304,7 @@ def _enviar_confirmacao_agendamento(user, data_hora):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Agendamento Confirmado!</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu horário foi reservado.</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu horário foi reservado.</p>
       <div style="background:#1a1a1a;border-left:4px solid #C9A96E;
                   padding:16px 20px;border-radius:6px;margin:20px 0;">
         <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1226,7 +1327,7 @@ def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#f87171;margin-top:0;">⚠️ Agendamento Cancelado</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
       <p style="color:#ccc;">Seu agendamento foi cancelado:</p>
       <p style="color:#f87171;font-weight:600;">{motivo}</p>
       <div style="background:#1a1a1a;border-left:4px solid #f87171;
@@ -1256,10 +1357,10 @@ def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
         q = q.filter(Agendamento.funcionario_id == funcionario_id)
     result = []
     for ag in q.order_by(Agendamento.data_hora).all():
-        user = db.session.get(User, ag.user_id)
+        user = db.session.get(Usuario, ag.user_id)
         result.append({
             'ag': ag, 'user': user,
-            'nome': user.name if user else 'Cliente',
+            'nome': user.nome if user else 'Cliente',
             'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M'),
         })
     return result
@@ -1281,7 +1382,7 @@ def _enviar_comprovante_pagamento(user, pedido):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Pagamento Confirmado!</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu pagamento foi aprovado.</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu pagamento foi aprovado.</p>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         {itens_html}
         <tr style="border-top:1px solid #333;">
@@ -1444,21 +1545,21 @@ def preview_ag_sem_cadastro():
 @app.route('/preview/ag/google-contato')
 def preview_ag_google_contato():
     tema_override = _build_ag_tema_override(request.args)
-    class MockUser:
+    class UsuarioPreview:
         email = 'carlos@gmail.com'; name = 'Carlos Silva'
     resp = make_response(render_template('google_contato.html',
-        user=MockUser(), erro=None, hide_fabs=True, tema_override=tema_override, preview_mode=True))
+        user=UsuarioPreview(), erro=None, hide_fabs=True, tema_override=tema_override, preview_mode=True))
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
 @app.route('/preview/ag/perfil')
 def preview_ag_perfil():
     tema_override = _build_ag_tema_override(request.args)
-    class MockUser:
-        id=9991; name='Carlos Silva'; email='carlos@preview.com'
-        contact='(11) 99999-0000'; observation=''; receber_lembretes=True; guest=False
+    class UsuarioPreview:
+        id=9991; nome='Carlos Silva'; email='carlos@preview.com'
+        contato='(11) 99999-0000'; observacao=''; receber_lembretes=True; convidado=False
     resp = make_response(render_template('perfil.html',
-        user=MockUser(), hide_fabs=True, tema_override=tema_override, preview_mode=True))
+        user=UsuarioPreview(), hide_fabs=True, tema_override=tema_override, preview_mode=True))
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
@@ -1581,16 +1682,16 @@ def agendar():
         return jsonify({'erro': 'Você já possui um agendamento marcado.'}), 400
 
     data_str = data_hora.strftime('%Y-%m-%d')
-    dias_s = _get_setting('dias_fechados', _api_tid())
-    if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
+    dias_s = _obter_config('dias_fechados', _api_tid())
+    if dias_s and dias_s.valor and data_str in json.loads(dias_s.valor):
         return jsonify({'erro': 'Este dia não está disponível.'}), 400
 
     ativos = _funcionarios_ativos_para_data(data_str)
     capacidade = max(1, len(ativos))
 
     duracao_total = data.get('duracao_total')
-    _dur_s = _get_setting('intervalo_minutos', _api_tid())
-    _dur_default = _duracao_segura(_dur_s.value if _dur_s and _dur_s.value else 40)
+    _dur_s = _obter_config('intervalo_minutos', _api_tid())
+    _dur_default = _duracao_segura(_dur_s.valor if _dur_s and _dur_s.valor else 40)
     # H7: duração precisa ser inteiro dentro do intervalo permitido — 0/negativa
     # travaria os geradores de slot e valores altos bloqueariam a agenda inteira
     if duracao_total is None or duracao_total == '':
@@ -1643,7 +1744,7 @@ def agendar():
     db.session.add(ag)
     db.session.commit()
 
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if user:
         _enviar_confirmacao_agendamento(user, data_hora)
 
@@ -1676,7 +1777,7 @@ def cancelar_agendamento(ag_id):
             EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
     db.session.commit()
     # Email de cancelamento ao cliente
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user and user.email and not user.email.endswith('@ibarber.local'):
         data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
         hora_fmt = ag.data_hora.strftime('%H:%M')
@@ -1684,7 +1785,7 @@ def cancelar_agendamento(ag_id):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-          <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado.</p>
+          <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu agendamento foi cancelado.</p>
           <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                       padding:16px 20px;border-radius:6px;margin:20px 0;">
             <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1725,8 +1826,8 @@ def reagendar_agendamento():
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
     # C7: verificar sobreposição com duração, não só horário exato
-    _dur_s = _get_setting('intervalo_minutos', ag.tenant_id)
-    _dur_default_r = _duracao_segura(_dur_s.value if _dur_s and _dur_s.value else 40)
+    _dur_s = _obter_config('intervalo_minutos', ag.tenant_id)
+    _dur_default_r = _duracao_segura(_dur_s.valor if _dur_s and _dur_s.valor else 40)
     _nova_fim = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_r)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), ag.tenant_id)
     capacidade = max(1, len(ativos))
@@ -1753,7 +1854,7 @@ def reagendar_agendamento():
         ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user:
         _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
@@ -1778,8 +1879,8 @@ def api_gestao_reagendar():
     except Exception:
         return jsonify({'erro': 'data inválida'}), 400
     # C7: verificar sobreposição com duração, não só horário exato
-    _dur_sg = _get_setting('intervalo_minutos', tid)
-    _dur_default_g = _duracao_segura(_dur_sg.value if _dur_sg and _dur_sg.value else 40)
+    _dur_sg = _obter_config('intervalo_minutos', tid)
+    _dur_default_g = _duracao_segura(_dur_sg.valor if _dur_sg and _dur_sg.valor else 40)
     _nova_fim_g = nova_dt + timedelta(minutes=ag.duracao_total or _dur_default_g)
     ativos = _funcionarios_ativos_para_data(nova_dt.strftime('%Y-%m-%d'), tid)
     capacidade = max(1, len(ativos))
@@ -1806,7 +1907,7 @@ def api_gestao_reagendar():
         ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento pela gestão
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user:
         _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
@@ -1866,7 +1967,7 @@ def _notificar_lista_espera(tenant_id, data_str):
     nome_barbearia = tenant.nome if tenant else 'Barbearia'
     slug = tenant.slug if tenant else ''
     for le in pendentes:
-        user = db.session.get(User, le.user_id)
+        user = db.session.get(Usuario, le.user_id)
         if not user or not user.email or user.email.endswith('@ibarber.local'):
             continue
         try:
@@ -1878,7 +1979,7 @@ def _notificar_lista_espera(tenant_id, data_str):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#C9A96E;margin-top:0;">Abriu uma vaga!</h2>
-          <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+          <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
           <p>Uma vaga abriu em <strong>{nome_barbearia}</strong> para <strong>{data_fmt}</strong>.</p>
           <div style="text-align:center;margin:24px 0;">
             <a href="{_tenant_url(slug)}"
@@ -1944,11 +2045,11 @@ def atualizar_forma_pagamento():
     if ag.pedido_id and forma != 'cartao':
         EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
         pedido = db.session.get(Pedido, ag.pedido_id)
-        user   = db.session.get(User, session[_SESSION_USER_ID])
+        user   = db.session.get(Usuario, session[_SESSION_USER_ID])
         if pedido:
             _forma_map = {'dinheiro': 'dinheiro', 'pix': 'pix'}
             servicos = ', '.join(i.nome for i in pedido.itens) if pedido.itens else 'Serviço'
-            nome_cliente = user.name if user else 'Cliente'
+            nome_cliente = user.nome if user else 'Cliente'
             entrada = EntradaMonetaria(
                 descricao=f'{servicos} — {nome_cliente}',
                 valor=pedido.total,
@@ -2043,7 +2144,9 @@ def _token_valido(tid, version) -> bool:
 def verificar_token(req):
     """Retorna tenant_id se válido e na versão correta, None caso contrário.
     Se o token for de funcionário, ele precisa continuar ativo e no mesmo
-    tenant — demitir alguém corta o acesso na hora."""
+    tenant — demitir alguém corta o acesso na hora.
+    Assinatura vencida além da carência também invalida o token: é o que
+    bloqueia o app."""
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
     tid, fid, ver = _extrair_tenant_token(token)
     if not tid or not _token_valido(tid, ver):
@@ -2052,6 +2155,9 @@ def verificar_token(req):
         f = db.session.get(Funcionario, fid)
         if not f or f.tenant_id != tid or not f.ativo:
             return None
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
+        return None
     return tid
 
 def verificar_token_admin(req):
@@ -2073,6 +2179,9 @@ def verificar_token_perm(req, perm):
     token = req.headers.get('Authorization', '').replace('Bearer ', '').strip()
     tid, fid, ver = _extrair_tenant_token(token)
     if not tid or not _token_valido(tid, ver):
+        return None
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
         return None
     if fid == 0:
         return tid
@@ -2433,13 +2542,13 @@ def api_horarios_disponiveis():
         return jsonify({'erro': 'data inválida'}), 400
 
     _tid = _api_tid()
-    dias_s = _get_setting('dias_fechados', _tid)
-    dias_fechados = json.loads(dias_s.value) if dias_s and dias_s.value else []
+    dias_s = _obter_config('dias_fechados', _tid)
+    dias_fechados = json.loads(dias_s.valor) if dias_s and dias_s.valor else []
     if data_str in dias_fechados:
         return jsonify({'disponiveis': [], 'tomados': [], 'fechado': True})
 
-    duracao_s = _get_setting('intervalo_minutos', _tid)
-    duracao   = _duracao_segura(duracao_s.value if duracao_s and duracao_s.value else 40)
+    duracao_s = _obter_config('intervalo_minutos', _tid)
+    duracao   = _duracao_segura(duracao_s.valor if duracao_s and duracao_s.valor else 40)
 
     # Duração solicitada pelo cliente (soma dos serviços escolhidos)
     _dur_raw = request.args.get('duracao')
@@ -2483,9 +2592,9 @@ def api_horarios_disponiveis():
         abertura_str   = he.abertura
         fechamento_str = he.fechamento
     else:
-        config_s = _get_setting('horario_funcionamento', _tid)
-        if config_s and config_s.value:
-            config  = json.loads(config_s.value)
+        config_s = _obter_config('horario_funcionamento', _tid)
+        if config_s and config_s.valor:
+            config  = json.loads(config_s.valor)
             dia_key = _DIAS_KEYS[data_obj.weekday()]
             dia_cfg = config.get(dia_key, {})
             if not dia_cfg.get('aberto', True):
@@ -2502,8 +2611,8 @@ def api_horarios_disponiveis():
     _aber_min = ah * 60 + am
     _fech_min = fh * 60 + fm
 
-    slots_fixos_s = _get_setting('slots_predefinidos_ativo', _tid)
-    usar_grade_fixa = slots_fixos_s and slots_fixos_s.value == '1'
+    slots_fixos_s = _obter_config('slots_predefinidos_ativo', _tid)
+    usar_grade_fixa = slots_fixos_s and slots_fixos_s.valor == '1'
 
     if usar_grade_fixa:
         # Grade fixa: abertura → fechamento em passos de duracao (intervalo_minutos)
@@ -2533,8 +2642,8 @@ def api_horarios_disponiveis():
         return conflitos < capacidade
 
     # Filtro de intervalo de descanso
-    _int_s = _get_setting('intervalos_descanso', _tid)
-    _intervalos = json.loads(_int_s.value) if _int_s and _int_s.value else {}
+    _int_s = _obter_config('intervalos_descanso', _tid)
+    _intervalos = json.loads(_int_s.valor) if _int_s and _int_s.valor else {}
     _dia_key_int = _DIAS_KEYS[data_obj.weekday()]
     _int_cfg = _intervalos.get(_dia_key_int, {})
     _int_ativo = _int_cfg.get('ativo', False)
@@ -2570,8 +2679,8 @@ def api_barbeiros_lista():
     result = []
     gestor_ativo, gestor_nome = _gestor_como_barbeiro(_tid)
     if gestor_ativo:
-        gf = _get_setting('gestor_foto', _tid)
-        foto_url = f'/static/uploads/{gf.value}' if gf and gf.value else None
+        gf = _obter_config('gestor_foto', _tid)
+        foto_url = f'/static/uploads/{gf.valor}' if gf and gf.valor else None
         result.append({'id': 0, 'nome': gestor_nome or 'Proprietário', 'foto_url': foto_url})
     for f in funs:
         foto = f'/static/uploads/{f.foto}' if f.foto else None
@@ -2611,19 +2720,19 @@ def api_gestor_barbeiro():
     if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     ativo, nome = _gestor_como_barbeiro(_tid)
     if request.method == 'GET':
-        gf = _get_setting('gestor_foto', _tid)
-        foto_url = f'/static/uploads/{gf.value}' if gf and gf.value else None
+        gf = _obter_config('gestor_foto', _tid)
+        foto_url = f'/static/uploads/{gf.valor}' if gf and gf.valor else None
         return jsonify({'ativo': ativo, 'nome': nome, 'foto_url': foto_url})
     data = request.get_json(silent=True) or {}
     if 'ativo' in data:
-        _upsert_setting('gestor_e_barbeiro', '1' if data['ativo'] else '0', _tid)
+        _gravar_config('gestor_e_barbeiro', '1' if data['ativo'] else '0', _tid)
         if not data['ativo'] and data.get('cancelar'):
             tenant = db.session.get(Tenant, _tid)
             conflitos = _conflitos_agendamentos_futuros(_tid, funcionario_id=0)
             _cancelar_conflitos(conflitos, tenant.nome if tenant else 'Barbearia',
                                 'Barbeiro não está mais disponível')
     if 'nome' in data:
-        _upsert_setting('gestor_nome', data['nome'], _tid)
+        _gravar_config('gestor_nome', data['nome'], _tid)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -2647,8 +2756,8 @@ def api_escala(data_str):
         }
     gestor_ativo, gestor_nome = _gestor_como_barbeiro(tid)
     gestor_ausente_key = f'gestor_ausente_{data_str}'
-    gestor_ausente_setting = _get_setting(gestor_ausente_key, tid)
-    gestor_trabalhando = not (gestor_ausente_setting and gestor_ausente_setting.value == '1')
+    gestor_ausente_setting = _obter_config(gestor_ausente_key, tid)
+    gestor_trabalhando = not (gestor_ausente_setting and gestor_ausente_setting.valor == '1')
 
     if request.method == 'GET':
         result = [{'id': f.id, 'nome': f.nome, 'trabalhando': f.id not in ausentes_ids} for f in todos]
@@ -2665,7 +2774,7 @@ def api_escala(data_str):
             if gestor_ausente_setting:
                 db.session.delete(gestor_ausente_setting)
         else:
-            _upsert_setting(gestor_ausente_key, '1', tid)
+            _gravar_config(gestor_ausente_key, '1', tid)
     # Salvar ausências dos funcionários
     if emp_ids:
         FuncionarioAusencia.query.filter(
@@ -2686,27 +2795,27 @@ def api_config_horarios():
         data     = request.get_json(silent=True) or {}
         intervalo = data.pop('intervalo_minutos', None)
         if intervalo is not None:
-            _upsert_setting('intervalo_minutos', str(_int_seguro(intervalo, 40, 10, 120)), _tid)
+            _gravar_config('intervalo_minutos', str(_int_seguro(intervalo, 40, 10, 120)), _tid)
         dias_agenda = data.pop('dias_agenda', None)
         if dias_agenda is not None:
-            _upsert_setting('dias_agenda', str(_int_seguro(dias_agenda, 20, 1, 60)), _tid)
-        _upsert_setting('horario_funcionamento', json.dumps(data, ensure_ascii=False), _tid)
+            _gravar_config('dias_agenda', str(_int_seguro(dias_agenda, 20, 1, 60)), _tid)
+        _gravar_config('horario_funcionamento', json.dumps(data, ensure_ascii=False), _tid)
         db.session.commit()
         return jsonify({'ok': True})
-    s  = _get_setting('horario_funcionamento', _tid)
-    si = _get_setting('intervalo_minutos', _tid)
-    sd = _get_setting('dias_agenda', _tid)
-    cfg = json.loads(s.value) if s and s.value else \
+    s  = _obter_config('horario_funcionamento', _tid)
+    si = _obter_config('intervalo_minutos', _tid)
+    sd = _obter_config('dias_agenda', _tid)
+    cfg = json.loads(s.valor) if s and s.valor else \
           {k: {'aberto': k != 'dom', 'abertura': '08:00', 'fechamento': '18:00'} for k in _DIAS_KEYS}
-    cfg['intervalo_minutos'] = _duracao_segura(si.value if si and si.value else 40)
-    cfg['dias_agenda'] = _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)
+    cfg['intervalo_minutos'] = _duracao_segura(si.valor if si and si.valor else 40)
+    cfg['dias_agenda'] = _int_seguro(sd.valor if sd and sd.valor else 20, 20, 1, 60)
     return jsonify(cfg)
 
 @app.route('/api/config-publica', methods=['GET'])
 def api_config_publica():
     """Configurações públicas lidas pelo site (sem autenticação)."""
-    sd = _get_setting('dias_agenda', _api_tid())
-    return jsonify({'dias_agenda': _int_seguro(sd.value if sd and sd.value else 20, 20, 1, 60)})
+    sd = _obter_config('dias_agenda', _api_tid())
+    return jsonify({'dias_agenda': _int_seguro(sd.valor if sd and sd.valor else 20, 20, 1, 60)})
 
 @app.route('/api/horarios/conflitos', methods=['POST'])
 def api_horarios_conflitos():
@@ -2728,8 +2837,8 @@ def api_horarios_conflitos():
         cfg = novos.get(dia_key, {})
         hora = ag.data_hora.strftime('%H:%M')
         if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
-            user = db.session.get(User, ag.user_id)
-            conflitos.append({'id': ag.id, 'nome': user.name if user else 'Cliente',
+            user = db.session.get(Usuario, ag.user_id)
+            conflitos.append({'id': ag.id, 'nome': user.nome if user else 'Cliente',
                               'hora': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
     return jsonify({'conflitos': conflitos})
 
@@ -2750,8 +2859,8 @@ def api_dias_fechados_conflitos():
 def api_dias_fechados():
     _tid = verificar_token_admin(request)
     if not _tid: return jsonify({'erro': 'não autorizado'}), 403
-    s = _get_setting('dias_fechados', _tid)
-    dias = json.loads(s.value) if s and s.value else []
+    s = _obter_config('dias_fechados', _tid)
+    dias = json.loads(s.valor) if s and s.valor else []
     if request.method in ('POST', 'DELETE'):
         body = request.get_json(silent=True) or {}
         data_val = body.get('data', '')
@@ -2767,7 +2876,7 @@ def api_dias_fechados():
                                     'Dia fechado pela barbearia')
         elif request.method == 'DELETE' and data_val in dias:
             dias.remove(data_val)
-        _upsert_setting('dias_fechados', json.dumps(dias), _tid)
+        _gravar_config('dias_fechados', json.dumps(dias), _tid)
         db.session.commit()
         return jsonify({'ok': True, 'dias': dias})
     return jsonify({'dias': dias})
@@ -2809,7 +2918,7 @@ def api_horarios_especiais():
                     conflitos.append({
                         'id':      ag.id,
                         'hora':    hora,
-                        'usuario': ag.usuario.name if ag.usuario else 'Cliente',
+                        'usuario': ag.usuario.nome if ag.usuario else 'Cliente',
                     })
             if conflitos:
                 return jsonify({'conflitos': conflitos, 'total': len(conflitos)}), 409
@@ -2854,11 +2963,11 @@ def api_slots_predefinidos():
     if request.method == 'POST':
         d = request.get_json() or {}
         ativo = bool(d.get('ativo', False))
-        _upsert_setting('slots_predefinidos_ativo', '1' if ativo else '0', tid)
+        _gravar_config('slots_predefinidos_ativo', '1' if ativo else '0', tid)
         db.session.commit()
         return jsonify({'ok': True})
-    ativo_s = _get_setting('slots_predefinidos_ativo', tid)
-    return jsonify({'ativo': ativo_s.value == '1' if ativo_s else False})
+    ativo_s = _obter_config('slots_predefinidos_ativo', tid)
+    return jsonify({'ativo': ativo_s.valor == '1' if ativo_s else False})
 
 @app.route('/api/intervalos-descanso', methods=['GET', 'POST'])
 def api_intervalos_descanso():
@@ -2866,11 +2975,11 @@ def api_intervalos_descanso():
     if not tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'POST':
         d = request.get_json() or {}
-        _upsert_setting('intervalos_descanso', json.dumps(d, ensure_ascii=False), tid)
+        _gravar_config('intervalos_descanso', json.dumps(d, ensure_ascii=False), tid)
         db.session.commit()
         return jsonify({'ok': True})
-    s = _get_setting('intervalos_descanso', tid)
-    return jsonify(json.loads(s.value) if s and s.value else {})
+    s = _obter_config('intervalos_descanso', tid)
+    return jsonify(json.loads(s.valor) if s and s.valor else {})
 
 @app.route('/api/agendamentos/<int:ag_id>/status', methods=['POST'])
 def api_agendamento_status(ag_id):
@@ -2905,13 +3014,13 @@ def api_credenciais():
         for k in _keys:
             if k in data:
                 v = str(data[k])
-                _upsert_setting(k, _enc(v) if k in _SENSITIVE_KEYS and v else v, _tid)
+                _gravar_config(k, _enc(v) if k in _SENSITIVE_KEYS and v else v, _tid)
         db.session.commit()
         return jsonify({'ok': True})
     result = {}
     for k in _keys:
-        s = _get_setting(k, _tid)
-        raw = s.value if s else ''
+        s = _obter_config(k, _tid)
+        raw = s.valor if s else ''
         result[k] = _dec(raw) if k in _SENSITIVE_KEYS and raw else raw
     return jsonify(result)
 
@@ -2929,11 +3038,11 @@ def api_credenciais_conta():
         return jsonify({'erro': 'Nada a atualizar'}), 400
     # Senha atual só é exigida para trocar a senha
     if senha_nova:
-        if not senha_atual or not check_password_hash(tenant.password, senha_atual):
+        if not senha_atual or not tenant.conferir_senha(senha_atual):
             return jsonify({'erro': 'Senha atual incorreta'}), 400
         if len(senha_nova) < 8:
             return jsonify({'erro': 'Nova senha deve ter mínimo 8 caracteres'}), 400
-        tenant.password = generate_password_hash(senha_nova)
+        tenant.senha = senha_nova
         # Invalida todos os tokens emitidos antes da troca de senha
         tenant.token_version = (tenant.token_version or 0) + 1
     if email_novo and email_novo != tenant.email:
@@ -2949,14 +3058,14 @@ def api_credenciais_conta():
 def api_status_pagamentos():
     """Retorna quais métodos de pagamento estão configurados (sem expor credenciais)."""
     _tid = _api_tid()
-    mp_token  = _get_setting('mp_token', _tid)
-    pix_chave = _get_setting('pix_chave', _tid)
-    mp_ok  = bool(mp_token  and mp_token.value  and mp_token.value.strip())
-    pix_ok = bool(pix_chave and pix_chave.value and pix_chave.value.strip()) and mp_ok
-    pix_ativo_s    = _get_setting('pix_ativo', _tid)
-    cartao_ativo_s = _get_setting('cartao_ativo', _tid)
-    pix_ligado    = pix_ativo_s.value    != '0' if pix_ativo_s    else False
-    cartao_ligado = cartao_ativo_s.value != '0' if cartao_ativo_s else False
+    mp_token  = _obter_config('mp_token', _tid)
+    pix_chave = _obter_config('pix_chave', _tid)
+    mp_ok  = bool(mp_token  and mp_token.valor  and mp_token.valor.strip())
+    pix_ok = bool(pix_chave and pix_chave.valor and pix_chave.valor.strip()) and mp_ok
+    pix_ativo_s    = _obter_config('pix_ativo', _tid)
+    cartao_ativo_s = _obter_config('cartao_ativo', _tid)
+    pix_ligado    = pix_ativo_s.valor    != '0' if pix_ativo_s    else False
+    cartao_ligado = cartao_ativo_s.valor != '0' if cartao_ativo_s else False
     return jsonify({'pix': pix_ok and pix_ligado, 'cartao': mp_ok and cartao_ligado})
 
 @app.route('/api/criar-pagamento', methods=['POST'])
@@ -2969,8 +3078,8 @@ def criar_pagamento():
     pedido_id = data.get('pedido_id')
 
     _tid = _api_tid()
-    mp_token_s = _get_setting('mp_token', _tid)
-    mp_token   = _dec(mp_token_s.value) if mp_token_s and mp_token_s.value else ''
+    mp_token_s = _obter_config('mp_token', _tid)
+    mp_token   = _dec(mp_token_s.valor) if mp_token_s and mp_token_s.valor else ''
 
     if not mp_token:
         return jsonify({'erro': 'Mercado Pago não configurado. Configure o Access Token em Credenciais.'}), 400
@@ -3014,8 +3123,6 @@ def criar_pagamento():
     else:  # cartao – Checkout Pro
         if not pedido_id:
             return jsonify({'erro': 'pedido_id obrigatório para pagamento com cartão'}), 400
-        _tenant = db.session.get(Tenant, _tid)
-        _slug = _tenant.slug if _tenant else ''
         _base = request.host_url.rstrip('/')
         payload = {
             'items': [{'title': 'Barbearia – Serviços', 'quantity': 1,
@@ -3046,10 +3153,10 @@ def verificar_pagamento(mp_payment_id):
     if _SESSION_USER_ID not in session:
         return jsonify({'erro': 'não autenticado'}), 401
     pedido_id  = request.args.get('pedido_id', type=int)
-    mp_token_s = _get_setting('mp_token', _api_tid())
-    if not mp_token_s or not mp_token_s.value:
+    mp_token_s = _obter_config('mp_token', _api_tid())
+    if not mp_token_s or not mp_token_s.valor:
         return jsonify({'status': 'unknown'}), 400
-    _mp_tok = _dec(mp_token_s.value)
+    _mp_tok = _dec(mp_token_s.valor)
     r = req_http.get(
         f'https://api.mercadopago.com/v1/payments/{mp_payment_id}',
         headers={'Authorization': f'Bearer {_mp_tok}'},
@@ -3078,7 +3185,7 @@ def verificar_pagamento(mp_payment_id):
                     tenant_id=pedido.tenant_id,
                 ))
             db.session.commit()
-            user = db.session.get(User, pedido.user_id)
+            user = db.session.get(Usuario, pedido.user_id)
             if user:
                 _enviar_comprovante_pagamento(user, pedido)
     return jsonify({'status': status})
@@ -3100,8 +3207,8 @@ def retorno_pagamento():
             _tenant = db.session.get(Tenant, pedido.tenant_id)
             slug = _tenant.slug if _tenant else ''
             if status_mp == 'approved' and payment_id and pedido.status != 'pago':
-                mp_token_s = _get_setting('mp_token', pedido.tenant_id)
-                mp_token_v = _dec(mp_token_s.value) if mp_token_s and mp_token_s.value else ''
+                mp_token_s = _obter_config('mp_token', pedido.tenant_id)
+                mp_token_v = _dec(mp_token_s.valor) if mp_token_s and mp_token_s.valor else ''
                 try:
                     rv = req_http.get(
                         f'https://api.mercadopago.com/v1/payments/{payment_id}',
@@ -3121,7 +3228,7 @@ def retorno_pagamento():
                                 tenant_id=pedido.tenant_id,
                             ))
                         db.session.commit()
-                        user = db.session.get(User, pedido.user_id)
+                        user = db.session.get(Usuario, pedido.user_id)
                         if user:
                             _enviar_comprovante_pagamento(user, pedido)
                 except Exception:
@@ -3163,32 +3270,32 @@ def api_usuarios():
             slug = name.split()[0].lower().replace(' ', '')
             base = f"{slug}.{contact.replace(' ','').replace('-','').replace('(','').replace(')','')}"
             email = f"{base}@admin.local"
-            if User.query.filter_by(email=email).first():
+            if Usuario.query.filter_by(email=email).first():
                 import time; email = f"{base}.{int(time.time())}@admin.local"
-        elif User.query.filter_by(email=email, tenant_id=tid).first():
+        elif Usuario.query.filter_by(email=email, tenant_id=tid).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
-        senha_temp = generate_password_hash(secrets.token_hex(16))
+        senha_temp = secrets.token_hex(16)
         receber_lembretes = data.get('receber_lembretes', True)
-        user = User(name=name, email=email, password=senha_temp,
-                    contact=contact, observation=observation,
+        user = Usuario(nome=name, email=email, senha=senha_temp,
+                    contato=contact, observacao=observation,
                     tenant_id=tid,
                     receber_lembretes=bool(receber_lembretes))
         db.session.add(user)
         db.session.commit()
         return jsonify({'ok': True, 'id': user.id, 'usuario': user_dict(user)})
-    usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).limit(5000).all()
+    usuarios = Usuario.query.filter_by(tenant_id=tid).order_by(Usuario.criado_em.desc()).limit(5000).all()
     return jsonify([user_dict(u) for u in usuarios])
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
 def api_usuario(uid):
     tid = verificar_token_perm(request, 'clientes')
     if not tid: return jsonify({'erro': 'não autorizado'}), 403
-    u = db.session.get(User, uid)
+    u = db.session.get(Usuario, uid)
     if not u or u.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     data = user_dict(u)
-    data['contact'] = u.contact or ''
-    data['name']    = u.name
+    data['contact'] = u.contato or ''
+    data['name']    = u.nome
     data['pedidos'] = [pedido_dict(p) for p in u.pedidos]
 
     _, gestor_nome = _gestor_como_barbeiro(tid)
@@ -3259,7 +3366,6 @@ def api_pedido_status(pid):
 def api_stats_servicos():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True, tenant_id=tid).limit(1000).all()}
     contagem = {}
     pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').limit(5000).all()
     for p in pedidos:
@@ -3460,12 +3566,12 @@ def api_export():
         if d_ini: q = q.filter(Agendamento.data_hora >= d_ini)
         if d_fim: q = q.filter(Agendamento.data_hora <= d_fim)
         for ag in q.order_by(Agendamento.data_hora.desc()).limit(CSV_LIMIT).all():
-            user   = db.session.get(User, ag.user_id)
+            user   = db.session.get(Usuario, ag.user_id)
             pedido = db.session.get(Pedido, ag.pedido_id) if ag.pedido_id else None
             servs  = ', '.join(i.nome for i in pedido.itens) if pedido else '—'
             barb   = ag.funcionario.nome if ag.funcionario else 'Proprietário'
             _csv_row(w, [ag.data_hora.strftime('%d/%m/%Y'), ag.data_hora.strftime('%H:%M'),
-                         user.name if user else '—', user.contact if user else '—',
+                         user.nome if user else '—', user.contato if user else '—',
                          servs, barb, STATUS_MAP.get(ag.status, ag.status),
                          FORMA_MAP.get(ag.forma_pagamento or '', ag.forma_pagamento or '—')])
 
@@ -3480,9 +3586,9 @@ def api_export():
 
     elif tipo == 'clientes':
         w.writerow(['Nome','Email','Contato','Cadastrado em'])
-        q = User.query.filter(User.tenant_id == tid)
-        for c in q.order_by(User.name).limit(CSV_LIMIT).all():
-            _csv_row(w, [c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
+        q = Usuario.query.filter(Usuario.tenant_id == tid)
+        for c in q.order_by(Usuario.nome).limit(CSV_LIMIT).all():
+            _csv_row(w, [c.nome, c.email, c.contato or '—', c.criado_em.strftime('%d/%m/%Y')])
 
     elif tipo == 'servicos':
         w.writerow(['Data','Cliente','Serviço','Categoria','Preço (R$)','Status'])
@@ -3492,7 +3598,7 @@ def api_export():
         for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).limit(CSV_LIMIT).all():
             for item in p.itens:
                 _csv_row(w, [p.criado_em.strftime('%d/%m/%Y'),
-                             p.usuario.name if p.usuario else '—',
+                             p.usuario.nome if p.usuario else '—',
                              item.nome, item.categoria or '—',
                              f'{item.preco:.2f}'.replace('.',','),
                              STATUS_MAP.get(p.status, p.status)])
@@ -3519,12 +3625,12 @@ def api_agendamentos():
             return jsonify({'erro': 'data inválida'}), 400
         if not user_id:
             return jsonify({'erro': 'user_id obrigatório'}), 400
-        user = db.session.get(User, user_id)
+        user = db.session.get(Usuario, user_id)
         if not user or user.tenant_id != tid:
             return jsonify({'erro': 'usuário não encontrado'}), 404
         data_str = data_hora.strftime('%Y-%m-%d')
-        dias_s = _get_setting('dias_fechados', tid)
-        if dias_s and dias_s.value and data_str in json.loads(dias_s.value):
+        dias_s = _obter_config('dias_fechados', tid)
+        if dias_s and dias_s.valor and data_str in json.loads(dias_s.valor):
             return jsonify({'erro': 'Este dia não está disponível.'}), 400
         slot_ocupado = (Agendamento.query
                         .filter_by(status='ativo', tenant_id=tid)
@@ -3596,7 +3702,7 @@ def api_agendamentos():
         if pedido and forma_pag == 'pagar_no_local':
             nomes = ', '.join(sv.nome for sv in servicos_validos)
             db.session.add(EntradaMonetaria(
-                descricao=f'{nomes} — {user.name}',
+                descricao=f'{nomes} — {user.nome}',
                 valor=total_pedido,
                 forma='dinheiro',
                 tenant_id=tid,
@@ -3638,10 +3744,10 @@ def api_agendamentos():
             'data_hora': ag.data_hora.isoformat(),
             'status': ag.status or 'ativo',
             'pedido_id': ag.pedido_id,
-            'usuario': u.name if u else '—',
+            'usuario': u.nome if u else '—',
             'email': u.email if u else '—',
-            'contato': u.contact if u else '—',
-            'observacao': u.observation if u else None,
+            'contato': u.contato if u else '—',
+            'observacao': u.observacao if u else None,
             'barbeiro': barbeiro,
             'pedido': pedido_dict(p) if p else None,
         })
@@ -3804,7 +3910,7 @@ def verificar_lembretes():
                     ok = _enviar_email(
                         user.email,
                         'Lembrete — Barbearia',
-                        _corpo_lembrete(user.name, ag.data_hora, tipo)
+                        _corpo_lembrete(user.nome, ag.data_hora, tipo)
                     )
                     if ok:
                         db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo=tipo))
@@ -3819,7 +3925,7 @@ def testar_lembretes():
     tid = verificar_token_admin(request)
     if not tid: return jsonify({'erro': 'não autorizado'}), 403
     with app.app_context():
-        user = User.query.filter_by(tenant_id=tid).first()
+        user = Usuario.query.filter_by(tenant_id=tid).first()
         if not user:
             return jsonify({'erro': 'nenhum usuário cadastrado'}), 404
         ag = (Agendamento.query.filter_by(user_id=user.id, tenant_id=user.tenant_id, status='ativo')
@@ -3831,19 +3937,55 @@ def testar_lembretes():
             ok = _enviar_email(
                 user.email,
                 'Lembrete — Barbearia',
-                _corpo_lembrete(user.name, ag.data_hora, tipo)
+                _corpo_lembrete(user.nome, ag.data_hora, tipo)
             )
             if ok:
                 enviados.append(tipo)
         return jsonify({'ok': True, 'enviados': enviados, 'email': user.email})
 
 def verificar_assinaturas():
+    """Avisa quem acabou de vencer e suspende quem passou da carência.
+
+    O bloqueio em si não depende deste job: estado_assinatura() calcula pelo
+    vencimento a cada requisição. O job cuida do e-mail e de deixar o banco
+    coerente (status e assinatura_ativa).
+    """
     with app.app_context():
         try:
             agora = datetime.utcnow()
-            vencidas = Assinatura.query.filter(
+            limite_carencia = agora - timedelta(hours=Assinatura.HORAS_CARENCIA)
+
+            # 1. Venceu agora, ainda na carência: avisa que faltam horas.
+            em_carencia = Assinatura.query.filter(
                 Assinatura.status == 'ativo',
-                Assinatura.vencimento < agora
+                Assinatura.vencimento < agora,
+                Assinatura.vencimento >= limite_carencia,
+            ).all()
+            for a in em_carencia:
+                tenant = db.session.get(Tenant, a.tenant_id)
+                if not tenant:
+                    continue
+                # Um aviso por assinatura, na primeira passada após vencer.
+                if a.status != 'vencendo':
+                    a.status = 'vencendo'
+                    _enviar_email(tenant.email,
+                        'Assinatura vencida — renove em 24h',
+                        f'''<div style="font-family:Arial,sans-serif;
+                      background:#0f0f0f;color:#f0f0f0;padding:28px;
+                      border-radius:10px;">
+                      <h2 style="color:#C9A96E;">Assinatura vencida</h2>
+                      <p>Olá {tenant.nome}, sua assinatura venceu.</p>
+                      <p>Você tem <strong>24 horas</strong> para renovar antes
+                        que o painel e o site da sua barbearia sejam bloqueados.</p>
+                      <p>Renove em
+                        <a href="https://ibarber.shop/planos"
+                           style="color:#C9A96E;">ibarber.shop</a>.
+                      </p></div>''')
+
+            # 2. Passou da carência: suspende de fato.
+            vencidas = Assinatura.query.filter(
+                Assinatura.status.in_(('ativo', 'vencendo')),
+                Assinatura.vencimento < limite_carencia,
             ).all()
             for a in vencidas:
                 a.status = 'suspenso'
@@ -3851,16 +3993,17 @@ def verificar_assinaturas():
                 if tenant:
                     tenant.assinatura_ativa = False
                     _enviar_email(tenant.email,
-                        'Assinatura vencida — Barbearia Online',
+                        'Acesso bloqueado — Barbearia Online',
                         f'''<div style="font-family:Arial,sans-serif;
                       background:#0f0f0f;color:#f0f0f0;padding:28px;
                       border-radius:10px;">
-                      <h2 style="color:#C9A96E;">Assinatura vencida</h2>
-                      <p>Olá {tenant.nome}, sua assinatura venceu.</p>
-                      <p>Renove em
+                      <h2 style="color:#C9A96E;">Acesso bloqueado</h2>
+                      <p>Olá {tenant.nome}, o prazo de 24 horas terminou e o
+                        painel e o site da sua barbearia foram bloqueados.</p>
+                      <p>Seus dados continuam salvos. Renove em
                         <a href="https://ibarber.shop/planos"
                            style="color:#C9A96E;">ibarber.shop</a>
-                        para reativar seu site.
+                        para liberar.
                       </p></div>''')
             db.session.commit()
         except Exception as e:
@@ -3870,8 +4013,8 @@ def limpar_guests():
     with app.app_context():
         try:
             limite = datetime.utcnow() - timedelta(hours=24)
-            guests = User.query.filter_by(guest=True).filter(User.criado_em < limite).all()
-            for g in guests:
+            convidados = Usuario.query.filter_by(convidado=True).filter(Usuario.criado_em < limite).all()
+            for g in convidados:
                 tem_ag = Agendamento.query.filter_by(user_id=g.id, status='ativo').first()
                 if not tem_ag:
                     db.session.delete(g)
@@ -3934,7 +4077,7 @@ def enviar_retorno_automatico():
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
-                  <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+                  <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
                   <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
                   <p>Que tal agendar seu próximo horário?</p>
                   <div style="text-align:center;margin:24px 0;">
@@ -4018,7 +4161,7 @@ def api_rotar_token():
 # ── Email blast — atualização do APK ───────────────────────────────────────────
 
 def _email_atualizar_apk(tenant):
-    apk_url   = f'https://{APP_DOMAIN}/static/app/ibarber.apk'
+    apk_url   = f'https://{APP_DOMAIN}/static/ibarber.apk'
     painel_url = f'https://{APP_DOMAIN}/gestao/login'
     corpo = f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;
@@ -4080,7 +4223,7 @@ def admin_login():
     email = data.get('email', '').strip().lower()
     senha = data.get('password', '')
     tenant = Tenant.query.filter_by(email=email, ativo=True).first()
-    if not tenant or not check_password_hash(tenant.password, senha):
+    if not tenant or not tenant.conferir_senha(senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
     # func_id=0 aqui é correto: quem autenticou foi o próprio dono do tenant
     token = _gerar_token(tenant.id, func_id=0, version=tenant.token_version or 0)
@@ -4093,7 +4236,7 @@ def api_funcionarios_login():
     email = data.get('email', '').strip().lower()
     senha = data.get('password', '')
     candidatos = Funcionario.query.filter_by(email=email, ativo=True).all()
-    f = next((c for c in candidatos if check_password_hash(c.password, senha)), None)
+    f = next((c for c in candidatos if c.conferir_senha(senha)), None)
     if not f:
         return jsonify({'erro': 'credenciais inválidas'}), 401
     t = db.session.get(Tenant, f.tenant_id)
@@ -4137,7 +4280,7 @@ def api_funcionarios_criar():
     f = Funcionario(
         nome=nome_func,
         email=email_func,
-        password=generate_password_hash(senha),
+        senha=senha,
         telefone=tel_func,
         tenant_id=tid,
         perm_agendamentos=perms.get('agendamentos', True),
@@ -4190,7 +4333,7 @@ def api_funcionario_detalhe(fid):
     if nova_senha and len(nova_senha) < 8:
         return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
     if nova_senha:
-        f.password = generate_password_hash(nova_senha)
+        f.senha = nova_senha
     perms = d.get('permissoes', {})
     if perms:
         f.perm_agendamentos = perms.get('agendamentos', f.perm_agendamentos)
@@ -4261,11 +4404,11 @@ def api_gestor_foto():
     _tid = verificar_token_admin(request)
     if not _tid: return jsonify({'erro': 'não autorizado'}), 403
     if request.method == 'DELETE':
-        s = _get_setting('gestor_foto', _tid)
-        if s and s.value:
-            p = os.path.join(UPLOAD_FOLDER, s.value)
+        s = _obter_config('gestor_foto', _tid)
+        if s and s.valor:
+            p = os.path.join(UPLOAD_FOLDER, s.valor)
             if os.path.exists(p): os.remove(p)
-            s.value = ''
+            s.valor = ''
             db.session.commit()
         return jsonify({'ok': True})
     arquivo = request.files.get('foto')
@@ -4276,14 +4419,14 @@ def api_gestor_foto():
     buf, err, ext = _processar_imagem(arquivo)
     if err:
         return jsonify({'erro': err}), 400
-    s = _get_setting('gestor_foto', _tid)
-    if s and s.value:
-        old = os.path.join(UPLOAD_FOLDER, s.value)
+    s = _obter_config('gestor_foto', _tid)
+    if s and s.valor:
+        old = os.path.join(UPLOAD_FOLDER, s.valor)
         if os.path.exists(old): os.remove(old)
     filename = f"gestor_{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(UPLOAD_FOLDER, filename), 'wb') as fh:
         fh.write(buf.read())
-    _upsert_setting('gestor_foto', filename, _tid)
+    _gravar_config('gestor_foto', filename, _tid)
     db.session.commit()
     return jsonify({'ok': True, 'foto_url': f'/static/uploads/{filename}'})
 
@@ -4354,10 +4497,51 @@ def _gestao_login_required():
         if not f or f.tenant_id != tid or not f.ativo:
             session.clear()
             return redirect(url_for('gestao_login'))
+    # Assinatura vencida ha mais de 24h fecha o painel. Dentro das 24h o acesso
+    # continua liberado e o aviso aparece pelo _assinatura_ctx.
+    tenant = db.session.get(Tenant, tid)
+    if tenant and tenant.assinatura_bloqueada():
+        return redirect(url_for('gestao_assinatura_vencida'))
     return None
 
 def _gestao_tenant():
     return db.session.get(Tenant, session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID))
+
+@app.route('/gestao/assinatura-vencida')
+def gestao_assinatura_vencida():
+    """Tela final de quem passou da carencia. Nao usa _gestao_login_required
+    (ele redireciona para ca, o que daria laco)."""
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
+    if not tid:
+        return redirect(url_for('gestao_login'))
+    tenant = db.session.get(Tenant, tid)
+    if not tenant:
+        session.clear()
+        return redirect(url_for('gestao_login'))
+    # Pagou enquanto estava nesta tela: volta para o painel.
+    if not tenant.assinatura_bloqueada():
+        return redirect(url_for('gestao_dashboard'))
+    atual = tenant.assinatura_atual
+    return render_template('gestao/assinatura_vencida.html',
+                           tenant=tenant,
+                           vencimento=atual.vencimento if atual else None), 402
+
+@app.context_processor
+def _assinatura_ctx():
+    """Alimenta o aviso de vencimento em todo template da gestao."""
+    tid = session.get(_SESSION_GESTAO_TENANT_ID) or session.get(_SESSION_REPERSON_TID)
+    if not tid:
+        return {}
+    tenant = db.session.get(Tenant, tid)
+    if not tenant:
+        return {}
+    estado = tenant.estado_assinatura()
+    atual = tenant.assinatura_atual
+    return {
+        'assinatura_estado': estado,
+        'assinatura_em_carencia': estado == Tenant.ASSINATURA_CARENCIA,
+        'assinatura_horas_restantes': atual.horas_restantes_carencia if atual else 0,
+    }
 
 def _gestao_token():
     """Token da API com a identidade REAL de quem está logado.
@@ -4474,7 +4658,7 @@ def gestao_login():
         email = request.form.get('email', '').strip().lower()
         senha = request.form.get('senha', '')
         tenant = Tenant.query.filter_by(email=email, ativo=True).first()
-        if tenant and check_password_hash(tenant.password, senha):
+        if tenant and tenant.conferir_senha(senha):
             session.clear()
             session.permanent = True
             session[_SESSION_GESTAO_TENANT_ID] = tenant.id
@@ -4482,7 +4666,7 @@ def gestao_login():
             return redirect(url_for('gestao_dashboard'))
         # Tenta login como funcionário (checa senha em todos os candidatos para evitar ambiguidade de tenant)
         func = next((c for c in Funcionario.query.filter_by(email=email, ativo=True).all()
-                     if check_password_hash(c.password, senha)), None)
+                     if c.conferir_senha(senha)), None)
         if func and func.tenant_id:
             t = db.session.get(Tenant, func.tenant_id)
             if t and t.ativo:
@@ -4538,10 +4722,10 @@ def gestao_dashboard():
             'id': ag.id,
             'data_hora': ag.data_hora.strftime('%Y-%m-%dT%H:%M:%S'),
             'status': ag.status or 'ativo',
-            'usuario': u.name if u else '—',
+            'usuario': u.nome if u else '—',
             'email': u.email if u else '—',
-            'contato': u.contact if u else '—',
-            'observacao': u.observation if u else None,
+            'contato': u.contato if u else '—',
+            'observacao': u.observacao if u else None,
             'barbeiro': barbeiro,
             'servico': servico_nome,
         })
@@ -4560,7 +4744,6 @@ def gestao_dashboard():
                 'tem_ag': cursor.strftime('%Y-%m-%d') in datas_com_ag,
             })
         cursor += timedelta(days=1)
-    tenant = _gestao_tenant()
     return render_template('gestao/dashboard.html',
         active='dashboard',
         hoje=hoje.strftime('%Y-%m-%d'),
@@ -4580,9 +4763,9 @@ def gestao_agendamentos():
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
     token = _gestao_token()
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
+    clientes = Usuario.query.filter_by(tenant_id=tenant.id).order_by(Usuario.nome).limit(5000).all()
     clientes_json = _safe_json([
-        {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
+        {'id': c.id, 'name': c.nome, 'email': c.email, 'contact': c.contato or ''}
         for c in clientes
     ])
     return render_template('gestao/agendamentos.html', active='agendamentos',
@@ -4600,7 +4783,7 @@ def gestao_agendamento_status(ag_id):
         ag.status = novo_status
         db.session.commit()
         if novo_status == 'cancelado':
-            user = db.session.get(User, ag.user_id)
+            user = db.session.get(Usuario, ag.user_id)
             if user and not user.email.endswith('@ibarber.local'):
                 data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
                 hora_fmt = ag.data_hora.strftime('%H:%M')
@@ -4608,7 +4791,7 @@ def gestao_agendamento_status(ag_id):
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-                  <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
+                  <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
                   <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                               padding:16px 20px;border-radius:6px;margin:20px 0;">
                     <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -4636,7 +4819,7 @@ def gestao_pedidos():
     pedidos_json = _safe_json([{
         'id': p.id, 'status': p.status, 'total': p.total,
         'criado_em': p.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
-        'usuario': p.usuario.name if p.usuario else '—',
+        'usuario': p.usuario.nome if p.usuario else '—',
         'itens': [{'nome': i.nome, 'categoria': i.categoria or '', 'preco': i.preco} for i in p.itens],
     } for p in pedidos])
     return render_template('gestao/pedidos.html', active='pedidos', pedidos_json=pedidos_json, token=token)
@@ -4649,10 +4832,10 @@ def gestao_clientes():
     if perm: return perm
     tenant = _gestao_tenant()
     token = _gestao_token()
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
+    clientes = Usuario.query.filter_by(tenant_id=tenant.id).order_by(Usuario.nome).limit(5000).all()
     clientes_json = _safe_json([{
-        'id': c.id, 'name': c.name, 'email': c.email,
-        'contact': c.contact or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
+        'id': c.id, 'name': c.nome, 'email': c.email,
+        'contact': c.contato or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
     } for c in clientes])
     return render_template('gestao/clientes.html', active='clientes', clientes_json=clientes_json, token=token)
 
@@ -4662,7 +4845,6 @@ def gestao_cliente_detalhe(uid):
     if redir: return redir
     perm = _gestao_perm_required('clientes')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/cliente_detalhe.html', active='clientes', uid=uid, token=token)
 
@@ -4699,7 +4881,7 @@ def gestao_entradas():
             ags_json.append({
                 'data_hora': ag.data_hora.strftime('%Y-%m-%dT%H:%M:%S'),
                 'total': p.total,
-                'usuario': ag.usuario.name if ag.usuario else '—',
+                'usuario': ag.usuario.nome if ag.usuario else '—',
             })
     entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).limit(5000).all()
     entradas_json = _safe_json([{
@@ -4728,7 +4910,6 @@ def gestao_funcionarios():
     if redir: return redir
     perm = _gestao_owner_required()
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/funcionarios.html', active='funcionarios', token=token)
 
@@ -4738,7 +4919,6 @@ def gestao_servicos():
     if redir: return redir
     perm = _gestao_perm_required('servicos')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/servicos.html', active='servicos', token=token)
 
@@ -4770,7 +4950,6 @@ def gestao_fotos():
     if redir: return redir
     perm = _gestao_perm_required('fotos')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/fotos.html', active='fotos', token=token)
 
@@ -4914,9 +5093,9 @@ def gestao_horarios():
                 'fechamento': request.form.get(f'fechamento_{k}', '18:00'),
             }
         _tid = tenant.id
-        _upsert_setting('horario_funcionamento', json.dumps(horarios, ensure_ascii=False), _tid)
-        _upsert_setting('intervalo_minutos', str(_duracao_segura(request.form.get('slot_minutos'), 40)), _tid)
-        _upsert_setting('dias_agenda', str(_int_seguro(request.form.get('dias_agenda'), 20, 1, 60)), _tid)
+        _gravar_config('horario_funcionamento', json.dumps(horarios, ensure_ascii=False), _tid)
+        _gravar_config('intervalo_minutos', str(_duracao_segura(request.form.get('slot_minutos'), 40)), _tid)
+        _gravar_config('dias_agenda', str(_int_seguro(request.form.get('dias_agenda'), 20, 1, 60)), _tid)
         # Cancelar agendamentos conflitantes se solicitado
         if request.form.get('_confirmar') == 'cancelar':
             DOW_MAP = {'Monday':'seg','Tuesday':'ter','Wednesday':'qua','Thursday':'qui',
@@ -4931,8 +5110,8 @@ def gestao_horarios():
                 cfg = horarios.get(dia_key, {})
                 hora = ag.data_hora.strftime('%H:%M')
                 if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
-                    user = db.session.get(User, ag.user_id)
-                    conflitos.append({'ag': ag, 'user': user, 'nome': user.name if user else 'Cliente',
+                    user = db.session.get(Usuario, ag.user_id)
+                    conflitos.append({'ag': ag, 'user': user, 'nome': user.nome if user else 'Cliente',
                                       'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
             if conflitos:
                 _cancelar_conflitos(conflitos, tenant.nome, 'Mudança de horário de funcionamento')
@@ -4940,16 +5119,16 @@ def gestao_horarios():
         flash('Horários salvos.', 'success')
         return redirect(url_for('gestao_horarios'))
     _tid = tenant.id
-    config_s = _get_setting('horario_funcionamento', _tid)
-    config_dias = json.loads(config_s.value) if config_s and config_s.value else {}
-    slot_s = _get_setting('intervalo_minutos', _tid)
-    dias_ag_s = _get_setting('dias_agenda', _tid)
-    dias_fechados_s = _get_setting('dias_fechados', _tid)
-    dias_fechados = json.loads(dias_fechados_s.value) if dias_fechados_s and dias_fechados_s.value else []
+    config_s = _obter_config('horario_funcionamento', _tid)
+    config_dias = json.loads(config_s.valor) if config_s and config_s.valor else {}
+    slot_s = _obter_config('intervalo_minutos', _tid)
+    dias_ag_s = _obter_config('dias_agenda', _tid)
+    dias_fechados_s = _obter_config('dias_fechados', _tid)
+    dias_fechados = json.loads(dias_fechados_s.valor) if dias_fechados_s and dias_fechados_s.valor else []
     especiais = HorarioEspecial.query.filter_by(tenant_id=tenant.id).order_by(HorarioEspecial.data).limit(1000).all()
     config_geral = {
-        'slot_minutos': _duracao_segura(slot_s.value if slot_s and slot_s.value else 40),
-        'dias_agenda': _int_seguro(dias_ag_s.value if dias_ag_s and dias_ag_s.value else 20, 20, 1, 60),
+        'slot_minutos': _duracao_segura(slot_s.valor if slot_s and slot_s.valor else 40),
+        'dias_agenda': _int_seguro(dias_ag_s.valor if dias_ag_s and dias_ag_s.valor else 20, 20, 1, 60),
     }
     especiais_json = _safe_json([{'id': e.id, 'data': e.data,
         'abertura': e.abertura, 'fechamento': e.fechamento} for e in especiais])
@@ -5030,18 +5209,23 @@ def gestao_credenciais():
                 return redirect(url_for('gestao_credenciais'))
             tenant.email = email
         if nova_senha:
-            if not check_password_hash(tenant.password, senha_atual):
+            if not tenant.conferir_senha(senha_atual):
                 flash('Senha atual incorreta.', 'error')
                 return redirect(url_for('gestao_credenciais'))
             if nova_senha != confirmar:
                 flash('As senhas não coincidem.', 'error')
                 return redirect(url_for('gestao_credenciais'))
-            tenant.password = generate_password_hash(nova_senha)
+            # Mesmo mínimo exigido em /api/cadastro e /api/credenciais/conta;
+            # sem isto, o setter de Tenant.senha levantaria ValueError aqui.
+            if len(nova_senha) < 8:
+                flash('Nova senha deve ter ao menos 8 caracteres.', 'error')
+                return redirect(url_for('gestao_credenciais'))
+            tenant.senha = nova_senha
         db.session.commit()
         session[_SESSION_GESTAO_NOME] = tenant.nome
         flash('Dados atualizados.', 'success')
         return redirect(url_for('gestao_credenciais'))
-    def _sv(key): s = _get_setting(key, tenant.id); return s.value if s else ''
+    def _sv(key): s = _obter_config(key, tenant.id); return s.valor if s else ''
     return render_template('gestao/credenciais.html',
         active='credenciais', tenant=tenant,
         token=_gestao_token(),
@@ -5058,7 +5242,6 @@ def gestao_graficos():
     if redir: return redir
     perm = _gestao_owner_required()
     if perm: return perm
-    tenant = _gestao_tenant()
     return render_template('gestao/graficos.html',
         active='graficos',
         token=_gestao_token())
@@ -5069,7 +5252,6 @@ def gestao_calendario():
     if redir: return redir
     perm = _gestao_perm_required('calendario')
     if perm: return perm
-    tenant = _gestao_tenant()
     return render_template('gestao/calendario.html',
         active='calendario',
         token=_gestao_token())
@@ -5220,7 +5402,7 @@ def api_cadastro_personalizar():
         slug=slug,
         nome=nome,
         email=email,
-        password=generate_password_hash(senha),
+        senha=senha,
         whatsapp=d.get('whatsapp', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
@@ -5230,7 +5412,7 @@ def api_cadastro_personalizar():
     db.session.flush()
     for nome_cat in ['Corte', 'Barba', 'Combo']:
         db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
-    _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
+    _gravar_config('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     session.pop('is_preview', None)
     session[_SESSION_ONB_TENANT_ID] = tenant.id
@@ -5258,7 +5440,7 @@ def api_repersonalizar_auth():
     email = d.get('email', '').strip().lower()
     senha = d.get('senha', '')
     tenant = Tenant.query.filter_by(email=email).first()
-    if not tenant or not check_password_hash(tenant.password, senha):
+    if not tenant or not tenant.conferir_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
     if not tenant.assinatura_ativa:
         return jsonify({'erro': 'Conta sem assinatura ativa'}), 403
@@ -5300,7 +5482,7 @@ def api_repersonalizar_credenciais():
     if senha:
         if len(senha) < 8:
             return jsonify({'erro': 'Senha deve ter pelo menos 8 caracteres'}), 400
-        tenant.password = generate_password_hash(senha)
+        tenant.senha = senha
         # Invalida todos os tokens emitidos antes da troca de senha
         tenant.token_version = (tenant.token_version or 0) + 1
     if whatsapp is not None:
@@ -5417,7 +5599,7 @@ def api_cadastro():
         slug=slug,
         nome=nome,
         email=email,
-        password=generate_password_hash(senha),
+        senha=senha,
         contato=d.get('contato', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
@@ -5429,7 +5611,7 @@ def api_cadastro():
     db.session.flush()
     for nome_cat in ['Corte', 'Barba', 'Combo']:
         db.session.add(Categoria(nome=nome_cat, tenant_id=tenant.id))
-    _upsert_setting('gestor_e_barbeiro', '1', tenant.id)
+    _gravar_config('gestor_e_barbeiro', '1', tenant.id)
     db.session.commit()
     session.pop('is_preview', None)
     session[_SESSION_ONB_TENANT_ID] = tenant.id
@@ -5529,7 +5711,7 @@ def admin_painel():
           <button type="submit" style="padding:10px 28px;background:#C9A96E;color:#000;border:none;border-radius:6px;font-weight:bold;cursor:pointer">Entrar</button>
         </form></body></html>''', 401
     tenants = Tenant.query.order_by(Tenant.id.desc()).limit(5000).all()
-    mp_pub  = _get_setting('admin_mp_public_key')
+    mp_pub  = _obter_config('admin_mp_public_key')
 
     now = datetime.utcnow()
     chart_data = []
@@ -5556,7 +5738,7 @@ def admin_painel():
 
     return render_template('admin_painel.html',
         tenants=tenants,
-        mp_public_key=mp_pub.value if mp_pub else '',
+        mp_public_key=mp_pub.valor if mp_pub else '',
         mp_token_set=bool(get_mp_token()),
         chart_data=chart_data,
         planos_dist=dict(planos_dist),
@@ -5573,10 +5755,10 @@ def api_admin_credenciais():
             continue
         if k == 'mp_token':
             os.environ['MP_ACCESS_TOKEN'] = v
-            _upsert_setting('admin_mp_access_token', v)
-            _upsert_setting('admin_mp_token_set', '1')
+            _gravar_config('admin_mp_access_token', v)
+            _gravar_config('admin_mp_token_set', '1')
         else:
-            _upsert_setting('admin_mp_public_key', v)
+            _gravar_config('admin_mp_public_key', v)
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -5619,7 +5801,11 @@ def api_admin_desativar(tid):
     if not t:
         return jsonify({'erro': 'não encontrado'}), 404
     t.assinatura_ativa = False
-    asn = Assinatura.query.filter_by(tenant_id=tid, status='ativo').first()
+    # 'vencendo' é o estado de quem está na carência — também precisa cair.
+    asn = Assinatura.query.filter(
+        Assinatura.tenant_id == tid,
+        Assinatura.status.in_(('ativo', 'vencendo')),
+    ).first()
     if asn:
         asn.status = 'inativo'
     db.session.commit()
@@ -5664,7 +5850,7 @@ def api_admin_excluir(tid):
     Funcionario.query.filter_by(tenant_id=tid).delete()
 
     # 9. Usuários
-    User.query.filter_by(tenant_id=tid).delete()
+    Usuario.query.filter_by(tenant_id=tid).delete()
 
     # 10. Fotos, horários, serviços, categorias, assinaturas
     FotoServico.query.filter_by(tenant_id=tid).delete()
@@ -5674,7 +5860,7 @@ def api_admin_excluir(tid):
     Assinatura.query.filter_by(tenant_id=tid).delete()
 
     # 11. Settings com prefixo do tenant
-    Setting.query.filter(Setting.key.like(f'{tid}:%')).delete(synchronize_session=False)
+    Configuracao.query.filter(Configuracao.chave.like(f'{tid}:%')).delete(synchronize_session=False)
 
     # 12. Tenant
     db.session.delete(t)
@@ -5743,8 +5929,8 @@ def api_pagamento_criar_v2():
     # Public key: env var primeiro, depois DB setting
     mp_pub_key = os.environ.get('MP_PUBLIC_KEY', '')
     if not mp_pub_key:
-        mp_pub_key_s = _get_setting('admin_mp_public_key')
-        mp_pub_key = mp_pub_key_s.value if mp_pub_key_s else ''
+        mp_pub_key_s = _obter_config('admin_mp_public_key')
+        mp_pub_key = mp_pub_key_s.valor if mp_pub_key_s else ''
 
     amount = PLANOS[plano]['total']
     meta   = {'tenant_id': tenant.id, 'plano': plano, 'tipo': 'assinatura'}
@@ -5912,20 +6098,40 @@ def verificar_slug(slug):
     existe = Tenant.query.filter_by(slug=slug).first() is not None
     return jsonify({'disponivel': valido and not existe})
 
+def _aviso_assinatura(estado, horas_restantes):
+    """Mensagem pronta para o app exibir. Vazia quando esta tudo em dia."""
+    if estado == Tenant.ASSINATURA_CARENCIA:
+        return (f'Assinatura vencida. Seu acesso será bloqueado em '
+                f'{horas_restantes}h. Renove em ibarber.shop/planos.')
+    if estado == Tenant.ASSINATURA_BLOQUEADA:
+        return ('Assinatura vencida. O acesso está bloqueado — '
+                'renove em ibarber.shop/planos para liberar.')
+    return ''
+
 @app.route('/api/minha-assinatura')
 def api_minha_assinatura():
     tenant_id = verificar_token_admin(request)
     if not tenant_id: return jsonify({'erro': 'não autorizado'}), 403
+    tenant = db.session.get(Tenant, tenant_id)
+    estado = tenant.estado_assinatura() if tenant else Tenant.ASSINATURA_BLOQUEADA
+
     assinatura = Assinatura.query.filter_by(
         tenant_id=tenant_id).order_by(Assinatura.criado_em.desc()).first()
     if not assinatura:
-        return jsonify({'status': 'sem_assinatura'})
+        return jsonify({'status': 'sem_assinatura', 'estado': estado,
+                        'bloqueado': estado == Tenant.ASSINATURA_BLOQUEADA,
+                        'aviso': _aviso_assinatura(estado, 0)})
     return jsonify({
         'status': assinatura.status,
         'plano': assinatura.plano,
         'vencimento': assinatura.vencimento.isoformat() if assinatura.vencimento else None,
         'dias_restantes': assinatura.dias_restantes(),
         'valor_mensal': assinatura.valor_mensal,
+        # Campos novos: permitem ao app avisar antes de o acesso cair.
+        'estado': estado,
+        'bloqueado': estado == Tenant.ASSINATURA_BLOQUEADA,
+        'horas_para_bloqueio': assinatura.horas_restantes_carencia,
+        'aviso': _aviso_assinatura(estado, assinatura.horas_restantes_carencia),
     })
 
 def _udp_broadcast():
@@ -5941,7 +6147,7 @@ def _udp_broadcast():
 @app.route('/<slug>/loja')
 def tenant_loja(slug):
     tenant = get_tenant_by_slug(slug)
-    if not tenant or not tenant.assinatura_ativa or not getattr(tenant, 'loja_ativa', False):
+    if not tenant or tenant.assinatura_bloqueada() or not getattr(tenant, 'loja_ativa', False):
         return redirect(url_for('tenant_site', slug=slug))
     if session.get(_SESSION_USER_ID) and session.get(_SESSION_PATH_TENANT_ID) and session[_SESSION_PATH_TENANT_ID] != tenant.id:
         session.pop('user_id', None)
@@ -5963,7 +6169,9 @@ def tenant_site(slug):
                 '<p style="color:#888;margin-top:.5rem">Barbearia não encontrada.</p>'
                 '<a href="/landing" style="color:#C9A96E;margin-top:1rem;display:block">Criar meu site →</a>'
                 '</div></body></html>', 404)
-    if not tenant.assinatura_ativa:
+    # Dentro das 24h de carencia o site continua no ar: quem agenda e o cliente
+    # da barbearia, que nao tem culpa do atraso do pagamento.
+    if tenant.assinatura_bloqueada():
         return ('<html><body style="background:#0a0a0a;color:#f0ece4;font-family:sans-serif;'
                 'display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">'
                 f'<div><h2 style="color:#C9A96E">✦ {tenant.nome}</h2>'
@@ -5981,7 +6189,7 @@ def tenant_site(slug):
         return render_template('index.html', user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True)
     user = None
     if 'user_id' in session:
-        user = db.session.get(User, session[_SESSION_USER_ID])
+        user = db.session.get(Usuario, session[_SESSION_USER_ID])
     return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
 
 @app.errorhandler(413)

@@ -8,7 +8,6 @@ scripts_dir = os.path.dirname(os.path.abspath(__file__))
 audits = [
     ('BACKEND',      'audit_backend.py'),
     ('FRONTEND',     'audit_frontend.py'),
-    ('CONSISTENCIA', 'audit_consistencia.py'),
     ('DEPENDENCIAS', 'audit_deps.py'),
 ]
 

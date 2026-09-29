@@ -332,6 +332,19 @@
     .g-flash-success { background: rgba(76,175,130,0.1); color: var(--success); border: 1px solid var(--success); }
     .g-flash-error   { background: rgba(224,85,85,0.1);  color: var(--error);   border: 1px solid var(--error); }
 
+    /* ── Aviso de assinatura vencida (carência) ─ */
+    .g-aviso-vencida {
+      padding: 0.85rem 1rem; border-radius: var(--radius); margin-bottom: 1rem;
+      font-size: 0.875rem; line-height: 1.5;
+      background: rgba(224,85,85,0.12); color: var(--error);
+      border: 1px solid var(--error);
+    }
+    .g-aviso-vencida strong { display: block; margin-bottom: 0.15rem; }
+    .g-aviso-vencida a {
+      color: var(--error); font-weight: 600; text-decoration: underline;
+      white-space: nowrap; margin-left: 0.25rem;
+    }
+
     /* ── Section ─────────────────────────────── */
     .g-section { margin-bottom: 1.75rem; }
     .g-section-title { font-size: 0.78rem; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.85rem; }
@@ -527,6 +540,14 @@
 
     <!-- Main content -->
     <main class="g-main">
+      {% if assinatura_em_carencia %}
+        <div class="g-aviso-vencida" role="alert">
+          <strong>Assinatura vencida.</strong>
+          Seu acesso ao painel será bloqueado em
+          {{ assinatura_horas_restantes }}h. Renove para não perder a agenda.
+          <a href="/planos">Renovar agora</a>
+        </div>
+      {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}

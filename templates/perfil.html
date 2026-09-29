@@ -71,12 +71,12 @@
     {% if session.get('is_guest') %}
     <div class="pf-campo">
       <div class="pf-label">Nome</div>
-      <div class="pf-valor">{{ user.name }}</div>
+      <div class="pf-valor">{{ user.nome }}</div>
     </div>
-    {% if user.contact %}
+    {% if user.contato %}
     <div class="pf-campo">
       <div class="pf-label">WhatsApp</div>
-      <div class="pf-valor">{{ user.contact }}</div>
+      <div class="pf-valor">{{ user.contato }}</div>
     </div>
     {% endif %}
     <div style="margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border);">
@@ -94,12 +94,12 @@
       <div class="pf-view" id="view_nome">
         <div>
           <div class="pf-label">Nome</div>
-          <div class="pf-valor" id="mostrar_nome">{{ user.name }}</div>
+          <div class="pf-valor" id="mostrar_nome">{{ user.nome }}</div>
         </div>
         <button class="pf-edit-btn" onclick="editarCampo('nome')">Editar</button>
       </div>
       <div class="pf-edit-box" id="edit_nome" style="display:none;">
-        <input class="field-input" type="text" id="input_nome" value="{{ user.name }}" placeholder="Seu nome" />
+        <input class="field-input" type="text" id="input_nome" value="{{ user.nome }}" placeholder="Seu nome" />
         <p class="pf-erro" id="erro_nome"></p>
         <div class="pf-edit-actions">
           <button class="btn btn-outline" onclick="cancelarEdit('nome')">Cancelar</button>
@@ -113,18 +113,18 @@
       <div class="pf-view" id="view_telefone">
         <div>
           <div class="pf-label">WhatsApp</div>
-          <div class="pf-valor" id="mostrar_telefone" data-raw="{{ user.contact or '' }}">
-            {% if user.contact %}{{ user.contact }}{% else %}<span style="color:var(--text-muted);">Não cadastrado</span>{% endif %}
+          <div class="pf-valor" id="mostrar_telefone" data-raw="{{ user.contato or '' }}">
+            {% if user.contato %}{{ user.contato }}{% else %}<span style="color:var(--text-muted);">Não cadastrado</span>{% endif %}
           </div>
         </div>
-        <button class="pf-edit-btn" onclick="editarCampo('telefone')">{{ 'Editar' if user.contact else 'Adicionar' }}</button>
+        <button class="pf-edit-btn" onclick="editarCampo('telefone')">{{ 'Editar' if user.contato else 'Adicionar' }}</button>
       </div>
       <div class="pf-edit-box" id="edit_telefone" style="display:none;">
         <div class="tel-input-wrap">
           <span class="tel-prefix">🇧🇷 +55</span>
           <input class="field-input" type="tel" id="input_telefone" inputmode="numeric"
                  placeholder="(11) 99999-9999"
-                 value="{{ user.contact or '' }}"
+                 value="{{ user.contato or '' }}"
                  oninput="mascaraTel(this)" style="flex:1;" />
         </div>
         <p class="pf-erro" id="erro_telefone"></p>
