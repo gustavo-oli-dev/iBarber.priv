@@ -268,12 +268,35 @@ PLANOS = {
     'anual':      {'meses': 12, 'mensal': 34.00, 'total': 408.00},
 }
 
-class Tenant(db.Model):
+class SenhaMixin:
+    """Campo de senha compartilhado por Tenant, User e Funcionario.
+
+    A coluna continua se chamando 'password' no banco (sem precisar de
+    migration); o que muda é que ninguém mais grava ou lê o hash na mão.
+    Escrever em `.senha` sempre passa por generate_password_hash — não tem
+    como salvar senha em texto puro por esquecimento. Ler `.senha` não é
+    permitido; a comparação é feita por `conferir_senha()`.
+    """
+    password = db.Column(db.String(200), nullable=False)
+
+    @property
+    def senha(self):
+        raise AttributeError('senha é escreve-só — use conferir_senha() para validar')
+
+    @senha.setter
+    def senha(self, texto):
+        if not texto or len(texto) < 8:
+            raise ValueError('senha precisa ter 8 caracteres ou mais')
+        self.password = generate_password_hash(texto)
+
+    def conferir_senha(self, texto):
+        return bool(texto) and check_password_hash(self.password, texto)
+
+class Tenant(SenhaMixin, db.Model):
     id               = db.Column(db.Integer, primary_key=True)
     slug             = db.Column(db.String(50),  unique=True, nullable=False)
     nome             = db.Column(db.String(100), nullable=False)
     email            = db.Column(db.String(120), unique=True, nullable=False)
-    password         = db.Column(db.String(200), nullable=False)
     contato          = db.Column(db.String(20),  nullable=True)
     ativo            = db.Column(db.Boolean, default=True)
     criado_em        = db.Column(db.DateTime, default=datetime.utcnow)
@@ -318,11 +341,10 @@ class Assinatura(db.Model):
     def esta_ativo(self):
         return self.status == 'ativo' and bool(self.vencimento) and self.vencimento > datetime.utcnow()
 
-class User(db.Model):
+class User(SenhaMixin, db.Model):
     id             = db.Column(db.Integer, primary_key=True)
     name           = db.Column(db.String(100), nullable=False)
     email          = db.Column(db.String(120), nullable=False)
-    password       = db.Column(db.String(200), nullable=False)
     contact            = db.Column(db.String(20),  nullable=True)
     observation        = db.Column(db.Text,        nullable=True)
     receber_lembretes  = db.Column(db.Boolean,     default=True)
@@ -465,11 +487,10 @@ class HorarioEspecial(db.Model):
     criado_em  = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
 
-class Funcionario(db.Model):
+class Funcionario(SenhaMixin, db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     nome          = db.Column(db.String(100), nullable=False)
     email         = db.Column(db.String(120), nullable=True)
-    password      = db.Column(db.String(200), nullable=False)
     telefone      = db.Column(db.String(20),  nullable=True)
     foto          = db.Column(db.String(200),  nullable=True)
     ativo         = db.Column(db.Boolean, default=True)
@@ -835,7 +856,7 @@ def login_rapido():
     user   = User(
         name=nome,
         email=email,
-        password=generate_password_hash(secrets.token_hex(16)),
+        senha=secrets.token_hex(16),
         contact=contato or None,
         observation=alergia or None,
         receber_lembretes=False,
@@ -899,7 +920,7 @@ def api_auth_criar_telefone():
     user  = User(
         name=nome,
         email=email,
-        password=generate_password_hash(secrets.token_hex(16)),
+        senha=secrets.token_hex(16),
         contact=tel,
         receber_lembretes=lembretes,
         guest=False,
@@ -1054,7 +1075,7 @@ def auth_google_callback():
         else:
             user = User(
                 name=nome, email=email,
-                password=generate_password_hash(secrets.token_hex(32)),
+                senha=secrets.token_hex(32),
                 google_id=google_id, contact=None,
                 receber_lembretes=True, guest=False, tenant_id=tid,
             )
@@ -2929,11 +2950,11 @@ def api_credenciais_conta():
         return jsonify({'erro': 'Nada a atualizar'}), 400
     # Senha atual só é exigida para trocar a senha
     if senha_nova:
-        if not senha_atual or not check_password_hash(tenant.password, senha_atual):
+        if not senha_atual or not tenant.conferir_senha(senha_atual):
             return jsonify({'erro': 'Senha atual incorreta'}), 400
         if len(senha_nova) < 8:
             return jsonify({'erro': 'Nova senha deve ter mínimo 8 caracteres'}), 400
-        tenant.password = generate_password_hash(senha_nova)
+        tenant.senha = senha_nova
         # Invalida todos os tokens emitidos antes da troca de senha
         tenant.token_version = (tenant.token_version or 0) + 1
     if email_novo and email_novo != tenant.email:
@@ -3167,9 +3188,9 @@ def api_usuarios():
                 import time; email = f"{base}.{int(time.time())}@admin.local"
         elif User.query.filter_by(email=email, tenant_id=tid).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
-        senha_temp = generate_password_hash(secrets.token_hex(16))
+        senha_temp = secrets.token_hex(16)
         receber_lembretes = data.get('receber_lembretes', True)
-        user = User(name=name, email=email, password=senha_temp,
+        user = User(name=name, email=email, senha=senha_temp,
                     contact=contact, observation=observation,
                     tenant_id=tid,
                     receber_lembretes=bool(receber_lembretes))
@@ -4080,7 +4101,7 @@ def admin_login():
     email = data.get('email', '').strip().lower()
     senha = data.get('password', '')
     tenant = Tenant.query.filter_by(email=email, ativo=True).first()
-    if not tenant or not check_password_hash(tenant.password, senha):
+    if not tenant or not tenant.conferir_senha(senha):
         return jsonify({'erro': 'credenciais inválidas'}), 401
     # func_id=0 aqui é correto: quem autenticou foi o próprio dono do tenant
     token = _gerar_token(tenant.id, func_id=0, version=tenant.token_version or 0)
@@ -4093,7 +4114,7 @@ def api_funcionarios_login():
     email = data.get('email', '').strip().lower()
     senha = data.get('password', '')
     candidatos = Funcionario.query.filter_by(email=email, ativo=True).all()
-    f = next((c for c in candidatos if check_password_hash(c.password, senha)), None)
+    f = next((c for c in candidatos if c.conferir_senha(senha)), None)
     if not f:
         return jsonify({'erro': 'credenciais inválidas'}), 401
     t = db.session.get(Tenant, f.tenant_id)
@@ -4137,7 +4158,7 @@ def api_funcionarios_criar():
     f = Funcionario(
         nome=nome_func,
         email=email_func,
-        password=generate_password_hash(senha),
+        senha=senha,
         telefone=tel_func,
         tenant_id=tid,
         perm_agendamentos=perms.get('agendamentos', True),
@@ -4190,7 +4211,7 @@ def api_funcionario_detalhe(fid):
     if nova_senha and len(nova_senha) < 8:
         return jsonify({'erro': 'Senha deve ter mínimo 8 caracteres'}), 400
     if nova_senha:
-        f.password = generate_password_hash(nova_senha)
+        f.senha = nova_senha
     perms = d.get('permissoes', {})
     if perms:
         f.perm_agendamentos = perms.get('agendamentos', f.perm_agendamentos)
@@ -4474,7 +4495,7 @@ def gestao_login():
         email = request.form.get('email', '').strip().lower()
         senha = request.form.get('senha', '')
         tenant = Tenant.query.filter_by(email=email, ativo=True).first()
-        if tenant and check_password_hash(tenant.password, senha):
+        if tenant and tenant.conferir_senha(senha):
             session.clear()
             session.permanent = True
             session[_SESSION_GESTAO_TENANT_ID] = tenant.id
@@ -4482,7 +4503,7 @@ def gestao_login():
             return redirect(url_for('gestao_dashboard'))
         # Tenta login como funcionário (checa senha em todos os candidatos para evitar ambiguidade de tenant)
         func = next((c for c in Funcionario.query.filter_by(email=email, ativo=True).all()
-                     if check_password_hash(c.password, senha)), None)
+                     if c.conferir_senha(senha)), None)
         if func and func.tenant_id:
             t = db.session.get(Tenant, func.tenant_id)
             if t and t.ativo:
@@ -5030,13 +5051,18 @@ def gestao_credenciais():
                 return redirect(url_for('gestao_credenciais'))
             tenant.email = email
         if nova_senha:
-            if not check_password_hash(tenant.password, senha_atual):
+            if not tenant.conferir_senha(senha_atual):
                 flash('Senha atual incorreta.', 'error')
                 return redirect(url_for('gestao_credenciais'))
             if nova_senha != confirmar:
                 flash('As senhas não coincidem.', 'error')
                 return redirect(url_for('gestao_credenciais'))
-            tenant.password = generate_password_hash(nova_senha)
+            # Mesmo mínimo exigido em /api/cadastro e /api/credenciais/conta;
+            # sem isto, o setter de Tenant.senha levantaria ValueError aqui.
+            if len(nova_senha) < 8:
+                flash('Nova senha deve ter ao menos 8 caracteres.', 'error')
+                return redirect(url_for('gestao_credenciais'))
+            tenant.senha = nova_senha
         db.session.commit()
         session[_SESSION_GESTAO_NOME] = tenant.nome
         flash('Dados atualizados.', 'success')
@@ -5220,7 +5246,7 @@ def api_cadastro_personalizar():
         slug=slug,
         nome=nome,
         email=email,
-        password=generate_password_hash(senha),
+        senha=senha,
         whatsapp=d.get('whatsapp', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,
@@ -5258,7 +5284,7 @@ def api_repersonalizar_auth():
     email = d.get('email', '').strip().lower()
     senha = d.get('senha', '')
     tenant = Tenant.query.filter_by(email=email).first()
-    if not tenant or not check_password_hash(tenant.password, senha):
+    if not tenant or not tenant.conferir_senha(senha):
         return jsonify({'erro': 'E-mail ou senha incorretos'}), 401
     if not tenant.assinatura_ativa:
         return jsonify({'erro': 'Conta sem assinatura ativa'}), 403
@@ -5300,7 +5326,7 @@ def api_repersonalizar_credenciais():
     if senha:
         if len(senha) < 8:
             return jsonify({'erro': 'Senha deve ter pelo menos 8 caracteres'}), 400
-        tenant.password = generate_password_hash(senha)
+        tenant.senha = senha
         # Invalida todos os tokens emitidos antes da troca de senha
         tenant.token_version = (tenant.token_version or 0) + 1
     if whatsapp is not None:
@@ -5417,7 +5443,7 @@ def api_cadastro():
         slug=slug,
         nome=nome,
         email=email,
-        password=generate_password_hash(senha),
+        senha=senha,
         contato=d.get('contato', '').strip() or None,
         tema=json.dumps(d.get('tema', {})),
         ativo=True,

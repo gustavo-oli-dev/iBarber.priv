@@ -50,15 +50,57 @@ def main():
         except Exception as e:
             falhas.append((r.rule, repr(e)[:150]))
 
+    falhas += _checar_senhas(m)
+
     os.unlink(tmp_db.name)
 
     if falhas:
         print(f'\nFALHAS: {len(falhas)}')
-        for rota, erro in falhas:
-            print(f'  {rota}: {erro}')
+        for alvo, erro in falhas:
+            print(f'  {alvo}: {erro}')
         sys.exit(1)
 
-    print('OK — nenhuma rota GET sem parametro falhou.')
+    print('OK — rotas GET e contrato de senha verificados.')
+
+
+def _checar_senhas(m):
+    """Verifica o contrato do SenhaMixin nos tres modelos que o usam."""
+    falhas = []
+    modelos = [
+        ('Tenant', lambda: m.Tenant(slug='x', nome='X', email='x@x.com',
+                                    senha='senha123')),
+        ('User', lambda: m.User(name='X', email='u@x.com', senha='senha123')),
+        ('Funcionario', lambda: m.Funcionario(nome='X', senha='senha123')),
+    ]
+    with m.app.app_context():
+        for nome, criar in modelos:
+            obj = criar()
+
+            # O hash nunca pode ser a senha em texto puro.
+            if obj.password == 'senha123':
+                falhas.append((nome, 'senha gravada em texto puro'))
+
+            if not obj.conferir_senha('senha123'):
+                falhas.append((nome, 'conferir_senha rejeitou a senha correta'))
+
+            if obj.conferir_senha('errada123'):
+                falhas.append((nome, 'conferir_senha aceitou senha errada'))
+
+            # Ler .senha tem de falhar: o campo e escreve-so.
+            try:
+                obj.senha
+                falhas.append((nome, 'leitura de .senha deveria falhar'))
+            except AttributeError:
+                pass
+
+            # Senha curta tem de ser recusada antes de virar hash.
+            try:
+                obj.senha = '123'
+                falhas.append((nome, 'aceitou senha com menos de 8 caracteres'))
+            except ValueError:
+                pass
+
+    return falhas
 
 
 if __name__ == '__main__':
