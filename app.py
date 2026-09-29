@@ -269,7 +269,7 @@ PLANOS = {
 }
 
 class SenhaMixin:
-    """Campo de senha compartilhado por Tenant, User e Funcionario.
+    """Campo de senha compartilhado por Tenant, Usuario e Funcionario.
 
     A coluna continua se chamando 'password' no banco (sem precisar de
     migration); o que muda é que ninguém mais grava ou lê o hash na mão.
@@ -341,19 +341,28 @@ class Assinatura(db.Model):
     def esta_ativo(self):
         return self.status == 'ativo' and bool(self.vencimento) and self.vencimento > datetime.utcnow()
 
-class User(SenhaMixin, db.Model):
-    id             = db.Column(db.Integer, primary_key=True)
-    name           = db.Column(db.String(100), nullable=False)
-    email          = db.Column(db.String(120), nullable=False)
-    contact            = db.Column(db.String(20),  nullable=True)
-    observation        = db.Column(db.Text,        nullable=True)
+class Usuario(SenhaMixin, db.Model):
+    """Cliente da barbearia.
+
+    Os nomes das colunas no banco ('user', 'name', 'contact', 'observation',
+    'guest') sao preservados de proposito: o app Flutter compilado le essas
+    chaves e nao ha fonte Dart neste repositorio para recompilar. So os nomes
+    em Python foram traduzidos.
+    """
+    __tablename__ = 'user'
+
+    id                 = db.Column(db.Integer, primary_key=True)
+    nome               = db.Column('name',        db.String(100), nullable=False)
+    email              = db.Column(db.String(120), nullable=False)
+    contato            = db.Column('contact',     db.String(20),  nullable=True)
+    observacao         = db.Column('observation', db.Text,        nullable=True)
     receber_lembretes  = db.Column(db.Boolean,     default=True)
-    guest              = db.Column(db.Boolean,     default=False)
+    convidado          = db.Column('guest',       db.Boolean,     default=False)
     google_id          = db.Column(db.String(200), nullable=True, index=True)
     criado_em          = db.Column(db.DateTime,    default=datetime.utcnow)
     tenant_id          = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
-    pedidos        = db.relationship('Pedido', backref='usuario', lazy=True,
-                                     cascade='all, delete-orphan')
+    pedidos            = db.relationship('Pedido', backref='usuario', lazy=True,
+                                         cascade='all, delete-orphan')
     __table_args__ = (db.UniqueConstraint('email', 'tenant_id', name='uq_user_email_tenant'),)
 
 class Pedido(db.Model):
@@ -453,7 +462,7 @@ class Agendamento(db.Model):
     funcionario_id  = db.Column(db.Integer, db.ForeignKey('funcionario.id'), nullable=True)
     criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
     tenant_id       = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
-    usuario         = db.relationship('User', lazy='select')
+    usuario         = db.relationship('Usuario', lazy='select')
     funcionario     = db.relationship('Funcionario', lazy='select', foreign_keys=[funcionario_id])
     pedido          = db.relationship('Pedido', lazy='select', foreign_keys=[pedido_id])
 
@@ -704,21 +713,21 @@ def _nome_seguro(valor, tamanho=80):
 
 def user_dict(u):
     return {
-        'id': u.id, 'nome': u.name, 'email': u.email,
-        'contato': u.contact, 'observacao': u.observation,
+        'id': u.id, 'nome': u.nome, 'email': u.email,
+        'contato': u.contato, 'observacao': u.observacao,
         'criado_em': u.criado_em.isoformat() if u.criado_em else None,
     }
 
 def pedido_dict(p):
     ag   = Agendamento.query.filter_by(pedido_id=p.id, tenant_id=p.tenant_id).first()
-    user = db.session.get(User, p.user_id)
+    user = db.session.get(Usuario, p.user_id)
     return {
         'id': p.id, 'user_id': p.user_id, 'total': p.total,
         'status': p.status,
         'criado_em': p.criado_em.isoformat() if p.criado_em else None,
         'data_hora': ag.data_hora.isoformat() if ag else None,
-        'user_nome':    user.name    if user else '',
-        'user_contato': user.contact if user else '',
+        'user_nome':    user.nome    if user else '',
+        'user_contato': user.contato if user else '',
         'itens': [{'nome': i.nome, 'categoria': i.categoria, 'preco': i.preco} for i in p.itens],
     }
 
@@ -829,7 +838,7 @@ def index():
     if tenant:
         session[_SESSION_PATH_TENANT_ID] = tenant.id
         session.pop('is_preview', None)
-        user = db.session.get(User, session[_SESSION_USER_ID]) if 'user_id' in session else None
+        user = db.session.get(Usuario, session[_SESSION_USER_ID]) if 'user_id' in session else None
         auto_rapido = bool(not user and request.args.get('agendar'))
         return render_template('index.html', user=user, auto_rapido=auto_rapido, auto_criar=False)
     return redirect(url_for('landing'))
@@ -853,14 +862,14 @@ def login_rapido():
         flash('Informe um nome válido (apenas letras, espaços, apóstrofo e hífen) e o contato.', 'error')
         return redirect(url_for('login'))
     email  = f"guest_{uuid.uuid4().hex[:8]}@temp.com"
-    user   = User(
-        name=nome,
+    user   = Usuario(
+        nome=nome,
         email=email,
         senha=secrets.token_hex(16),
-        contact=contato or None,
-        observation=alergia or None,
+        contato=contato or None,
+        observacao=alergia or None,
         receber_lembretes=False,
-        guest=True,
+        convidado=True,
         tenant_id=session.get(_SESSION_PATH_TENANT_ID) or _api_tid(),
     )
     db.session.add(user)
@@ -879,15 +888,15 @@ def api_auth_telefone():
     if len(tel) < 10:
         return jsonify({'erro': 'Telefone inválido'}), 400
     tid  = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    user = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    user = Usuario.query.filter_by(contato=tel, convidado=False, tenant_id=tid).first()
     if user:
         _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
         session[_SESSION_USER_ID]    = user.id
-        session[_SESSION_USER_NAME]  = user.name
+        session[_SESSION_USER_NAME]  = user.nome
         session[_SESSION_USER_EMAIL] = user.email
         if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
-        return jsonify({'ok': True, 'nome': user.name})
+        return jsonify({'ok': True, 'nome': user.nome})
     return jsonify({'novo': True})
 
 @app.route('/api/auth/criar-telefone', methods=['POST'])
@@ -905,25 +914,25 @@ def api_auth_criar_telefone():
     if len(tel) < 10:
         return jsonify({'erro': 'Nome e telefone são obrigatórios'}), 400
     tid = session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    existing = User.query.filter_by(contact=tel, guest=False, tenant_id=tid).first()
+    existing = Usuario.query.filter_by(contato=tel, convidado=False, tenant_id=tid).first()
     if existing:
         _ptid = session.get(_SESSION_PATH_TENANT_ID)
         session.clear()
         session[_SESSION_USER_ID]    = existing.id
-        session[_SESSION_USER_NAME]  = existing.name
+        session[_SESSION_USER_NAME]  = existing.nome
         session[_SESSION_USER_EMAIL] = existing.email
         if _ptid: session[_SESSION_PATH_TENANT_ID] = _ptid
-        return jsonify({'ok': True, 'nome': existing.name})
-    if email_opt and User.query.filter_by(email=email_opt, tenant_id=tid).first():
+        return jsonify({'ok': True, 'nome': existing.nome})
+    if email_opt and Usuario.query.filter_by(email=email_opt, tenant_id=tid).first():
         return jsonify({'erro': 'Este e-mail já está em uso'}), 400
     email = email_opt or f"tel_{tel}_{tid or 0}@ibarber.local"
-    user  = User(
-        name=nome,
+    user  = Usuario(
+        nome=nome,
         email=email,
         senha=secrets.token_hex(16),
-        contact=tel,
+        contato=tel,
         receber_lembretes=lembretes,
-        guest=False,
+        convidado=False,
         tenant_id=tid,
     )
     db.session.add(user)
@@ -943,13 +952,13 @@ def api_auth_lembretes():
     data      = request.get_json(force=True) or {}
     ativo     = bool(data.get('ativo'))
     email_opt = data.get('email', '').strip().lower() or None
-    user      = db.session.get(User, session[_SESSION_USER_ID])
+    user      = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if ativo and not email_opt and user.email.endswith('@ibarber.local'):
         return jsonify({'erro': 'Informe um e-mail para receber lembretes'}), 400
     if email_opt:
-        conflito = User.query.filter(User.email == email_opt, User.id != user.id, User.tenant_id == user.tenant_id).first()
+        conflito = Usuario.query.filter(Usuario.email == email_opt, Usuario.id != user.id, Usuario.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já em uso'}), 400
         user.email = email_opt
@@ -1065,19 +1074,19 @@ def auth_google_callback():
         flash('Não foi possível obter dados do Google.', 'error')
         return redirect(url_for('index'))
     tid = tid_from_state or session.get(_SESSION_PATH_TENANT_ID) or _api_tid()
-    user = User.query.filter_by(google_id=google_id, tenant_id=tid).first()
+    user = Usuario.query.filter_by(google_id=google_id, tenant_id=tid).first()
     if not user:
-        user = User.query.filter_by(email=email, tenant_id=tid).first()
+        user = Usuario.query.filter_by(email=email, tenant_id=tid).first()
         if user:
             if not user.google_id:
                 user.google_id = google_id
                 db.session.commit()
         else:
-            user = User(
-                name=nome, email=email,
+            user = Usuario(
+                nome=nome, email=email,
                 senha=secrets.token_hex(32),
-                google_id=google_id, contact=None,
-                receber_lembretes=True, guest=False, tenant_id=tid,
+                google_id=google_id, contato=None,
+                receber_lembretes=True, convidado=False, tenant_id=tid,
             )
             db.session.add(user)
             try:
@@ -1085,15 +1094,15 @@ def auth_google_callback():
             except Exception:
                 # C5: race condition — outro request criou o mesmo usuário simultaneamente
                 db.session.rollback()
-                user = (User.query.filter_by(google_id=google_id, tenant_id=tid).first() or
-                        User.query.filter_by(email=email, tenant_id=tid).first())
+                user = (Usuario.query.filter_by(google_id=google_id, tenant_id=tid).first() or
+                        Usuario.query.filter_by(email=email, tenant_id=tid).first())
                 if not user:
                     flash('Erro ao criar conta. Tente novamente.', 'error')
                     return redirect(url_for('index'))
     # M1: atribuição direta em vez de session.clear() para preservar path_tenant_id
     # e outros dados úteis já presentes na sessão antes do callback OAuth
     session[_SESSION_USER_ID]       = user.id
-    session[_SESSION_USER_NAME]     = user.name
+    session[_SESSION_USER_NAME]     = user.nome
     session[_SESSION_USER_EMAIL]    = user.email
     session[_SESSION_PATH_TENANT_ID] = tid
     # C4: só redirecionar para subdomínios conhecidos do APP_DOMAIN (evita open redirect)
@@ -1102,7 +1111,7 @@ def auth_google_callback():
         _allowed_suffix = f".{APP_DOMAIN}"
         if oauth_host == APP_DOMAIN or oauth_host.endswith(_allowed_suffix):
             _base = f"https://{oauth_host}"
-    if not user.contact:
+    if not user.contato:
         return redirect(f"{_base}{url_for('google_contato')}")
     return redirect(f"{_base}{url_for('servicos')}")
 
@@ -1116,16 +1125,16 @@ def google_contato():
         if len(tel) < 10:
             erro = 'Telefone inválido — mínimo 10 dígitos.'
         else:
-            user = db.session.get(User, session[_SESSION_USER_ID])
+            user = db.session.get(Usuario, session[_SESSION_USER_ID])
             # H3: garantir que o user pertence ao tenant da sessão atual
             if user and user.tenant_id != session.get(_SESSION_PATH_TENANT_ID):
                 return redirect(url_for('index'))
             if user:
-                user.contact = tel
+                user.contato = tel
                 user.receber_lembretes = request.form.get('lembretes', '1') != '0'
                 db.session.commit()
             return redirect(url_for('servicos'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     return render_template('google_contato.html', user=user, erro=erro)
 
 # ── Perfil — atualização de campo individual ──────────────────────────────────
@@ -1140,19 +1149,19 @@ def api_perfil_update():
     _CAMPOS_PERMITIDOS = {'telefone', 'email', 'nome'}  # H1: whitelist — name/contact/receber_lembretes
     if campo not in _CAMPOS_PERMITIDOS:
         return jsonify({'erro': 'Campo inválido'}), 400
-    user  = db.session.get(User, session[_SESSION_USER_ID])
+    user  = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return jsonify({'erro': 'usuário não encontrado'}), 404
     if campo == 'telefone':
         tel = ''.join(c for c in valor if c.isdigit())
         if len(tel) < 10:
             return jsonify({'erro': 'Telefone inválido — mínimo 10 dígitos'}), 400
-        user.contact = tel
+        user.contato = tel
     elif campo == 'email':
         email = valor.strip().lower()
         if not email or not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email):
             return jsonify({'erro': 'E-mail inválido'}), 400
-        conflito = User.query.filter(User.email == email, User.id != user.id, User.tenant_id == user.tenant_id).first()
+        conflito = Usuario.query.filter(Usuario.email == email, Usuario.id != user.id, Usuario.tenant_id == user.tenant_id).first()
         if conflito:
             return jsonify({'erro': 'E-mail já está em uso'}), 400
         user.email = email
@@ -1160,7 +1169,7 @@ def api_perfil_update():
     elif campo == 'nome':
         if len(valor) < 2:
             return jsonify({'erro': 'Nome muito curto'}), 400
-        user.name = valor
+        user.nome = valor
         session[_SESSION_USER_NAME] = valor
     else:
         return jsonify({'erro': 'Campo inválido'}), 400
@@ -1171,7 +1180,7 @@ def api_perfil_update():
 def perfil():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     return render_template('perfil.html', user=user, hide_fabs=True)
@@ -1180,10 +1189,10 @@ def perfil():
 def salvar_observacao():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
-    user.observation = request.form.get('observation', '').strip() or None
+    user.observacao = request.form.get('observation', '').strip() or None
     db.session.commit()
     return redirect(url_for('perfil'))
 
@@ -1191,7 +1200,7 @@ def salvar_observacao():
 def salvar_lembretes():
     if 'user_id' not in session:
         return redirect(url_for('index'))
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if not user:
         return redirect(url_for('logout'))
     user.receber_lembretes = request.form.get('receber_lembretes') == '1'
@@ -1224,7 +1233,7 @@ def _enviar_confirmacao_agendamento(user, data_hora):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Agendamento Confirmado!</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu horário foi reservado.</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu horário foi reservado.</p>
       <div style="background:#1a1a1a;border-left:4px solid #C9A96E;
                   padding:16px 20px;border-radius:6px;margin:20px 0;">
         <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1247,7 +1256,7 @@ def _enviar_cancelamento_por_fechamento(user, tenant_nome, data_hora, motivo):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#f87171;margin-top:0;">⚠️ Agendamento Cancelado</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
       <p style="color:#ccc;">Seu agendamento foi cancelado:</p>
       <p style="color:#f87171;font-weight:600;">{motivo}</p>
       <div style="background:#1a1a1a;border-left:4px solid #f87171;
@@ -1277,10 +1286,10 @@ def _conflitos_agendamentos_futuros(tenant_id, data=None, funcionario_id=None):
         q = q.filter(Agendamento.funcionario_id == funcionario_id)
     result = []
     for ag in q.order_by(Agendamento.data_hora).all():
-        user = db.session.get(User, ag.user_id)
+        user = db.session.get(Usuario, ag.user_id)
         result.append({
             'ag': ag, 'user': user,
-            'nome': user.name if user else 'Cliente',
+            'nome': user.nome if user else 'Cliente',
             'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M'),
         })
     return result
@@ -1302,7 +1311,7 @@ def _enviar_comprovante_pagamento(user, pedido):
     <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                 background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
       <h2 style="color:#C9A96E;margin-top:0;">✦ Pagamento Confirmado!</h2>
-      <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu pagamento foi aprovado.</p>
+      <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu pagamento foi aprovado.</p>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         {itens_html}
         <tr style="border-top:1px solid #333;">
@@ -1465,21 +1474,21 @@ def preview_ag_sem_cadastro():
 @app.route('/preview/ag/google-contato')
 def preview_ag_google_contato():
     tema_override = _build_ag_tema_override(request.args)
-    class MockUser:
+    class UsuarioPreview:
         email = 'carlos@gmail.com'; name = 'Carlos Silva'
     resp = make_response(render_template('google_contato.html',
-        user=MockUser(), erro=None, hide_fabs=True, tema_override=tema_override, preview_mode=True))
+        user=UsuarioPreview(), erro=None, hide_fabs=True, tema_override=tema_override, preview_mode=True))
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
 @app.route('/preview/ag/perfil')
 def preview_ag_perfil():
     tema_override = _build_ag_tema_override(request.args)
-    class MockUser:
-        id=9991; name='Carlos Silva'; email='carlos@preview.com'
-        contact='(11) 99999-0000'; observation=''; receber_lembretes=True; guest=False
+    class UsuarioPreview:
+        id=9991; nome='Carlos Silva'; email='carlos@preview.com'
+        contato='(11) 99999-0000'; observacao=''; receber_lembretes=True; convidado=False
     resp = make_response(render_template('perfil.html',
-        user=MockUser(), hide_fabs=True, tema_override=tema_override, preview_mode=True))
+        user=UsuarioPreview(), hide_fabs=True, tema_override=tema_override, preview_mode=True))
     resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return resp
 
@@ -1664,7 +1673,7 @@ def agendar():
     db.session.add(ag)
     db.session.commit()
 
-    user = db.session.get(User, session[_SESSION_USER_ID])
+    user = db.session.get(Usuario, session[_SESSION_USER_ID])
     if user:
         _enviar_confirmacao_agendamento(user, data_hora)
 
@@ -1697,7 +1706,7 @@ def cancelar_agendamento(ag_id):
             EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
     db.session.commit()
     # Email de cancelamento ao cliente
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user and user.email and not user.email.endswith('@ibarber.local'):
         data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
         hora_fmt = ag.data_hora.strftime('%H:%M')
@@ -1705,7 +1714,7 @@ def cancelar_agendamento(ag_id):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-          <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado.</p>
+          <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu agendamento foi cancelado.</p>
           <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                       padding:16px 20px;border-radius:6px;margin:20px 0;">
             <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -1774,7 +1783,7 @@ def reagendar_agendamento():
         ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user:
         _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
@@ -1827,7 +1836,7 @@ def api_gestao_reagendar():
         ag.funcionario_id = None if int(barbeiro_id) == 0 else int(barbeiro_id)
     db.session.commit()
     # M4: enviar email de confirmação ao cliente após reagendamento pela gestão
-    user = db.session.get(User, ag.user_id)
+    user = db.session.get(Usuario, ag.user_id)
     if user:
         _enviar_confirmacao_agendamento(user, nova_dt)
     return jsonify({'ok': True, 'data_hora': nova_dt.isoformat()})
@@ -1887,7 +1896,7 @@ def _notificar_lista_espera(tenant_id, data_str):
     nome_barbearia = tenant.nome if tenant else 'Barbearia'
     slug = tenant.slug if tenant else ''
     for le in pendentes:
-        user = db.session.get(User, le.user_id)
+        user = db.session.get(Usuario, le.user_id)
         if not user or not user.email or user.email.endswith('@ibarber.local'):
             continue
         try:
@@ -1899,7 +1908,7 @@ def _notificar_lista_espera(tenant_id, data_str):
         <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                     background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
           <h2 style="color:#C9A96E;margin-top:0;">Abriu uma vaga!</h2>
-          <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+          <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
           <p>Uma vaga abriu em <strong>{nome_barbearia}</strong> para <strong>{data_fmt}</strong>.</p>
           <div style="text-align:center;margin:24px 0;">
             <a href="{_tenant_url(slug)}"
@@ -1965,11 +1974,11 @@ def atualizar_forma_pagamento():
     if ag.pedido_id and forma != 'cartao':
         EntradaMonetaria.query.filter_by(pedido_id=ag.pedido_id).delete()
         pedido = db.session.get(Pedido, ag.pedido_id)
-        user   = db.session.get(User, session[_SESSION_USER_ID])
+        user   = db.session.get(Usuario, session[_SESSION_USER_ID])
         if pedido:
             _forma_map = {'dinheiro': 'dinheiro', 'pix': 'pix'}
             servicos = ', '.join(i.nome for i in pedido.itens) if pedido.itens else 'Serviço'
-            nome_cliente = user.name if user else 'Cliente'
+            nome_cliente = user.nome if user else 'Cliente'
             entrada = EntradaMonetaria(
                 descricao=f'{servicos} — {nome_cliente}',
                 valor=pedido.total,
@@ -2749,8 +2758,8 @@ def api_horarios_conflitos():
         cfg = novos.get(dia_key, {})
         hora = ag.data_hora.strftime('%H:%M')
         if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
-            user = db.session.get(User, ag.user_id)
-            conflitos.append({'id': ag.id, 'nome': user.name if user else 'Cliente',
+            user = db.session.get(Usuario, ag.user_id)
+            conflitos.append({'id': ag.id, 'nome': user.nome if user else 'Cliente',
                               'hora': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
     return jsonify({'conflitos': conflitos})
 
@@ -2830,7 +2839,7 @@ def api_horarios_especiais():
                     conflitos.append({
                         'id':      ag.id,
                         'hora':    hora,
-                        'usuario': ag.usuario.name if ag.usuario else 'Cliente',
+                        'usuario': ag.usuario.nome if ag.usuario else 'Cliente',
                     })
             if conflitos:
                 return jsonify({'conflitos': conflitos, 'total': len(conflitos)}), 409
@@ -3097,7 +3106,7 @@ def verificar_pagamento(mp_payment_id):
                     tenant_id=pedido.tenant_id,
                 ))
             db.session.commit()
-            user = db.session.get(User, pedido.user_id)
+            user = db.session.get(Usuario, pedido.user_id)
             if user:
                 _enviar_comprovante_pagamento(user, pedido)
     return jsonify({'status': status})
@@ -3140,7 +3149,7 @@ def retorno_pagamento():
                                 tenant_id=pedido.tenant_id,
                             ))
                         db.session.commit()
-                        user = db.session.get(User, pedido.user_id)
+                        user = db.session.get(Usuario, pedido.user_id)
                         if user:
                             _enviar_comprovante_pagamento(user, pedido)
                 except Exception:
@@ -3182,32 +3191,32 @@ def api_usuarios():
             slug = name.split()[0].lower().replace(' ', '')
             base = f"{slug}.{contact.replace(' ','').replace('-','').replace('(','').replace(')','')}"
             email = f"{base}@admin.local"
-            if User.query.filter_by(email=email).first():
+            if Usuario.query.filter_by(email=email).first():
                 import time; email = f"{base}.{int(time.time())}@admin.local"
-        elif User.query.filter_by(email=email, tenant_id=tid).first():
+        elif Usuario.query.filter_by(email=email, tenant_id=tid).first():
             return jsonify({'erro': 'E-mail já cadastrado'}), 400
         senha_temp = secrets.token_hex(16)
         receber_lembretes = data.get('receber_lembretes', True)
-        user = User(name=name, email=email, senha=senha_temp,
-                    contact=contact, observation=observation,
+        user = Usuario(nome=name, email=email, senha=senha_temp,
+                    contato=contact, observacao=observation,
                     tenant_id=tid,
                     receber_lembretes=bool(receber_lembretes))
         db.session.add(user)
         db.session.commit()
         return jsonify({'ok': True, 'id': user.id, 'usuario': user_dict(user)})
-    usuarios = User.query.filter_by(tenant_id=tid).order_by(User.criado_em.desc()).limit(5000).all()
+    usuarios = Usuario.query.filter_by(tenant_id=tid).order_by(Usuario.criado_em.desc()).limit(5000).all()
     return jsonify([user_dict(u) for u in usuarios])
 
 @app.route('/api/usuarios/<int:uid>', methods=['GET'])
 def api_usuario(uid):
     tid = verificar_token_perm(request, 'clientes')
     if not tid: return jsonify({'erro': 'não autorizado'}), 403
-    u = db.session.get(User, uid)
+    u = db.session.get(Usuario, uid)
     if not u or u.tenant_id != tid:
         return jsonify({'erro': 'não encontrado'}), 404
     data = user_dict(u)
-    data['contact'] = u.contact or ''
-    data['name']    = u.name
+    data['contact'] = u.contato or ''
+    data['name']    = u.nome
     data['pedidos'] = [pedido_dict(p) for p in u.pedidos]
 
     _, gestor_nome = _gestor_como_barbeiro(tid)
@@ -3478,12 +3487,12 @@ def api_export():
         if d_ini: q = q.filter(Agendamento.data_hora >= d_ini)
         if d_fim: q = q.filter(Agendamento.data_hora <= d_fim)
         for ag in q.order_by(Agendamento.data_hora.desc()).limit(CSV_LIMIT).all():
-            user   = db.session.get(User, ag.user_id)
+            user   = db.session.get(Usuario, ag.user_id)
             pedido = db.session.get(Pedido, ag.pedido_id) if ag.pedido_id else None
             servs  = ', '.join(i.nome for i in pedido.itens) if pedido else '—'
             barb   = ag.funcionario.nome if ag.funcionario else 'Proprietário'
             _csv_row(w, [ag.data_hora.strftime('%d/%m/%Y'), ag.data_hora.strftime('%H:%M'),
-                         user.name if user else '—', user.contact if user else '—',
+                         user.nome if user else '—', user.contato if user else '—',
                          servs, barb, STATUS_MAP.get(ag.status, ag.status),
                          FORMA_MAP.get(ag.forma_pagamento or '', ag.forma_pagamento or '—')])
 
@@ -3498,9 +3507,9 @@ def api_export():
 
     elif tipo == 'clientes':
         w.writerow(['Nome','Email','Contato','Cadastrado em'])
-        q = User.query.filter(User.tenant_id == tid)
-        for c in q.order_by(User.name).limit(CSV_LIMIT).all():
-            _csv_row(w, [c.name, c.email, c.contact or '—', c.criado_em.strftime('%d/%m/%Y')])
+        q = Usuario.query.filter(Usuario.tenant_id == tid)
+        for c in q.order_by(Usuario.nome).limit(CSV_LIMIT).all():
+            _csv_row(w, [c.nome, c.email, c.contato or '—', c.criado_em.strftime('%d/%m/%Y')])
 
     elif tipo == 'servicos':
         w.writerow(['Data','Cliente','Serviço','Categoria','Preço (R$)','Status'])
@@ -3510,7 +3519,7 @@ def api_export():
         for p in q.options(joinedload(Pedido.itens), joinedload(Pedido.usuario)).order_by(Pedido.criado_em.desc()).limit(CSV_LIMIT).all():
             for item in p.itens:
                 _csv_row(w, [p.criado_em.strftime('%d/%m/%Y'),
-                             p.usuario.name if p.usuario else '—',
+                             p.usuario.nome if p.usuario else '—',
                              item.nome, item.categoria or '—',
                              f'{item.preco:.2f}'.replace('.',','),
                              STATUS_MAP.get(p.status, p.status)])
@@ -3537,7 +3546,7 @@ def api_agendamentos():
             return jsonify({'erro': 'data inválida'}), 400
         if not user_id:
             return jsonify({'erro': 'user_id obrigatório'}), 400
-        user = db.session.get(User, user_id)
+        user = db.session.get(Usuario, user_id)
         if not user or user.tenant_id != tid:
             return jsonify({'erro': 'usuário não encontrado'}), 404
         data_str = data_hora.strftime('%Y-%m-%d')
@@ -3614,7 +3623,7 @@ def api_agendamentos():
         if pedido and forma_pag == 'pagar_no_local':
             nomes = ', '.join(sv.nome for sv in servicos_validos)
             db.session.add(EntradaMonetaria(
-                descricao=f'{nomes} — {user.name}',
+                descricao=f'{nomes} — {user.nome}',
                 valor=total_pedido,
                 forma='dinheiro',
                 tenant_id=tid,
@@ -3656,10 +3665,10 @@ def api_agendamentos():
             'data_hora': ag.data_hora.isoformat(),
             'status': ag.status or 'ativo',
             'pedido_id': ag.pedido_id,
-            'usuario': u.name if u else '—',
+            'usuario': u.nome if u else '—',
             'email': u.email if u else '—',
-            'contato': u.contact if u else '—',
-            'observacao': u.observation if u else None,
+            'contato': u.contato if u else '—',
+            'observacao': u.observacao if u else None,
             'barbeiro': barbeiro,
             'pedido': pedido_dict(p) if p else None,
         })
@@ -3822,7 +3831,7 @@ def verificar_lembretes():
                     ok = _enviar_email(
                         user.email,
                         'Lembrete — Barbearia',
-                        _corpo_lembrete(user.name, ag.data_hora, tipo)
+                        _corpo_lembrete(user.nome, ag.data_hora, tipo)
                     )
                     if ok:
                         db.session.add(LembreteEnviado(agendamento_id=ag.id, tipo=tipo))
@@ -3837,7 +3846,7 @@ def testar_lembretes():
     tid = verificar_token_admin(request)
     if not tid: return jsonify({'erro': 'não autorizado'}), 403
     with app.app_context():
-        user = User.query.filter_by(tenant_id=tid).first()
+        user = Usuario.query.filter_by(tenant_id=tid).first()
         if not user:
             return jsonify({'erro': 'nenhum usuário cadastrado'}), 404
         ag = (Agendamento.query.filter_by(user_id=user.id, tenant_id=user.tenant_id, status='ativo')
@@ -3849,7 +3858,7 @@ def testar_lembretes():
             ok = _enviar_email(
                 user.email,
                 'Lembrete — Barbearia',
-                _corpo_lembrete(user.name, ag.data_hora, tipo)
+                _corpo_lembrete(user.nome, ag.data_hora, tipo)
             )
             if ok:
                 enviados.append(tipo)
@@ -3888,8 +3897,8 @@ def limpar_guests():
     with app.app_context():
         try:
             limite = datetime.utcnow() - timedelta(hours=24)
-            guests = User.query.filter_by(guest=True).filter(User.criado_em < limite).all()
-            for g in guests:
+            convidados = Usuario.query.filter_by(convidado=True).filter(Usuario.criado_em < limite).all()
+            for g in convidados:
                 tem_ag = Agendamento.query.filter_by(user_id=g.id, status='ativo').first()
                 if not tem_ag:
                     db.session.delete(g)
@@ -3952,7 +3961,7 @@ def enviar_retorno_automatico():
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#C9A96E;margin-top:0;">✦ Hora de renovar!</h2>
-                  <p>Olá, <strong>{html.escape(user.name)}</strong>!</p>
+                  <p>Olá, <strong>{html.escape(user.nome)}</strong>!</p>
                   <p>Faz cerca de <strong>30 dias</strong> desde seu último corte em <strong>{nome_b}</strong>.</p>
                   <p>Que tal agendar seu próximo horário?</p>
                   <div style="text-align:center;margin:24px 0;">
@@ -4556,10 +4565,10 @@ def gestao_dashboard():
             'id': ag.id,
             'data_hora': ag.data_hora.strftime('%Y-%m-%dT%H:%M:%S'),
             'status': ag.status or 'ativo',
-            'usuario': u.name if u else '—',
+            'usuario': u.nome if u else '—',
             'email': u.email if u else '—',
-            'contato': u.contact if u else '—',
-            'observacao': u.observation if u else None,
+            'contato': u.contato if u else '—',
+            'observacao': u.observacao if u else None,
             'barbeiro': barbeiro,
             'servico': servico_nome,
         })
@@ -4597,9 +4606,9 @@ def gestao_agendamentos():
     tenant = _gestao_tenant()
     # Gera token de admin para o JS usar na API
     token = _gestao_token()
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
+    clientes = Usuario.query.filter_by(tenant_id=tenant.id).order_by(Usuario.nome).limit(5000).all()
     clientes_json = _safe_json([
-        {'id': c.id, 'name': c.name, 'email': c.email, 'contact': c.contact or ''}
+        {'id': c.id, 'name': c.nome, 'email': c.email, 'contact': c.contato or ''}
         for c in clientes
     ])
     return render_template('gestao/agendamentos.html', active='agendamentos',
@@ -4617,7 +4626,7 @@ def gestao_agendamento_status(ag_id):
         ag.status = novo_status
         db.session.commit()
         if novo_status == 'cancelado':
-            user = db.session.get(User, ag.user_id)
+            user = db.session.get(Usuario, ag.user_id)
             if user and not user.email.endswith('@ibarber.local'):
                 data_fmt = f"{DIAS_PT[ag.data_hora.weekday()]}, {ag.data_hora.day} de {MESES_PT[ag.data_hora.month-1]}"
                 hora_fmt = ag.data_hora.strftime('%H:%M')
@@ -4625,7 +4634,7 @@ def gestao_agendamento_status(ag_id):
                 <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;
                             background:#0f0f0f;color:#f0f0f0;padding:28px;border-radius:10px;">
                   <h2 style="color:#c0392b;margin-top:0;">Agendamento Cancelado</h2>
-                  <p>Olá, <strong>{html.escape(user.name)}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
+                  <p>Olá, <strong>{html.escape(user.nome)}</strong>! Seu agendamento foi cancelado pela barbearia.</p>
                   <div style="background:#1a1a1a;border-left:4px solid #c0392b;
                               padding:16px 20px;border-radius:6px;margin:20px 0;">
                     <p style="margin:0;font-size:15px;color:#888;">📅 {data_fmt}</p>
@@ -4653,7 +4662,7 @@ def gestao_pedidos():
     pedidos_json = _safe_json([{
         'id': p.id, 'status': p.status, 'total': p.total,
         'criado_em': p.criado_em.strftime('%Y-%m-%dT%H:%M:%S'),
-        'usuario': p.usuario.name if p.usuario else '—',
+        'usuario': p.usuario.nome if p.usuario else '—',
         'itens': [{'nome': i.nome, 'categoria': i.categoria or '', 'preco': i.preco} for i in p.itens],
     } for p in pedidos])
     return render_template('gestao/pedidos.html', active='pedidos', pedidos_json=pedidos_json, token=token)
@@ -4666,10 +4675,10 @@ def gestao_clientes():
     if perm: return perm
     tenant = _gestao_tenant()
     token = _gestao_token()
-    clientes = User.query.filter_by(tenant_id=tenant.id).order_by(User.name).limit(5000).all()
+    clientes = Usuario.query.filter_by(tenant_id=tenant.id).order_by(Usuario.nome).limit(5000).all()
     clientes_json = _safe_json([{
-        'id': c.id, 'name': c.name, 'email': c.email,
-        'contact': c.contact or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
+        'id': c.id, 'name': c.nome, 'email': c.email,
+        'contact': c.contato or '', 'criado_em': c.criado_em.strftime('%Y-%m-%d'),
     } for c in clientes])
     return render_template('gestao/clientes.html', active='clientes', clientes_json=clientes_json, token=token)
 
@@ -4715,7 +4724,7 @@ def gestao_entradas():
             ags_json.append({
                 'data_hora': ag.data_hora.strftime('%Y-%m-%dT%H:%M:%S'),
                 'total': p.total,
-                'usuario': ag.usuario.name if ag.usuario else '—',
+                'usuario': ag.usuario.nome if ag.usuario else '—',
             })
     entradas = EntradaMonetaria.query.filter_by(tenant_id=_tid).order_by(EntradaMonetaria.criado_em.desc()).limit(5000).all()
     entradas_json = _safe_json([{
@@ -4944,8 +4953,8 @@ def gestao_horarios():
                 cfg = horarios.get(dia_key, {})
                 hora = ag.data_hora.strftime('%H:%M')
                 if not cfg.get('aberto') or hora < cfg.get('abertura','00:00') or hora >= cfg.get('fechamento','24:00'):
-                    user = db.session.get(User, ag.user_id)
-                    conflitos.append({'ag': ag, 'user': user, 'nome': user.name if user else 'Cliente',
+                    user = db.session.get(Usuario, ag.user_id)
+                    conflitos.append({'ag': ag, 'user': user, 'nome': user.nome if user else 'Cliente',
                                       'data_hora_fmt': ag.data_hora.strftime('%d/%m/%Y %H:%M')})
             if conflitos:
                 _cancelar_conflitos(conflitos, tenant.nome, 'Mudança de horário de funcionamento')
@@ -5680,7 +5689,7 @@ def api_admin_excluir(tid):
     Funcionario.query.filter_by(tenant_id=tid).delete()
 
     # 9. Usuários
-    User.query.filter_by(tenant_id=tid).delete()
+    Usuario.query.filter_by(tenant_id=tid).delete()
 
     # 10. Fotos, horários, serviços, categorias, assinaturas
     FotoServico.query.filter_by(tenant_id=tid).delete()
@@ -5997,7 +6006,7 @@ def tenant_site(slug):
         return render_template('index.html', user=None, preview_mode=True, tema_override=tema_override, hide_fabs=True)
     user = None
     if 'user_id' in session:
-        user = db.session.get(User, session[_SESSION_USER_ID])
+        user = db.session.get(Usuario, session[_SESSION_USER_ID])
     return render_template('index.html', user=user, preview_mode=False, tema_override=None, hide_fabs=False)
 
 @app.errorhandler(413)

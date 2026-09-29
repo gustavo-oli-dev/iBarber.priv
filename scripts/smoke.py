@@ -69,7 +69,7 @@ def _checar_senhas(m):
     modelos = [
         ('Tenant', lambda: m.Tenant(slug='x', nome='X', email='x@x.com',
                                     senha='senha123')),
-        ('User', lambda: m.User(name='X', email='u@x.com', senha='senha123')),
+        ('Usuario', lambda: m.Usuario(nome='X', email='u@x.com', senha='senha123')),
         ('Funcionario', lambda: m.Funcionario(nome='X', senha='senha123')),
     ]
     with m.app.app_context():
