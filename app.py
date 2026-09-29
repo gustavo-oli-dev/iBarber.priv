@@ -3035,8 +3035,6 @@ def criar_pagamento():
     else:  # cartao – Checkout Pro
         if not pedido_id:
             return jsonify({'erro': 'pedido_id obrigatório para pagamento com cartão'}), 400
-        _tenant = db.session.get(Tenant, _tid)
-        _slug = _tenant.slug if _tenant else ''
         _base = request.host_url.rstrip('/')
         payload = {
             'items': [{'title': 'Barbearia – Serviços', 'quantity': 1,
@@ -3280,7 +3278,6 @@ def api_pedido_status(pid):
 def api_stats_servicos():
     tid = verificar_token(request)
     if not tid: return jsonify({'erro': 'token inválido'}), 401
-    cats = {c.nome: c.nome for c in Categoria.query.filter_by(ativo=True, tenant_id=tid).limit(1000).all()}
     contagem = {}
     pedidos = Pedido.query.filter(Pedido.tenant_id == tid, Pedido.status != 'cancelado').limit(5000).all()
     for p in pedidos:
@@ -4581,7 +4578,6 @@ def gestao_dashboard():
                 'tem_ag': cursor.strftime('%Y-%m-%d') in datas_com_ag,
             })
         cursor += timedelta(days=1)
-    tenant = _gestao_tenant()
     return render_template('gestao/dashboard.html',
         active='dashboard',
         hoje=hoje.strftime('%Y-%m-%d'),
@@ -4683,7 +4679,6 @@ def gestao_cliente_detalhe(uid):
     if redir: return redir
     perm = _gestao_perm_required('clientes')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/cliente_detalhe.html', active='clientes', uid=uid, token=token)
 
@@ -4749,7 +4744,6 @@ def gestao_funcionarios():
     if redir: return redir
     perm = _gestao_owner_required()
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/funcionarios.html', active='funcionarios', token=token)
 
@@ -4759,7 +4753,6 @@ def gestao_servicos():
     if redir: return redir
     perm = _gestao_perm_required('servicos')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/servicos.html', active='servicos', token=token)
 
@@ -4791,7 +4784,6 @@ def gestao_fotos():
     if redir: return redir
     perm = _gestao_perm_required('fotos')
     if perm: return perm
-    tenant = _gestao_tenant()
     token = _gestao_token()
     return render_template('gestao/fotos.html', active='fotos', token=token)
 
@@ -5084,7 +5076,6 @@ def gestao_graficos():
     if redir: return redir
     perm = _gestao_owner_required()
     if perm: return perm
-    tenant = _gestao_tenant()
     return render_template('gestao/graficos.html',
         active='graficos',
         token=_gestao_token())
@@ -5095,7 +5086,6 @@ def gestao_calendario():
     if redir: return redir
     perm = _gestao_perm_required('calendario')
     if perm: return perm
-    tenant = _gestao_tenant()
     return render_template('gestao/calendario.html',
         active='calendario',
         token=_gestao_token())
